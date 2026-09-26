@@ -40,6 +40,7 @@ import {
 } from './generator-orbit-view.js';
 import { LOCATOR_PROFILE_CELL_SURFACE_V0TR } from './locatorY.js';
 import { DEFAULT_PRESET } from './luminance.js';
+import { CELL_SHAPE_DEFAULT } from './cell-shape.js';
 
 /** 프리셋 미선택 = «이 화면은 어떤 촬영 프리셋도 주장하지 않는다». */
 export const SHOT_PRESET_NONE = 'none';
@@ -61,6 +62,17 @@ const SHOT_3D_COMMON = Object.freeze({
   eccLevel: 'H',
   qrPosition: 'none',
   preset: DEFAULT_PRESET,
+  // ─ 셀 꾸미기 끔 고정 (DESIGN_001 §2.1 wiring M6, 2026-09-26) ─────────────────
+  // 프리셋은 선언한 필드만 세운다 — 꾸미기를 켠 채 프리셋을 고르면 촬영 코퍼스에 꾸민 셀이
+  // 섞인다. 그래서 세 키를 «끔»(스키마 기본값)으로 못 박는다. QR 꾸미기 키와 customSat 은
+  // 넣지 않는다: 위 qrPosition 'none' · preset(프리셋 팔레트)이 이미 그 축을 닫는다.
+  // ⚠ hCellStyle · hCellGround 는 **검증되는 사본**이다 — 정본(generator-h 의
+  //   H_CELL_STYLE_DEFAULT · H_CELL_GROUND_DEFAULT)이 번들 순서상 이 모듈 **뒤**라 import 할 수
+  //   없다. generator-state 가 로드 시 «프리셋의 꾸미기 키 = 스키마 기본값» 을 단언한다
+  //   (assertShotPresetDecorationOff — 어긋나면 그 자리에서 던진다).
+  cellShape: CELL_SHAPE_DEFAULT,
+  hCellStyle: 'square',
+  hCellGround: 'level5',
   // ─ 궤도 축 (2026-09-07 21:0x, 운영자 지시 「8개 자세 x 2 배경」) ────────────
   // **자세 8은 카메라가 아니라 렌더의 궤도 회전이다** (`GUIDE_3d-shoot-32.md` §1):
   // 인쇄물을 비스듬히 찍으면 큐브 세 면이 여전히 한 평면이라 단일 H 로 풀리고,

@@ -432,8 +432,14 @@ export function encodeOptionsForY(state) {
 /**
  * 중앙 QR은 중앙 슬롯을 독점한다. 특히 실험판의 기본 파인더가 cell-mask일 때도
  * finderPatternId를 생략해 기본값으로 되돌아가지 않도록 여기서 명시한다.
+ *
+ * `cellShape` 는 셀 꾸미기 spec — `cell-shape.resolveCellShapeSpec` 의 `spec` 을 **그대로** 받는다
+ * (DESIGN_001 §4.2 L5). null · undefined(기본 · 잠금)면 **키를 만들지 않는다** — 꾸미기 끔 = 현재
+ * 출력 바이트 동일(§2.3 «키 없음» 규칙, `test/cell-shape-off-identity.test.js`). 값 검증은 생산자
+ * (`scene.js` cellShapeSpecOf)가 한다 — 여기서 고치거나 떨어뜨리지 않는다.
  */
 export function sceneOptionsForOA({
+  cellShape,
   centralN7Emphasis,
   fallback,
   finderPatternId,
@@ -507,6 +513,7 @@ export function sceneOptionsForOA({
    * «생성기 화면·산출물의 배치 정책» 단일 소유자라는 뜻이다.
    */
   if (!needsCornerQr) opts.margin = 20;
+  if (cellShape !== null && cellShape !== undefined) opts.cellShape = cellShape;
   return opts;
 }
 

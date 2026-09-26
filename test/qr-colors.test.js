@@ -12,6 +12,9 @@
 //   ④ match(custom 팔레트 h, customSat p) 의 색 = custom(h, p) 의 색 = makeCustomPalette 원본
 //      (L1 식과 같은 식) · 'darker' 폴백 · 눈 옵션 두 해석 · 허용표 fail-closed · 순수성
 //      (상태 · 팔레트 불변, makeCustomPalette 한 칸 캐시 불변).
+//   ⑤ 구조 잠금(통합자 결정 3 · 설계 §5.2 M6): 호스트 'y'(Type Y 코너 QR)의 비기본 조합은 전 조합 행이
+//      있어도 'qr-y-host' 로 잠기고, 같은 상태가 oak · h 에서는 열린다. 팔레트 · 대비 판정은 열리는
+//      호스트(oak · h)에서 잰다. H(Y + 3d)는 qrDecoHostOf 로 'h' — y 잠금으로 가지 않는다.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,6 +29,10 @@ import {
   qrCustomDark,
   qrDarkerEye,
   qrHostOfType,
+  qrDecoHostOf,
+  QR_DECO_LOCK_REASONS,
+  QR_DECO_STRUCTURAL_LOCK_REASONS,
+  QR_LOCKED_HOSTS,
   hueOfRgb,
   basePaletteProblem,
   resolveQrDeco,
@@ -263,8 +270,44 @@ test('기본 허용표(전부 잠금 스텁)에서는 모든 비기본 선택이
   for (const host of QR_HOSTS) {
     const r = resolveQrDeco(state, getPreset('slate'), host);
     assert.equal(r.deco, null);
-    assert.equal(r.lockReason, 'qr-unmeasured');
+    // y 는 구조 잠금이 허용표보다 먼저 건다(통합자 결정 3) — 사유가 «미측정» 이 아니라 호스트다.
+    assert.equal(r.lockReason, host === 'y' ? QR_DECO_LOCK_REASONS.Y_HOST : QR_DECO_LOCK_REASONS.UNMEASURED, host);
   }
+});
+
+test('구조 잠금 qr-y-host: 전 조합 행이 있어도 Y 코너 QR 꾸미기는 잠기고, 같은 상태가 oak · h 에서는 열린다', () => {
+  // 설계 §5.2 safety M6 · 통합자 결정 3 — 잠금 호스트는 y 하나.
+  assert.deepEqual([...QR_LOCKED_HOSTS], ['y']);
+  assert.deepEqual([...QR_DECO_STRUCTURAL_LOCK_REASONS], [QR_DECO_LOCK_REASONS.Y_HOST]);
+  // 생성기 상태 → 호스트: Y 2.5D 는 y, H(Y + 3d) 는 h — H 가 y 잠금으로 잘못 가지 않는다.
+  assert.equal(qrDecoHostOf('Y', { yRepresentation: '2.5d' }), 'y');
+  assert.equal(qrDecoHostOf('Y', {}), 'y');
+  assert.equal(qrDecoHostOf('Y', { yRepresentation: '3d' }), 'h');
+  for (const t of ['O', 'A', 'K']) assert.equal(qrDecoHostOf(t, { yRepresentation: '3d' }), 'oak', t);
+  const pal = getPreset('slate');
+  let combos = 0;
+  let openedElsewhere = 0;
+  for (const qrCellStyle of SQUARE_CELL_STYLES) {
+    for (const qrColorMode of QR_COLOR_MODES) {
+      for (const qrEye of QR_EYE_MODES) {
+        const state = deepFreeze({ qrCellStyle, qrColorMode, qrEye, qrHue: 200, qrSat: 120 });
+        const y = resolveQrDeco(state, pal, 'y', OPEN_ALL);
+        const oak = resolveQrDeco(state, pal, 'oak', OPEN_ALL);
+        if (oak.deco === null && oak.lockReason === undefined) {
+          // 기본 조합(꾸미기 끔) — y 도 사유 없는 null 이어야 한다(잠금이 끔을 가리지 않는다).
+          assert.deepEqual(y, { deco: null }, JSON.stringify(state));
+          continue;
+        }
+        combos += 1;
+        assert.deepEqual(y, { deco: null, lockReason: QR_DECO_LOCK_REASONS.Y_HOST }, JSON.stringify(state));
+        if (oak.deco) {
+          openedElsewhere += 1;
+          assert.deepEqual(resolveQrDeco(state, pal, 'h', OPEN_ALL).deco, oak.deco, `h = oak ${JSON.stringify(state)}`);
+        }
+      }
+    }
+  }
+  assert.ok(combos > 0 && openedElsewhere > 0, `잠금 ${combos} · oak 열림 ${openedElsewhere}`);
 });
 
 // ── ③ 심은 결함 ───────────────────────────────────────────────────────────
@@ -329,10 +372,14 @@ test('런타임 재단언: 기저 모양이지만 levels[0] 이 밝은 팔레트
   const slate = getPreset('slate');
   const bright = deepFreeze({ name: 'slate', label: 'x', background: slate.background,
     levels: [{ r: 150, g: 150, b: 150 }, slate.levels[1], slate.levels[2]] });
-  const r = resolveQrDeco({ qrColorMode: 'match' }, bright, 'y', OPEN_ALL);
-  assert.equal(r.deco, null);
-  assert.equal(r.lockReason, 'qr-contrast');
-  assert.ok(r.failures.some((f) => f.gate === 'G4'));
+  // 대비 재단언은 열리는 호스트(oak · h)에서 잰다 — y 는 구조 잠금이 대비 판정보다 먼저다.
+  for (const host of ['oak', 'h']) {
+    const r = resolveQrDeco({ qrColorMode: 'match' }, bright, host, OPEN_ALL);
+    assert.equal(r.deco, null, host);
+    assert.equal(r.lockReason, QR_DECO_LOCK_REASONS.CONTRAST, host);
+    assert.ok(r.failures.some((f) => f.gate === 'G4'), host);
+  }
+  assert.equal(resolveQrDeco({ qrColorMode: 'match' }, bright, 'y', OPEN_ALL).lockReason, QR_DECO_LOCK_REASONS.Y_HOST);
 });
 
 test('G1 순서: darker 는 눈이 데이터보다 밝으면 거부, Q3(b) custom 눈은 순서를 묻지 않는다', () => {
@@ -398,7 +445,11 @@ test('허용표 fail-closed: 행 한 줄은 그 조합만 연다 · 키가 빠�
   const one = { ROWS: [{ table: 'qr', host: 'oak', qrCellStyle: 'rounded', qrColorMode: 'match', eyeMode: 'none' }] };
   const state = { qrColorMode: 'match', qrCellStyle: 'rounded' };
   assert.equal(resolveQrDeco(state, pal, 'oak', one).deco.cellStyle, 'rounded');
-  assert.equal(resolveQrDeco(state, pal, 'y', one).lockReason, 'qr-unmeasured');
+  // oak 행은 다른 호스트를 열지 않는다(열리는 호스트 h 로 잰다 — y 는 구조 잠금이 먼저라 이 성질을 못 잰다).
+  assert.equal(resolveQrDeco(state, pal, 'h', one).lockReason, 'qr-unmeasured');
+  const oneY = { ROWS: [{ ...one.ROWS[0], host: 'y' }] };
+  assert.equal(resolveQrDeco(state, pal, 'y', oneY).lockReason, QR_DECO_LOCK_REASONS.Y_HOST);
+  assert.equal(resolveQrDeco(state, pal, 'oak', oneY).lockReason, 'qr-unmeasured');
   assert.equal(resolveQrDeco({ ...state, qrEyeMode: 'darker' }, pal, 'oak', one).lockReason, 'qr-unmeasured');
   assert.equal(resolveQrDeco({ ...state, qrCellStyle: 'dots' }, pal, 'oak', one).lockReason, 'qr-unmeasured');
   const missing = { ROWS: [{ table: 'qr', host: 'oak', qrCellStyle: 'rounded', qrColorMode: 'match' }] };

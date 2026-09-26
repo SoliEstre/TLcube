@@ -4,7 +4,7 @@ import {hAutoRotation,hPalette,H_CELL_GROUND_LEVELS} from './h-render.js';
 import {hMaskValue} from './h-profile.js';
 import {H_ARRANGEMENTS} from './h-face-arrangement.js';
 import {composeHRotation,hOrbitRotation,hOrbitFromRotation,hDragRotation,hAlignmentRotation,H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MODES} from './h-rotation.js';
-import {PRESETS} from './luminance.js';
+import {paletteGradeOf} from './cell-shape.js';
 import {SQUARE_CELL_STYLES} from './square-cell-style.js';
 import * as DEFAULT_CELL_ALLOW from './cell-shape-allow.js';
 export {H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MODES} from './h-rotation.js';
@@ -167,6 +167,10 @@ export function selectHArrangement(state,arrangement){
 // 여는 것은 허용표(cell-shape-allow.js)의 H 행뿐이에요 — 스텁(ROWS=[])이면 square 밖은 전부 잠겨요.
 /** H 셀 바탕 도메인 — level5 = 조명받는 중간톤(빈 면과 같은 색, 기본 §9.3 Q2) · white = 예약 무음영 레벨 4. */
 export const H_CELL_GROUNDS=Object.freeze(Object.keys(H_CELL_GROUND_LEVELS));
+/** 기본값 — 상태 스키마(`hCellStyle` · `hCellGround`)와 resolver 가 같은 값을 읽어요. square = 꾸미기 끔(현재 출력). */
+export const H_CELL_STYLE_DEFAULT='square';
+export const H_CELL_GROUND_DEFAULT='level5';
+if(!SQUARE_CELL_STYLES.includes(H_CELL_STYLE_DEFAULT)||!H_CELL_GROUNDS.includes(H_CELL_GROUND_DEFAULT))throw new Error('generator-h: H 셀 꾸미기 기본값이 도메인 밖이에요');
 /** 허용표 H 행의 문맥 키(와일드카드 없음 — 하나라도 빠진 행은 아무것도 허가하지 않아요). 행 모양:
  *  { table:'h', version, finder, tones, ground, paletteGrade, hCellStyle } */
 export const H_CELL_STYLE_ALLOW_KEYS=Object.freeze(['version','finder','tones','ground','paletteGrade']);
@@ -177,14 +181,14 @@ export const H_CELL_STYLE_LOCK_REASONS=Object.freeze({
   // corners 파인더(H5–H8)는 10×10 마커·2×2 포맷 배치를 재지 않았어요. 둘 다 허용표 행이 있어도 열지 않아요 —
   // 측정 레인이 연다면 이 두 줄을 먼저 지우고 이유를 적어야 해요.
   TWO_TONE:'h-two-tone',CORNERS_FINDER:'h-corners-finder',UNMEASURED:'unmeasured'});
-/** 팔레트 등급 {slate, ember, mono, custom} — 모르는 프리셋은 undefined(문맥 불완전 → 잠금). */
+/** 팔레트 등급 {slate, ember, mono, custom} — 모르는 프리셋은 undefined(문맥 불완전 → 잠금).
+ *  마름모 셀 문맥과 한 벌이에요(`cell-shape.paletteGradeOf` — 통합자 결정 1: 문맥 유도는 제품 코드에 한 벌). */
 export function hPaletteGrade(state){
-  const preset=state?.preset;
-  if(typeof preset!=='string')return undefined;
-  if(Object.prototype.hasOwnProperty.call(PRESETS,preset))return preset;
-  return preset==='custom'?'custom':undefined;
+  return paletteGradeOf(state);
 }
-/** 렌더 문맥 — 버전·파인더·톤은 실제 인코딩(자동 해상도·finder:'auto' 해석 뒤)에서 읽어요. */
+/** 렌더 문맥 — 버전·파인더·톤은 실제 인코딩(자동 해상도·finder:'auto' 해석 뒤)에서 읽어요.
+ *  모양은 마름모 셀의 `cell-shape.cellShapeCtx(type, encoded, state, render)` 와 같은 결: 인코딩 + 상태 → 표 키 문맥.
+ *  H 는 바탕(ground)이 상태 선택이라 렌더 뒤 값(render)이 없어요 — ground 는 resolver 가 상태에서 붙여요. */
 export function hCellStyleCtx(encoded,state){
   if(!encoded||typeof encoded!=='object')return null;
   return {version:encoded.version,finder:encoded.finder,tones:encoded.tones,paletteGrade:hPaletteGrade(state)};
@@ -199,10 +203,10 @@ export function hCellStyleCtx(encoded,state){
  * @param {{ROWS?: object[]}} [allow] 허용표(기본 `src/cell-shape-allow.js`, 테스트는 fixture 주입)
  */
 export function resolveHCellStyleSpec(state,ctx,allow=DEFAULT_CELL_ALLOW){
-  const R=H_CELL_STYLE_LOCK_REASONS,style=state?.hCellStyle??'square';
-  if(style==='square')return {spec:null};
+  const R=H_CELL_STYLE_LOCK_REASONS,style=state?.hCellStyle??H_CELL_STYLE_DEFAULT;
+  if(style===H_CELL_STYLE_DEFAULT)return {spec:null};
   if(!SQUARE_CELL_STYLES.includes(style))return {spec:null,lockReason:R.UNKNOWN_STYLE};
-  const ground=state.hCellGround??'level5';
+  const ground=state.hCellGround??H_CELL_GROUND_DEFAULT;
   if(!H_CELL_GROUNDS.includes(ground))return {spec:null,lockReason:R.UNKNOWN_GROUND};
   const key={...(ctx||{}),ground};
   if(!ctx||H_CELL_STYLE_ALLOW_KEYS.some(k=>key[k]===undefined))return {spec:null,lockReason:R.CTX_INCOMPLETE};
@@ -227,7 +231,7 @@ export function hPreviewOptions(state,{elapsedMs=0,palette,encoded,allow}={}){
     :{rotateX:0,rotateY:0,rotateZ:0};
   const pose=composeHRotation(hOrbitRotation(view),auto);
   const options={palette,margin:2,...pose,perspective:view.perspective,arrangement:state.hArrangement??'isometric',renderFaces:state.hRenderFaces??(state.hFaces>3?6:3)};
-  if((state.hCellStyle??'square')!=='square'){
+  if((state.hCellStyle??H_CELL_STYLE_DEFAULT)!==H_CELL_STYLE_DEFAULT){
     const {spec}=resolveHCellStyleSpec(state,hCellStyleCtx(encoded,state),allow);
     if(spec){options.hCellStyle=spec.style;options.hCellGround=spec.ground;}
   }

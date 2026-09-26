@@ -33,6 +33,8 @@ import {
   EXPOSED_CELL_SHAPES,
   CELL_SHAPE_ALLOW_KEYS,
   CELL_SHAPE_LOCK_REASONS,
+  CELL_SHAPE_LOCK_CTX_KEYS,
+  CELL_SHAPE_STRUCTURAL_LOCK_REASONS,
   BEVEL_BAND_SEPARATION_MIN,
   cellShapeTier,
   cellShapeAllowedKinds,
@@ -681,10 +683,28 @@ const CTX_OAK = Object.freeze({
   type: 'O', version: 'V1', finderPatternId: 'pinwheel-c2-2-1100-cw', tones: 3, gapGrade: 'white',
   bgMode: 'white', paletteGrade: 'slate', qrPosition: 'none',
 });
+/**
+ * Y 구조 잠금 문맥 키(표 밖 — `CELL_SHAPE_LOCK_CTX_KEYS.y`)의 «잠그지 않는» 값: 코너/없음 QR ·
+ * 윈도 β 아님 · 슬롯 셀 없음. 키 목록은 cell-shape.js 에서 읽는다 — 키가 늘면 여기서 던진다
+ * (빠진 키는 resolver 가 `ctx-incomplete` 로 잠가 아래 «표 행이 연다» 단언이 엉뚱한 사유로 빨개진다).
+ */
+const Y_LOCK_CTX_OPEN = Object.freeze({ qrPosition: 'none', qrWindow: false, qrSlot: false });
+{
+  const want = [...CELL_SHAPE_LOCK_CTX_KEYS.y].sort().join(',');
+  const have = Object.keys(Y_LOCK_CTX_OPEN).sort().join(',');
+  if (want !== have) throw new Error(`CTX_Y 구조 잠금 키 어긋남: 모듈 ${want} · 픽스처 ${have}`);
+  if (CELL_SHAPE_LOCK_CTX_KEYS.oak.length !== 0) throw new Error('oak 구조 잠금 문맥 키가 생겼다 — CTX_OAK 에 채워라');
+}
 const CTX_Y = Object.freeze({
   type: 'Y', cellSurfaceLayout: 'v0', locatorProfile: 'cell-surface-v0', nBand: '13', tones: 3,
   gapGrade: 'white', bgMode: 'white', paletteGrade: 'slate', seamAdjacent: 'off',
+  ...Y_LOCK_CTX_OPEN,
 });
+
+/** 구조 잠금 'bevel-raised'(설계 §3.1 «1.4 는 1차에서 잠근다» · safety M13) — 돌출 bevel(게인 > 1). */
+function isRaisedBevel(choice) {
+  return choice.cellShape === 'bevel' && choice[CELL_SHAPE_PARAMS.bevel.key] > 1;
+}
 
 /** 모든 비 square 선택 = 모양 × 도메인 파라미터(round-bevel 은 고정). */
 function allNonSquareChoices() {
@@ -710,6 +730,7 @@ describe('resolveCellShapeSpec', () => {
   test('스텁 표에서 모든 비 square 선택 × O·Y × 틈 등급 3 → null + lockReason, 동결 state 불변', () => {
     const reasons = new Set(Object.values(CELL_SHAPE_LOCK_REASONS));
     let n = 0;
+    let raised = 0;
     for (const base of [CTX_OAK, CTX_Y]) {
       for (const gapGrade of ['white', 'black', 'unknown']) {
         const ctx = { ...base, gapGrade };
@@ -720,13 +741,21 @@ describe('resolveCellShapeSpec', () => {
           assert.equal(res.spec, null, `${choice.cellShape} 는 스텁에서 잠겨야 한다`);
           assert.ok(reasons.has(res.lockReason), `사유 ${res.lockReason}`);
           const exposed = EXPOSED_CELL_SHAPES.includes(choice.cellShape);
-          assert.equal(res.lockReason, exposed && gapGrade !== 'white' ? 'exposed-gap' : 'unmeasured');
+          // 구조 잠금(허용표보다 먼저) → 노출형 × 틈 등급 → 미측정. 이 두 문맥은 bevel-raised 말고는
+          // 구조 잠금에 걸리지 않는다(Y 는 코너/없음 QR · v0 · 3톤 · cell-surface 로케이터).
+          const expected = isRaisedBevel(choice) ? CELL_SHAPE_LOCK_REASONS.BEVEL_RAISED
+            : exposed && gapGrade !== 'white' ? 'exposed-gap' : 'unmeasured';
+          assert.equal(res.lockReason, expected, `${base.type} ${JSON.stringify(choice)} ${gapGrade}`);
+          if (isRaisedBevel(choice)) raised += 1;
           assert.equal(JSON.stringify(state), before);
           n += 1;
         }
       }
     }
     assert.equal(n, 2 * 3 * (3 + 2 + 1 + 2 + 2));
+    // bevel 1.4 는 도메인 안(UI 선택지)이고 O·Y × 틈 3 칸 모두에서 구조 잠금 사유로 잠겼다.
+    assert.ok(CELL_SHAPE_STRUCTURAL_LOCK_REASONS.includes(CELL_SHAPE_LOCK_REASONS.BEVEL_RAISED));
+    assert.equal(raised, 2 * 3);
   });
 
   test('square · 키 없음 → spec null, 잠금 사유 없음', () => {
@@ -758,6 +787,33 @@ describe('resolveCellShapeSpec', () => {
     assert.equal(resolveCellShapeSpec({ cellShape: 'round-bevel' }, { ...CTX_Y, nBand: '25' }, allow).spec, null);
     // O 행이 Y 를, Y 행이 O 를 허가하지 않는다.
     assert.equal(resolveCellShapeSpec({ cellShape: 'round-bevel' }, { ...CTX_OAK }, allow).spec, null);
+    // Y 구조 잠금 키가 하나라도 빠지면 행이 있어도 잠긴다(잴 수 없으면 잠근다 — fail-closed).
+    for (const k of CELL_SHAPE_LOCK_CTX_KEYS.y) {
+      const { [k]: _drop, ...missing } = CTX_Y;
+      const res = resolveCellShapeSpec({ cellShape: 'round-bevel' }, missing, allow);
+      assert.deepEqual(res, { spec: null, lockReason: CELL_SHAPE_LOCK_REASONS.CTX_INCOMPLETE }, `키 ${k}`);
+    }
+  });
+
+  test('구조 잠금 bevel-raised: 허용표에 bevel 1.4 행이 있어도 잠기고(O·Y), 같은 표의 0.6 행은 연다', () => {
+    const R = CELL_SHAPE_LOCK_REASONS;
+    const bevel = CELL_SHAPE_PARAMS.bevel;
+    assert.ok(bevel.domain.includes(1.4), '1.4 는 도메인(UI 선택지) 안이다 — 잠금은 도메인 밖 사유가 아니다');
+    for (const [table, ctx] of [['oak', CTX_OAK], ['y', CTX_Y]]) {
+      const allow = deepFreeze({
+        ROWS: bevel.domain.map((param) => ({ table, ...ctx, cellShape: 'bevel', param })),
+      });
+      assert.deepEqual(
+        resolveCellShapeSpec(deepFreeze({ cellShape: 'bevel', [bevel.key]: 1.4 }), ctx, allow),
+        { spec: null, lockReason: R.BEVEL_RAISED },
+        `${table}: 행이 있는 1.4`,
+      );
+      assert.deepEqual(
+        resolveCellShapeSpec(deepFreeze({ cellShape: 'bevel', [bevel.key]: 0.6 }), ctx, allow),
+        { spec: { kind: 'bevel', param: 0.6 } },
+        `${table}: 같은 표의 0.6 은 열린다(잠금이 bevel 전체가 아니다)`,
+      );
+    }
   });
 
   test('잠금 사유: 모르는 모양 · 도메인 밖 · 마름모 아닌 타입 · 문맥 누락', () => {
@@ -773,15 +829,27 @@ describe('resolveCellShapeSpec', () => {
 
   test('resolver 가 여는 spec 은 shapeCellFace 가 그대로 받는다(도메인 일치)', () => {
     const points = facePolygon(0, 0, 'T', { size: 1 });
+    let opened = 0;
     for (const choice of allNonSquareChoices()) {
       const kind = choice.cellShape;
       const def = CELL_SHAPE_PARAMS[kind];
       const param = def ? choice[def.key] : null;
       const allow = { ROWS: [{ table: 'oak', ...CTX_OAK, cellShape: kind, param }] };
-      const { spec } = resolveCellShapeSpec(choice, CTX_OAK, allow);
+      const res = resolveCellShapeSpec(choice, CTX_OAK, allow);
+      if (isRaisedBevel(choice)) {
+        // 구조 잠금 — 행이 있어도 열리지 않는다. 기하는 여전히 1.4 를 받는다(잠금은 제품 판단, 기하 한계 아님).
+        assert.deepEqual(res, { spec: null, lockReason: CELL_SHAPE_LOCK_REASONS.BEVEL_RAISED });
+        const raw = shapeCellFace(points, COLOR, { kind, param }, CELL_TIERS.T3, DOT_CELL);
+        assert.ok(raw.length >= 1 && raw.every((s) => Array.isArray(s.basePoints)), `${kind} ${param} 기하`);
+        continue;
+      }
+      const { spec } = res;
+      opened += 1;
       assert.deepEqual(spec, { kind, param });
       const out = shapeCellFace(points, COLOR, spec, CELL_TIERS.T3, DOT_CELL);
       assert.ok(out.length >= 1 && out.every((s) => Array.isArray(s.basePoints)), kind);
     }
+    // 구조 잠금은 bevel 1.4 한 칸만 뺀다(나머지 비 square 선택은 행이 있으면 전부 열린다).
+    assert.equal(opened, allNonSquareChoices().length - 1);
   });
 });

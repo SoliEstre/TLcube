@@ -66,6 +66,8 @@ test('기울임값검증·UI범위·영상snapshot및간격계약을고정해요
   assert.match(html,/data-state-keys="[^"]*hRotationTiltDeg/);
   assert.match(html,/\$\('hRotationTiltRow'\)\.hidden=axis==='gyro'/);
   assert.match(html,/const state=\{\.\.\.generatorState\}/);
-  assert.match(html,/hPreviewOptions\(state,\{elapsedMs:elapsed\+timestampMs,palette\}\)/);
+  // 영상 프레임 옵션(경과 시각 = elapsed+timestampMs · palette · encoded · faceImages · zoom · outline · lighting ·
+  // 코너 QR)과 «클릭 시점 스냅샷(state)으로 그린다» 의 행동은 generator-h-rotation-fill.test.js 가 실제 click
+  // 리스너를 vm 에서 돌려 재요 — 인자 순서·철자만 바뀌어도 빨개지던 구 철자 정규식은 그 자로 대체했어요.
   assert.match(html,/grid-template-columns:36px 28px minmax\(50px,1fr\) 28px auto;gap:5px/);
 });

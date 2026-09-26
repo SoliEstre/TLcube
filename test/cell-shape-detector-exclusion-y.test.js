@@ -21,6 +21,8 @@
 //      성립한다 — 등급은 tones 가 아니라 role 로 가른다(§3.0 정정 2).
 //   ⑨ 코너 QR `palette.qrDeco`: 조각이 안전영역에 삼켜지지 않는다(태그를 벗기면 삼켜진다 — 심은
 //      결함) · 기능 모듈은 정확한 모듈 사각 · 눈은 deco.eye · 윈도 β · 슬롯 QR 과 나머지 도형은 불변.
+//      제품 resolver 는 Y 호스트를 구조 잠금(qr-y-host)하므로 deco 는 열린 호스트(oak)의 resolver 출력을
+//      생산자에 직접 주입해 잰다(생산자 경로 성질) · 잠금 자체는 별도 양성 단언.
 //   ⑩ bevel 띠 클램프: 생산자가 아는 배경을 avoid 에 더한다(투명 배경은 더하지 않는다).
 // 격자: 레이아웃 v0(n=13) · v0TR(21·25) · off(21) · hex-frame-v1(13) · 슬롯 v0WQ(21) · 윈도 β(25)
 // (v0 는 n=13 전용 — 인코더가 version 0 만 받는다)
@@ -37,7 +39,9 @@ import { quietZonePolygons } from '../src/quietzone.js';
 import { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, relativeLuminance } from '../src/luminance.js';
 import { TL_READER_URL, qrMatrix } from '../src/qr.js';
 import { CELL_TIERS, cellShapeTier, faceGainColor } from '../src/cell-shape.js';
-import { resolveQrDeco, QR_COLOR_MODES, QR_EYE_MODES } from '../src/qr-colors.js';
+import {
+  resolveQrDeco, qrDecoHostOf, QR_COLOR_MODES, QR_EYE_MODES, QR_DECO_LOCK_REASONS, QR_DECO_STRUCTURAL_LOCK_REASONS,
+} from '../src/qr-colors.js';
 import { SQUARE_CELL_STYLES } from '../src/square-cell-style.js';
 import { qrFunctionMapV1 } from '../src/qr-function-map.js';
 
@@ -527,15 +531,25 @@ describe('⑩ bevel 띠 클램프 — 생산자가 아는 배경을 avoid 에 �
 
 // ── ⑨ 코너 QR palette.qrDeco ───────────────────────────────────────────────
 
-const ALLOW_ALL_QR_Y = Object.freeze({
+// 제품에서 Y 코너 QR 꾸미기는 **구조 잠금**(`qr-y-host` — 설계 §5.2 safety M6 · 통합자 결정 3)이라
+// resolver 가 host 'y' 로는 deco 를 내지 않는다. 그래도 생산자(sceneY)의 코너 QR 경로가 받은 deco 를
+// 어떻게 그리는지(selfQuiet · 기능 모듈 사각 · 눈 색)는 계속 재야 한다 — 잠금이 풀리는 날 그 경로가
+// 이미 맞아 있어야 하므로. deco 는 열리는 호스트('oak')의 resolver 출력으로 얻어 생산자에 직접 넣는다
+// (deco 의 색 · 스타일은 호스트와 무관하다 — decoOf 의 전제 단언이 oak · h 동일을 잰다).
+const allowAllQr = (host) => Object.freeze({
   ROWS: Object.freeze(SQUARE_CELL_STYLES.flatMap((qrCellStyle) => QR_COLOR_MODES.flatMap((qrColorMode) => (
-    QR_EYE_MODES.map((eyeMode) => Object.freeze({ table: 'qr', host: 'y', qrCellStyle, qrColorMode, eyeMode }))
+    QR_EYE_MODES.map((eyeMode) => Object.freeze({ table: 'qr', host, qrCellStyle, qrColorMode, eyeMode }))
   )))),
 });
+const ALLOW_ALL_QR_OAK = allowAllQr('oak');
+const ALLOW_ALL_QR_H = allowAllQr('h');
+const ALLOW_ALL_QR_Y = allowAllQr('y');
 
 function decoOf(state) {
-  const r = resolveQrDeco(state, SLATE, 'y', ALLOW_ALL_QR_Y);
+  const r = resolveQrDeco(state, SLATE, 'oak', ALLOW_ALL_QR_OAK);
   assert.ok(r.deco, `전제: deco 가 안 열렸다 ${JSON.stringify(state)} → ${r.lockReason}`);
+  // 전제: 호스트 무관 — 다른 열린 호스트(h)도 같은 deco 를 낸다(주입값이 «y 가 열리면 받을 값» 의 대리로 정당).
+  assert.deepEqual(resolveQrDeco(state, SLATE, 'h', ALLOW_ALL_QR_H).deco, r.deco, `전제: 호스트별 deco 가 다르다 ${JSON.stringify(state)}`);
   return r.deco;
 }
 
@@ -658,6 +672,22 @@ describe('⑨ 코너 QR palette.qrDeco — 코너만 · 안전영역 제외 · �
     assert.ok(rect);
     assert.deepEqual(on.shapes.filter((s) => !inRect(centroid(s), rect)), off.shapes.filter((s) => !inRect(centroid(s), rect)));
     assert.notDeepEqual(on.shapes, off.shapes);
+  });
+
+  test('제품 resolver 는 Y 코너 QR 꾸미기를 qr-y-host 로 잠근다 — 전 조합 행이 있어도(구조 잠금)', () => {
+    // 생성기 상태의 Y 2.5D → 호스트 'y'(H = Y + 3d 는 'h' — 잠금 대상 아님).
+    assert.equal(qrDecoHostOf('Y', { type: 'Y', yRepresentation: '2.5d' }), 'y');
+    assert.equal(qrDecoHostOf('Y', { type: 'Y', yRepresentation: '3d' }), 'h');
+    assert.ok(QR_DECO_STRUCTURAL_LOCK_REASONS.includes(QR_DECO_LOCK_REASONS.Y_HOST));
+    for (const state of QR_DECO_STATES) {
+      const r = resolveQrDeco(state, SLATE, 'y', ALLOW_ALL_QR_Y);
+      assert.equal(r.deco, null, `${JSON.stringify(state)}: y 호스트에서 열렸다`);
+      assert.equal(r.lockReason, QR_DECO_LOCK_REASONS.Y_HOST, JSON.stringify(state));
+      // 같은 상태가 열린 호스트에서는 열린다 — 잠금 사유가 «미측정 · 대비» 가 아니라 호스트다.
+      assert.ok(resolveQrDeco(state, SLATE, 'oak', ALLOW_ALL_QR_OAK).deco, JSON.stringify(state));
+    }
+    // 기본 조합은 잠금이 아니라 «꾸미기 끔»(현재 출력) — 사유 없이 deco null.
+    assert.deepEqual(resolveQrDeco({}, SLATE, 'y', ALLOW_ALL_QR_Y), { deco: null });
   });
 
   test('반쯤 빈 qrDeco 는 조용히 기본으로 메우지 않고 던진다', () => {

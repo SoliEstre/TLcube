@@ -252,7 +252,10 @@ test('안전영역 — 문턱 타이브레이크는 프리셋 전부에서 죽�
 // ── A-2 «?» 도움말 배선 ───────────────────────────────────────────────────
 
 test('«?» 버튼은 button 요소 + aria-expanded 이고 사전 키가 여덟 언어에 있다', () => {
-  const dots = [...INDEX.matchAll(/<button type="button" class="help-dot" data-help="(g\d{3})"([^>]*)>/g)];
+  // ⚠ **의도적 갱신 (2026-09-26, DESIGN_001 §6.2)**: `g\d{3}` → `g\d{3,4}`. 사전 키가 g1000 을 넘은 뒤
+  //   (g1040~g1047 도움말이 이미 있다) 3자리 정규식은 4자리 키의 «?» 버튼을 **조용히 건너뛰어** 그 버튼들의
+  //   aria · 8언어 검사가 한 번도 돌지 않았다. 꾸미기 레인이 g1151 부터 키를 더하므로 여기서 넓힌다.
+  const dots = [...INDEX.matchAll(/<button type="button" class="help-dot" data-help="(g\d{3,4})"([^>]*)>/g)];
   assert.ok(dots.length >= 7, `«?» 버튼이 너무 적다 (${dots.length}) — 섹션 이관이 덜 됐다`);
   for (const [, key, rest] of dots) {
     assert.match(rest, /aria-expanded="false"/, `${key}: aria-expanded 기본값이 없다`);

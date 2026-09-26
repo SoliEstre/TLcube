@@ -8,6 +8,7 @@ import { commitFinderQrTransition } from '../src/finder-selection.js';
 import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from '../src/centralMarkerN7.js';
 import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 import {
+  DECORATION_STATE_KEYS,
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   GENERATOR_STATE_SCHEMA, createGeneratorState, exposedGeneratorStateKeys,
   RESOLUTION_TIERS, resolutionTierAvailable, resolutionTierForVersion,
@@ -48,6 +49,39 @@ test('일반 노출 선택은 전부 고급에도 있고 실제 패널 메타데
   const sharedSource = INDEX_SOURCE.slice(sharedStart, sharedEnd);
   assert.match(sharedSource, /id="finderSection"/);
   assert.match(sharedSource, /id="finderScorePanel"/);
+});
+
+test('셀 꾸미기 · 채도 · 폴백 QR 키(DESIGN_001 §2.2 + §9.3 운영자 답): 15키 · BOTH', () => {
+  // 키 목록은 설계 §2.2 표 + §9.3 Q3(qrEyeDark 불리언 → qrEye 3값 + qrEyeHue · qrEyeSat)의 계약이다.
+  assert.deepEqual([...DECORATION_STATE_KEYS].sort(), [
+    'cellShape', 'cellRound', 'cellBevel', 'cellGap', 'cellDot',
+    'hCellStyle', 'hCellGround',
+    'qrCellStyle', 'qrColorMode', 'qrHue', 'qrSat', 'qrEye', 'qrEyeHue', 'qrEyeSat',
+    'customSat',
+  ].sort());
+  for (const key of DECORATION_STATE_KEYS) {
+    assert.equal(GENERATOR_STATE_SCHEMA[key].exposure, 'both', key);
+    assert.ok(exposedGeneratorStateKeys('normal').includes(key), key);
+  }
+  // 컨테이너 배치(index.html data-state-keys)는 아래 테스트가 잰다.
+});
+
+test('꾸미기 키 컨테이너 배치: customSat 은 customHue 와 같은 두 모드 패널, 나머지 14키는 #sharedControls 에만', () => {
+  // 실제 index.html 의 data-state-keys 를 읽는다. 컨테이너는 위 «패널 메타데이터» 자와 같은 넷.
+  // ⚠ 형제 자: test/decoration-ui.test.js ⑥ 이 같은 배치 성질(14키 → #sharedControls · customSat ≡ customHue)을 잰다 —
+  //   두 벌이다(정본 지정은 통합자 몫). 차이: 이쪽은 customHue 의 위치 자체([panelNormal, panelAdvanced])를 못 박아
+  //   hue·sat 가 함께 다른 곳으로 옮겨가도 잡고, ⑥ 은 대신 일반 모드 노출(exposedGeneratorStateKeys)을 같이 잰다.
+  //   한쪽을 지우려면 그 차이를 남는 쪽으로 먼저 옮길 것.
+  const containers = ['sharedContent', 'sharedControls', 'panelNormal', 'panelAdvanced'];
+  const byId = new Map(containers.map((id) => [id, sectionStateKeys(id)]));
+  const where = (key) => containers.filter((id) => byId.get(id).includes(key));
+  // customSat 은 커스텀 팔레트 채도 — hue 와 한 묶음이라 hue 가 있는 곳(일반 · 고급 패널)에 같이 있다.
+  assert.deepEqual(where('customHue'), ['panelNormal', 'panelAdvanced']);
+  assert.deepEqual(where('customSat'), where('customHue'));
+  const rest = DECORATION_STATE_KEYS.filter((k) => k !== 'customSat');
+  assert.equal(rest.length, 14);
+  // 셀 모양 · H 셀 · 폴백 QR 꾸미기는 모드 공통(BOTH) 영역 한 곳에만 — 두 모드 패널에 중복되면 컨트롤이 둘 생긴다.
+  for (const key of rest) assert.deepEqual(where(key), ['sharedControls'], key);
 });
 
 test('일반 티어와 고급 정확 버전은 모든 타입에서 같은 canonical 값으로 왕복한다', () => {

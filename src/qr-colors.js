@@ -23,9 +23,16 @@
  *             #000 이라 아무것도 바뀌지 않는다(비활성 = 'none' 과 같다).
  *   'custom'  Q3 (b) — 눈 hue · 채도 별도: colorAtLuminance(qrEyeHue, satAt(0.42, qrEyeSat), Y_L0).
  *             목표 Y ≈ 0.0612 ≤ 0.12(G4). 데이터와의 명암 순서는 묻지 않는다(G1 은 흰 바탕 대비만).
- *   어느 해석을 UI 에 올릴지는 운영자 답 뒤 L5 가 정한다. 상태 키: `qrEyeMode`
- *   ('none'|'darker'|'custom'). 스키마 초안의 `qrEyeDark: true` 는 'darker' 로 읽는다.
- *   Q3 (b) 의 눈 hue · 채도는 `qrEyeHue` · `qrEyeSat`(없으면 qrHue · 100).
+ *   운영자 답(§9.3 Q3, 2026-09-26): 셋 다 UI 에 올린다. 상태 키의 정본은 스키마 `qrEye`
+ *   ('none'|'darker'|'custom'). 읽기 순서(`qrEyeModeOf`): `qrEye` → 초안 키 `qrEyeMode`(L0 하네스
+ *   fixture 가 쓰는 철자) → 초안 키 `qrEyeDark: true`('darker').
+ *   Q3 (b) 의 눈 hue · 채도는 `qrEyeHue` · `qrEyeSat`(없으면 qrHue · 중점 100).
+ *
+ * ── 구조 잠금 · 문맥 (통합자 결정 1 · 3, 2026-09-26) ─────────────────────────
+ *   `qrDecoCtx(host, state)` 가 허용표 QR 행 문맥(host · qrCellStyle · qrColorMode · eyeMode — eyeMode 는
+ *   default+darker → none 으로 접는다)의 **유일한 유도**다(하네스도 import). 호스트 'y'(Type Y 코너 QR)의
+ *   꾸미기는 허용표와 무관하게 잠근다(`qr-y-host` — 설계 §5.2 safety M6: «실루엣 밖 채색 금지» 기전을
+ *   재기 전까지). 잠금 사유 id 는 `QR_DECO_LOCK_REASONS`.
  *
  * ── 대비 가드 (§5.2) ──────────────────────────────────────────────────────
  * 그레이 변환 5종: 선형 Y709(상대휘도) · BT.601 luma · ZXing (R+2G+B)/4 · 감마 709(jsQR —
@@ -57,7 +64,9 @@
  */
 
 import { getPreset, relativeLuminance } from './luminance.js';
-import { CUSTOM_SATS, colorAtLuminance, satAt } from './palette-hue.js';
+import {
+  CUSTOM_SATS, CUSTOM_SAT_MAX, CUSTOM_SAT_MIN, colorAtLuminance, satAt,
+} from './palette-hue.js';
 import { SQUARE_CELL_STYLES } from './square-cell-style.js';
 import * as DEFAULT_ALLOW from './cell-shape-allow.js';
 
@@ -69,18 +78,83 @@ export const QR_COLOR_MODES = Object.freeze(['default', 'match', 'custom']);
 /** 눈 옵션 — 'darker' = Q3 (a), 'custom' = Q3 (b). */
 export const QR_EYE_MODES = Object.freeze(['none', 'darker', 'custom']);
 
+/** hue 도메인(정수 °) — `qrHue` · `qrEyeHue`. 색 공식은 360 으로 감싸지만 상태는 이 폭의 정수만 받는다. */
+export const QR_HUE_MIN = 0;
+export const QR_HUE_MAX = 359;
+
+/** 채도 조정 도메인(정수 %) — `qrSat` · `qrEyeSat` · `customSat` 공통. 정본은 palette-hue 의 커스텀 채도 폭. */
+export const QR_SAT_MIN = CUSTOM_SAT_MIN;
+export const QR_SAT_MAX = CUSTOM_SAT_MAX;
+/** 채도 중점 = 기준 채도 그대로(`satAt(base, 중점) === base`). 커스텀 팔레트 · QR 색의 기본값. */
+export const QR_SAT_NEUTRAL = (CUSTOM_SAT_MIN + CUSTOM_SAT_MAX) / 2;
+if (satAt(0.42, QR_SAT_NEUTRAL) !== 0.42 || satAt(0.3, QR_SAT_NEUTRAL) !== 0.3) {
+  throw new Error('qr-colors: 채도 중점이 기준 채도를 보존하지 않는다 — palette-hue satAt 가정 깨짐');
+}
+
+/**
+ * 폴백 QR 꾸미기 상태 키의 기본값 — 스키마(`generator-state.js`)와 resolver 가 같은 값을 읽는다.
+ * 기본 조합(default · square · none)이면 `resolveQrDeco` 는 `{deco:null}` = 현재 출력.
+ */
+export const QR_DECO_DEFAULTS = Object.freeze({
+  qrCellStyle: 'square',
+  qrColorMode: 'default',
+  qrHue: 210,
+  qrSat: QR_SAT_NEUTRAL,
+  qrEye: 'none',
+  qrEyeHue: 210,
+  qrEyeSat: QR_SAT_NEUTRAL,
+});
+if (!SQUARE_CELL_STYLES.includes(QR_DECO_DEFAULTS.qrCellStyle)
+  || !QR_COLOR_MODES.includes(QR_DECO_DEFAULTS.qrColorMode) || !QR_EYE_MODES.includes(QR_DECO_DEFAULTS.qrEye)) {
+  throw new Error('qr-colors: QR_DECO_DEFAULTS 가 도메인 밖이다');
+}
+
+/** 잠금 사유 — **안정 id**(UI 인라인 사유 i18n 키로 매핑). 문자열을 바꾸지 않는다. */
+export const QR_DECO_LOCK_REASONS = Object.freeze({
+  INVALID_STATE: 'qr-invalid-state', // 모르는 모드 · 스타일 · 눈 · 범위 밖 hue/sat
+  BASE_PALETTE: 'qr-base-palette', // 렌더 팔레트(paletteOf)가 들어왔다 — 기저 팔레트만 받는다
+  UNMEASURED: 'qr-unmeasured', // 허용표에 행이 없다
+  CONTRAST: 'qr-contrast', // 대비 가드 G1–G4 실패(런타임 재단언)
+  Y_HOST: 'qr-y-host', // 구조 잠금 — Type Y 코너 QR 꾸미기(설계 §5.2 safety M6 · 통합자 결정 3)
+});
+
+/** 구조 잠금 사유(허용표에 행이 있어도 잠긴다). */
+export const QR_DECO_STRUCTURAL_LOCK_REASONS = Object.freeze([QR_DECO_LOCK_REASONS.Y_HOST]);
+
+/** 구조 잠금 호스트 — 이 호스트의 꾸미기(기본 조합 밖)는 표와 무관하게 잠긴다. */
+export const QR_LOCKED_HOSTS = Object.freeze(['y']);
+
 /** 코너 QR 호스트 — 허용표 QR 행의 `host` 도메인. */
 export const QR_HOSTS = Object.freeze(['oak', 'y', 'h']);
 
 /** 기저 팔레트 이름 — 프리셋 3 + custom. */
 export const QR_BASE_PALETTE_NAMES = Object.freeze(['slate', 'ember', 'mono', 'custom']);
 
-/** 타입 → 코너 QR 호스트. C/G/V 는 O/A 생산자(scene.js)를 탄다. */
+/**
+ * **렌더 결과** 타입 → 코너 QR 호스트. C/G/V 는 O/A 생산자(scene.js)를 탄다.
+ * ⚠ 생성기 상태에서 호스트를 얻을 땐 이 함수가 아니라 `qrDecoHostOf(generatorState.type, generatorState)` —
+ * 생성기 상태의 H 는 `type:'Y'` + `yRepresentation:'3d'` 라 여기 넣으면 'y'(구조 잠금)로 잘못 간다.
+ */
 export function qrHostOfType(type) {
   if (type === 'Y') return 'y';
   if (type === 'H') return 'h';
   if (['O', 'A', 'K', 'C', 'G', 'V'].includes(type)) return 'oak';
   throw new RangeError(`qr-colors: 코너 QR 호스트가 없는 타입: ${type}`);
+}
+
+/**
+ * **생성기 상태** → 코너 QR 호스트 — 제품 문맥 유도의 QR 짝. H 판정은 `cell-shape.js` `cellShapeTypeOf`
+ * (Y + 3d → null) · `generator-h.js` `isHGenerator` 와 같은 뜻: Y + yRepresentation '3d' = H = 'h'.
+ * 순환 import 를 피하려고 조건을 옮겨 적었다 — 세 판정의 일치는 test/cell-shape-allowlist.test.js 가 격자로 잰다.
+ * Y 2.5D → 'y'(구조 잠금) · O/A/K → 'oak'. 렌더 결과 타입('H' · C/G/V)도 받는다(`qrHostOfType` 위임).
+ *
+ * @param {string} type generatorState.type(O|A|K|Y) 또는 렌더 결과 타입
+ * @param {object} [state] 생성기 상태(yRepresentation 을 읽는다)
+ * @returns {'oak'|'y'|'h'}
+ */
+export function qrDecoHostOf(type, state) {
+  if (type === 'Y' && state && state.yRepresentation === '3d') return 'h';
+  return qrHostOfType(type);
 }
 
 // ── 색 상수 ──────────────────────────────────────────────────────────────
@@ -233,13 +307,18 @@ function normHue(h) {
 }
 
 function validSat(p) {
-  return Number.isFinite(p) && p >= 0 && p <= 200;
+  return Number.isFinite(p) && p >= QR_SAT_MIN && p <= QR_SAT_MAX;
 }
 
-/** 상태에서 눈 옵션을 읽는다: qrEyeMode 우선, 없으면 초안 키 qrEyeDark(true → 'darker'). */
+/**
+ * 상태에서 눈 옵션을 읽는다: 스키마 키 `qrEye` → 초안 키 `qrEyeMode`(하네스 fixture 철자) →
+ * 초안 키 `qrEyeDark`(true → 'darker'). 셋 다 없으면 'none'.
+ */
 export function qrEyeModeOf(state) {
-  if (state.qrEyeMode !== undefined) return state.qrEyeMode;
-  return state.qrEyeDark === true ? 'darker' : 'none';
+  const s = state || {};
+  if (s.qrEye !== undefined) return s.qrEye;
+  if (s.qrEyeMode !== undefined) return s.qrEyeMode;
+  return s.qrEyeDark === true ? 'darker' : QR_DECO_DEFAULTS.qrEye;
 }
 
 // ── 허용표 ─────────────────────────────────────────────────────────────
@@ -255,6 +334,30 @@ function allowedByTable(allow, key) {
     && QR_ALLOW_KEYS.every((k) => Object.prototype.hasOwnProperty.call(row, k) && row[k] === key[k]));
 }
 
+/**
+ * 제품 QR 꾸미기 문맥 — 허용표 QR 행 문맥의 **유일한 유도**(하네스도 이것을 쓴다; H 의
+ * `hCellStyleCtx` 선례). `{table:'qr', host, qrCellStyle, qrColorMode, eyeMode}` — QR_ALLOW_KEYS 전부.
+ *   - 없는 키는 `QR_DECO_DEFAULTS`. 눈은 `qrEyeModeOf`.
+ *   - eyeMode 는 접는다: default 의 어두운 색은 이미 #000 이라 'darker' 는 바꿀 것이 없다 → 'none'.
+ *   - 값 검증은 하지 않는다(모르는 값은 그대로 — resolver 가 `qr-invalid-state` 로 잠근다).
+ *
+ * @param {'oak'|'y'|'h'} host 코너 QR 호스트(생성기 상태에서는 `qrDecoHostOf(type, state)`)
+ * @param {object} state 생성기 상태
+ * @returns {{table:'qr', host:string, qrCellStyle:string, qrColorMode:string, eyeMode:string}}
+ */
+export function qrDecoCtx(host, state) {
+  const s = state || {};
+  const qrColorMode = s.qrColorMode ?? QR_DECO_DEFAULTS.qrColorMode;
+  const raw = qrEyeModeOf(s);
+  return {
+    table: 'qr',
+    host,
+    qrCellStyle: s.qrCellStyle ?? QR_DECO_DEFAULTS.qrCellStyle,
+    qrColorMode,
+    eyeMode: qrColorMode === 'default' && raw === 'darker' ? 'none' : raw,
+  };
+}
+
 // ── 해석 ───────────────────────────────────────────────────────────────
 
 function lock(lockReason, extra = {}) {
@@ -263,40 +366,45 @@ function lock(lockReason, extra = {}) {
 
 /**
  * 상태 + 기저 팔레트 + 호스트 → 코너 QR 꾸미기. 순수 함수 — 상태 · 팔레트를 고치지 않는다.
+ * 판정 순서: 상태 도메인 → 기본 조합(`{deco:null}`, 사유 없음) → **구조 잠금**(호스트 'y' — 표와 무관) →
+ * 기저 팔레트 모양 → 허용표 행(`qrDecoCtx`) → hue/sat 범위 → 대비 가드(반환 직전 재단언).
  *
- * @param {object} state 생성기 상태(qrColorMode · qrCellStyle · qrHue · qrSat · qrEyeMode|qrEyeDark ·
- *   qrEyeHue · qrEyeSat · customSat 를 읽는다. 없는 키는 스키마 기본값)
+ * @param {object} state 생성기 상태(qrColorMode · qrCellStyle · qrHue · qrSat · qrEye|qrEyeMode|qrEyeDark ·
+ *   qrEyeHue · qrEyeSat · customSat 를 읽는다. 없는 키는 `QR_DECO_DEFAULTS`)
  * @param {{name, label, background, levels}} basePalette getPreset / makeCustomPalette 원본
  * @param {'oak'|'y'|'h'} host
  * @param {{ROWS: object[]}} [allow] 허용표(기본 `cell-shape-allow.js`)
  */
 export function resolveQrDeco(state, basePalette, host, allow = DEFAULT_ALLOW) {
   if (!QR_HOSTS.includes(host)) throw new RangeError(`qr-colors: 모르는 호스트: ${host}`);
+  const R = QR_DECO_LOCK_REASONS;
   const s = state || {};
-  const colorMode = s.qrColorMode ?? 'default';
-  const cellStyle = s.qrCellStyle ?? 'square';
-  const rawEyeMode = qrEyeModeOf(s);
-  if (!QR_COLOR_MODES.includes(colorMode) || !SQUARE_CELL_STYLES.includes(cellStyle) || !QR_EYE_MODES.includes(rawEyeMode)) {
-    return lock('qr-invalid-state');
+  const ctx = qrDecoCtx(host, s);
+  const colorMode = ctx.qrColorMode;
+  const cellStyle = ctx.qrCellStyle;
+  const eyeMode = ctx.eyeMode;
+  if (!QR_COLOR_MODES.includes(colorMode) || !SQUARE_CELL_STYLES.includes(cellStyle) || !QR_EYE_MODES.includes(eyeMode)) {
+    return lock(R.INVALID_STATE);
   }
-  // default 의 어두운 색은 이미 #000 — 'darker' 는 바꿀 것이 없어 'none' 과 같다.
-  const eyeMode = colorMode === 'default' && rawEyeMode === 'darker' ? 'none' : rawEyeMode;
-  if (colorMode === 'default' && cellStyle === 'square' && eyeMode === 'none') return { deco: null };
+  // 기본 조합 = 현재 출력(키를 만들지 않는다). eyeMode 는 qrDecoCtx 가 이미 접었다(default+darker → none).
+  if (colorMode === QR_DECO_DEFAULTS.qrColorMode && cellStyle === QR_DECO_DEFAULTS.qrCellStyle
+    && eyeMode === QR_DECO_DEFAULTS.qrEye) return { deco: null };
+
+  // 구조 잠금 — 허용표 · 팔레트와 무관(통합자 결정 3). 사유가 «측정 전» 이 아니라 «설계 1차 잠금» 임을 보인다.
+  if (QR_LOCKED_HOSTS.includes(host)) return lock(R.Y_HOST);
 
   const paletteProblem = basePaletteProblem(basePalette);
-  if (paletteProblem !== null) return lock('qr-base-palette', { detail: paletteProblem });
+  if (paletteProblem !== null) return lock(R.BASE_PALETTE, { detail: paletteProblem });
 
-  if (!allowedByTable(allow, { host, qrCellStyle: cellStyle, qrColorMode: colorMode, eyeMode })) {
-    return lock('qr-unmeasured');
-  }
+  if (!allowedByTable(allow, ctx)) return lock(R.UNMEASURED);
 
-  const qrHue = s.qrHue ?? 210;
-  const qrSat = s.qrSat ?? 100;
+  const qrHue = s.qrHue ?? QR_DECO_DEFAULTS.qrHue;
+  const qrSat = s.qrSat ?? QR_DECO_DEFAULTS.qrSat;
   const eyeHue = s.qrEyeHue ?? qrHue;
-  const eyeSat = s.qrEyeSat ?? 100;
-  const customSat = s.customSat ?? 100;
+  const eyeSat = s.qrEyeSat ?? QR_DECO_DEFAULTS.qrEyeSat;
+  const customSat = s.customSat ?? QR_SAT_NEUTRAL;
   if (!Number.isFinite(qrHue) || !validSat(qrSat) || !Number.isFinite(eyeHue) || !validSat(eyeSat) || !validSat(customSat)) {
-    return lock('qr-invalid-state');
+    return lock(R.INVALID_STATE);
   }
 
   let dark;
@@ -322,7 +430,7 @@ export function resolveQrDeco(state, basePalette, host, allow = DEFAULT_ALLOW) {
 
   const colors = { dark, light: WHITE, eye };
   const guard = qrContrastGuard(colors, { eyeMode });
-  if (!guard.ok) return lock('qr-contrast', { failures: guard.failures });
+  if (!guard.ok) return lock(R.CONTRAST, { failures: guard.failures });
   return {
     deco: Object.freeze({
       dark: Object.freeze({ ...dark }),

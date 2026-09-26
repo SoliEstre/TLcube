@@ -1,0 +1,668 @@
+/**
+ * decoration-ui.test.js — 셀 꾸미기 · 채도 · 폴백 QR 꾸미기의 **화면 배선** 계약 (DESIGN_001 §4.2 ⓐ–ⓗ · §6 · §7.5).
+ *
+ * 무엇을 재나 (성질 — 철자가 아니라 실제 index.html 함수를 vm 에서 돌려 잰다):
+ *   ① 선택지는 상태 스키마에서 유도된다 — 카드 줄의 값 = DECORATION_STATE_DOMAINS 의 열거, 슬라이더 폭 = 정수 도메인.
+ *      화면 자리(#${key}Cards · #${key}Bar)나 라벨이 빠지면 로드 시점에 던진다(심은 결함으로 확인).
+ *   ② 스텁 허용표(제품 기본 — 전부 잠금)에서는 보이는 **모든** 꾸미기 카드가 잠금 + aria-disabled + 인라인 사유
+ *      한 줄(툴팁 title 아님)이다. «끔» 카드는 언제나 눌린다.
+ *   ③ 기본 상태에서는 어떤 타입(O · A · K · Y · H)도 생산자에 꾸미기 키를 넘기지 않는다 — sceneOpts.cellShape ·
+ *      palette.qrDeco · hQr.deco · hCellStyle 부재(D1 이 넘긴 «이름 붙인 미측정 축»). 켬 → 끔 클릭 경로 뒤에도.
+ *   ④ fixture 허용표를 주입하면(테스트 전용 경로 — decorationAllow 만 바꾼다) 카드가 열리고, 카드를 누르면
+ *      실제 렌더 함수가 spec · deco 를 생산자까지 나르고 미리보기 scene 이 바뀐다 — **K 수동 조립 · Y · H** 포함.
+ *      K 수동 경로에서 spec 대입 줄을 지우면 이 자가 빨개지는지 같은 파일에서 확인한다(심은 결함).
+ *   ⑤ 잠금 사유 id(세 resolver 합집합)가 전부 사전 키로 매핑되고, 쓰는 키가 8언어에 모두 있다.
+ *   ⑥ data-state-keys 배치 — 꾸미기 14키는 #sharedControls, customSat 은 customHue 와 같은 두 패널(D1 이양 자).
+ *   ⑦ Canvas drawScene 이 noSeam 도형에 seam stroke 를 긋지 않는다(svg.js 와 같은 조건).
+ *   ⑧ 파일명 꼬리표 — 기본이면 빈 문자열, 켜면 렌더된 것에서 읽는다.
+ *
+ * ⚠ 이 자가 못 재는 축: 실제 브라우저의 CSS(흐림 · pointer-events) · 모바일 표시, 그리고 허용표의 측정 사실(영수증은
+ *   private — DESIGN_001 §7.6). fixture 는 «배선이 닿는가» 만 증명하고 «안전하다» 는 증명하지 않는다.
+ */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
+
+import {
+  DECORATION_LOCK_REASON_IDS, DECORATION_STATE_DOMAINS, DECORATION_STATE_KEYS, createGeneratorState,
+  decorationValueFromInput, exposedGeneratorStateKeys, versionStateKey,
+} from '../src/generator-state.js';
+import {
+  CELL_SHAPE_DEFAULT, CELL_SHAPE_PARAMS, cellShapeAllowCtx, cellShapeCtx, resolveCellShapeSpec,
+} from '../src/cell-shape.js';
+import { qrDecoHostOf, resolveQrDeco } from '../src/qr-colors.js';
+import {
+  H_CELL_GROUND_DEFAULT, H_CELL_STYLE_DEFAULT, hCellStyleCtx, hMaskLuminance, hPreviewOptions, hUiLabel,
+  isHGenerator, resolveHCellStyleSpec,
+} from '../src/generator-h.js';
+import { makeCustomPalette } from '../src/palette-hue.js';
+import { BULLSEYE_DARK, BULLSEYE_LIGHT, getPreset } from '../src/luminance.js';
+import { encode } from '../src/encode.js';
+import { encodeA } from '../src/encodeA.js';
+import { encodeK } from '../src/encodeK.js';
+import { encodeY } from '../src/encodeY.js';
+import { encodeH, decodeH } from '../src/h-codec.js';
+import { buildScene } from '../src/scene.js';
+import { buildSceneY } from '../src/sceneY.js';
+import { buildHScene } from '../src/h-render.js';
+import {
+  withHCornerQr, hFaceQrSummary, hEffectiveQrPosition, hCornerTooCorner,
+} from '../src/generator-h-qr.js';
+import {
+  sceneOptionsForOA, centralN7FamilyForType, centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced,
+  centralBeaconEncoderOptions, encodeOptionsForY,
+} from '../src/generator-render-config.js';
+import { daehanPatternId, isDaehanFinderPatternId } from '../src/finder-daehan.js';
+import { CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId } from '../src/finder-selection.js';
+import { isCentralMarkerN7FinderPatternId, centralMarkerN7FamilyForType } from '../src/centralMarkerN7.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
+import {
+  LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_CELL_SURFACE_V0, isCellSurfaceLocatorProfileY,
+} from '../src/locatorY.js';
+import { hasCenterQrSlot } from '../src/cellSurfaceFinal.js';
+import { detectorEmphasisDetectorId } from '../src/detector-emphasis-ui-model.js';
+import { renderWithErrorDisplay } from '../src/render-status.js';
+import { hPlanarPreviewOptions, reconcileHPositionMode } from '../src/h-preview-decor.js';
+import { TL_READER_URL, tlReaderUrlWithHint } from '../src/qr.js';
+import { payloadByteLength } from '../src/header.js';
+import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
+
+const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const LANGS = ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt'];
+const ENUM_KEYS = DECORATION_STATE_KEYS.filter((k) => DECORATION_STATE_DOMAINS[k].kind === 'enum');
+const INT_KEYS = DECORATION_STATE_KEYS.filter((k) => DECORATION_STATE_DOMAINS[k].kind === 'int');
+
+/** 최상위 함수 하나(열 0 의 `}` 로 닫힌다). */
+function fnSource(text, name) {
+  const start = text.indexOf('\nfunction ' + name + '(');
+  assert.ok(start >= 0, 'index.html 에 function ' + name + ' 이 없다');
+  const end = text.indexOf('\n}\n', start);
+  return text.slice(start + 1, end + 2);
+}
+
+/** 꾸미기 블록 전체(상수 · 함수 · 로드 시점 buildDecorationCards 호출). */
+function decorationBlock(text) {
+  const start = text.indexOf('// ── 셀 꾸미기 · 채도 · 폴백 QR 꾸미기');
+  const call = '\nbuildDecorationCards();\n';
+  const end = text.indexOf(call, start);
+  assert.ok(start >= 0 && end > start, '꾸미기 블록을 못 찾았다');
+  return text.slice(start, end + call.length);
+}
+
+function langBlock(lang) {
+  const start = INDEX.indexOf('const GENERATOR_STRINGS = {');
+  const at = INDEX.indexOf(`\n  ${lang}: {`, start);
+  assert.ok(at > start, lang + ' 사전을 못 찾았다');
+  const open = INDEX.indexOf('{', at);
+  let depth = 0;
+  for (let i = open; i < INDEX.length; i += 1) {
+    if (INDEX[i] === '{') depth += 1;
+    else if (INDEX[i] === '}') { depth -= 1; if (depth === 0) return INDEX.slice(open, i + 1); }
+  }
+  throw new Error(lang + ' 사전이 닫히지 않는다');
+}
+
+// ── 가짜 DOM ─────────────────────────────────────────────────────────────
+const HTML_IDS = new Set([...INDEX.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+
+function makeNode(id = null, tag = 'div') {
+  const classes = new Set();
+  const attrs = new Map();
+  const handlers = new Map();
+  const styleProps = new Map();
+  return {
+    id, tagName: tag.toUpperCase(), hidden: false, children: [], dataset: {}, textContent: '', value: '',
+    tabIndex: 0, type: '', className: '', min: '', max: '',
+    style: { setProperty(k, v) { styleProps.set(k, v); }, getPropertyValue: (k) => styleProps.get(k) ?? '' },
+    classList: {
+      toggle(k, on) { if (on === undefined ? !classes.has(k) : on) classes.add(k); else classes.delete(k); },
+      contains: (k) => classes.has(k), add: (k) => classes.add(k), remove: (k) => classes.delete(k),
+    },
+    setAttribute(k, v) { attrs.set(k, String(v)); },
+    getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+    removeAttribute(k) { attrs.delete(k); },
+    hasAttribute: (k) => attrs.has(k),
+    addEventListener(kind, cb) { if (!handlers.has(kind)) handlers.set(kind, []); handlers.get(kind).push(cb); },
+    dispatch(kind) { for (const cb of handlers.get(kind) ?? []) cb({ preventDefault() {} }); },
+    append(...items) { this.children.push(...items); },
+  };
+}
+
+/**
+ * vm 하네스 — 실제 index.html 의 꾸미기 블록 · paletteOf · buildConfig · 렌더 함수 · render · 재렌더 훅을 꽂는다.
+ * 생산자(buildScene · buildSceneY · buildHScene · withHCornerQr)는 실제 함수를 감싸 받은 옵션을 기록한다.
+ * @param {{state?: object, allow?: object, source?: string, missingIds?: string[], quietColor?: string}} opts
+ */
+function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColor = 'white' } = {}) {
+  const nodes = new Map();
+  const $ = (id) => {
+    if (missingIds.includes(id) || !HTML_IDS.has(id)) return null;
+    if (!nodes.has(id)) nodes.set(id, makeNode(id));
+    return nodes.get(id);
+  };
+  const generatorState = createGeneratorState({ qrPosition: 'TL', eccLevel: 'M', ...state });
+  const calls = { buildScene: [], buildSceneY: [], buildHScene: [], withHCornerQr: [], draws: [] };
+  const pending = [];
+  const c = {
+    console, Math, Number, String, Object, Array, Set, Map, JSON, Error, RangeError, TypeError, structuredClone,
+    generatorState, current: null, keptPayload: null, hFaceImages: Object.freeze({}), hFacePositionMode: 'off',
+    hPositionProfile: null, lastEncodedYn: 0, lastEncodedKA: 0, lastEncodedKO: 0, quietColorAtRender: null,
+    quietAutoRerenders: 0, QUIET_AUTO_RERENDER_LIMIT: 2,
+    y3dPreview: { on: true, pad: 24 }, Y3D_PAD_BASE: 24, hAnimation: { elapsed: 0, scene: null },
+    document: { createElement: (tag) => makeNode(null, tag) }, window: { devicePixelRatio: 1 },
+    $, els: new Proxy({}, { get: (o, k) => $(String(k)) ?? makeNode(String(k)) }),
+    t: (key) => key, tf: (key, vars) => key + JSON.stringify(vars),
+    hText: (key) => hUiLabel(key, 'ko'),
+    // 모듈 (실물)
+    DECORATION_STATE_DOMAINS, decorationValueFromInput, CELL_SHAPE_DEFAULT, CELL_SHAPE_PARAMS, cellShapeCtx,
+    resolveCellShapeSpec, qrDecoHostOf, resolveQrDeco, hCellStyleCtx, resolveHCellStyleSpec, H_CELL_STYLE_DEFAULT,
+    H_CELL_GROUND_DEFAULT, makeCustomPalette, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT,
+    // H 경로(renderTypeH · hSceneOptions · 영상)는 decorationAllow 를 부르지 않고 hPreviewOptions 의 기본 허용표를 쓴다 —
+    // 그 셋은 다른 자(generator-h-qr-state 등)의 vm 하네스가 그대로 꺼내 돌리므로 새 이름을 들일 수 없다. 제품에서는
+    // decorationAllow() 가 undefined(= 같은 기본표)라 둘이 같다. 그래서 이 하네스는 같은 fixture 를 hPreviewOptions 이음매에도
+    // 넣는다(주입 지점 두 곳 = 제품이 표를 읽는 곳 두 곳).
+    hPreviewOptions: (state, options = {}) => hPreviewOptions(state, { allow: c.decorationAllow(), ...options }),
+    hMaskLuminance, encode, encodeA, encodeK, encodeY, encodeH, decodeH, sceneOptionsForOA, centralN7FamilyForType,
+    centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced, centralBeaconEncoderOptions, encodeOptionsForY,
+    daehanPatternId, isDaehanFinderPatternId, CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId,
+    isCentralMarkerN7FinderPatternId, centralMarkerN7FamilyForType, CENTRAL_N7_FINDER_PATTERN_ID,
+    LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_CELL_SURFACE_V0, isCellSurfaceLocatorProfileY, hasCenterQrSlot,
+    detectorEmphasisDetectorId, renderWithErrorDisplay, hPlanarPreviewOptions, reconcileHPositionMode,
+    TL_READER_URL, tlReaderUrlWithHint, payloadByteLength, cornerMarkerSeatActive, versionStateKey,
+    hFaceQrSummary, hEffectiveQrPosition, hCornerTooCorner,
+    // 생산자 — 실물을 감싸 옵션을 기록한다
+    buildScene: (encoded, opts) => { calls.buildScene.push(opts); return buildScene(encoded, opts); },
+    buildSceneY: (encoded, opts) => { calls.buildSceneY.push(opts); return buildSceneY(encoded, opts); },
+    buildHScene: (encoded, opts) => { calls.buildHScene.push(opts); return buildHScene(encoded, opts); },
+    withHCornerQr: (scene, qr) => { calls.withHCornerQr.push(qr); return withHCornerQr(scene, qr); },
+    // 렌더 주변(이 자의 대상 밖) — 스텁
+    hGeneratorActive: () => isHGenerator(generatorState),
+    quietChoice: () => ({ color: c.quietColor }), quietColor,
+    quietColorOf: (choice) => (choice.color === 'white' ? { r: 255, g: 255, b: 255 }
+      : choice.color === 'black' ? { r: 0, g: 0, b: 0 } : null),
+    withQuietZone: (scene) => { c.quietColorAtRender = c.quietColor; return scene; },
+    withShading: (scene) => scene, outlinedYScene: (scene) => scene,
+    rasterize: () => ({}), verifyRaster: () => ({ total: 0, minDelta: 0, mismatches: [] }),
+    verifyRasterY: () => ({ total: 0, minDeltaY: 0, logMargin: 0, mismatches: [], erasures: [] }),
+    selfCheckMarkup: () => '', deltaMinFor: () => 0.2, profileFaceGains: () => ({ T: 1, L: 0.72, R: 0.57 }),
+    currentFaceGains: () => ({ T: 1, L: 0.72, R: 0.57 }), resolvedRenderProfile: () => 'screen',
+    BG_MODE_COLORS: { transparent: null, white: { r: 255, g: 255, b: 255 }, black: { r: 0, g: 0, b: 0 } },
+    typeCGeneratorActive: (s = generatorState) => s.type === 'O' && s.versionO === 'ultra',
+    normalPayloadText: () => 'decoration-ui', effectiveVersionYForEncode: () => undefined,
+    ySlotLocatorActive: () => false, isLabPath: () => false, advancedOnlyCardsVisible: () => false,
+    hImageEditor: { syncQrText: () => c.hFaceImages }, syncHFaceImagesUi() {}, syncStyleUi() {},
+    decorActive: () => false, schedule: () => pending.push(1), drawScene: (scene) => calls.draws.push(scene),
+    syncBackdropLayer: () => vm.runInContext('maybeRerenderForQuietAuto()', c),
+  };
+  for (const name of ['syncShotPresetUi', 'syncFaceGainLabel', 'syncHUi', 'syncExportPpiHint', 'syncQuietGaugeReadout',
+    'syncTypeYCellEditorUi', 'emitProductGenerate', 'emitGeneratorFail', 'emitLabGen', 'applyPreviewFit',
+    'paintY3dPreview', 'updateGauge', 'updateOverflowHighlight', 'syncCubeMakeUi']) c[name] = () => {};
+  vm.createContext(c);
+  for (const name of ['resolveFallback', 'resolvedQrText', 'buildConfig', 'encodeOptsFor', 'encodeWithEcc',
+    'isCapacityError', 'eccTierLabel', 'paletteOf', 'sceneOptsForOA', 'renderTypeO', 'renderTypeA', 'renderTypeK',
+    'renderTypeY', 'renderTypeH', 'hSceneOptions', 'maybeRerenderForQuietAuto', 'render']) {
+    vm.runInContext(fnSource(source, name), c);
+  }
+  vm.runInContext(decorationBlock(source), c);
+  if (allow !== undefined) c.decorationAllow = () => allow;
+  const run = (code) => vm.runInContext(code, c, { timeout: 60000 });
+  const render = () => {
+    run('render()');
+    assert.equal($('error') ? $('error').textContent : c.els.error.textContent, '', '렌더 오류: ' + c.els.error.textContent);
+  };
+  const cards = (key) => $(key + 'Cards').children;
+  const card = (key, value) => cards(key).find((el) => el.dataset.decoValue === String(value));
+  const click = (key, value) => { card(key, value).dispatch('click'); pending.length = 0; render(); };
+  return { c, $, run, render, cards, card, click, calls, pending, state: generatorState };
+}
+
+const lastOf = (list) => list[list.length - 1];
+
+/** 렌더된 문맥에서 **모든** 모양 · 강도를 여는 fixture 행(제품이 유도한 문맥으로 키를 만든다 — 배선 증명용). */
+function openAllCellRows(ctx) {
+  const base = cellShapeAllowCtx(ctx);
+  const rows = [{ ...base, cellShape: 'round-bevel', param: null }];
+  for (const [kind, def] of Object.entries(CELL_SHAPE_PARAMS)) for (const param of def.domain) rows.push({ ...base, cellShape: kind, param });
+  return rows;
+}
+
+/** 기본 상태에서 생산자 입력에 꾸미기 키가 없는가 — 타입별. */
+function assertNoDecorationKeys(h, type, where) {
+  if (type === 'H') {
+    const opts = lastOf(h.calls.buildHScene);
+    assert.equal('hCellStyle' in opts, false, where + ': H buildHScene 옵션에 hCellStyle 이 있다');
+    assert.equal('hCellGround' in opts, false, where + ': H hCellGround');
+    assert.equal('qrDeco' in opts.palette, false, where + ': H palette.qrDeco');
+    assert.equal('deco' in h.c.current.hQr, false, where + ': hQr.deco 가 있다');
+    assert.equal('hCellStyle' in h.run('hSceneOptions()'), false, where + ': hSceneOptions');
+    return;
+  }
+  const opts = lastOf(type === 'Y' ? h.calls.buildSceneY : h.calls.buildScene);
+  assert.equal('cellShape' in opts, false, where + ': ' + type + ' sceneOpts.cellShape 가 있다');
+  assert.equal('qrDeco' in opts.palette, false, where + ': ' + type + ' palette.qrDeco 가 있다');
+  assert.equal('qrDeco' in h.run('paletteOf(generatorState.preset)'), false, where + ': paletteOf 출력에 qrDeco');
+}
+
+const TYPE_STATES = Object.freeze({
+  O: { type: 'O' }, A: { type: 'A' }, K: { type: 'K' }, Y: { type: 'Y', yRepresentation: '2.5d' },
+  H: { type: 'Y', yRepresentation: '3d', hFaces: 3, versionH: 'auto' },
+});
+
+// ── ① 스키마 유도 ─────────────────────────────────────────────────────────
+
+test('① 카드 · 슬라이더는 상태 스키마에서 유도된다(값 목록 · 순서 · 정수 폭)', () => {
+  const h = harness({ state: TYPE_STATES.O });
+  for (const key of ENUM_KEYS) {
+    assert.deepEqual(h.cards(key).map((el) => el.dataset.decoValue), DECORATION_STATE_DOMAINS[key].values.map(String), key);
+    for (const el of h.cards(key)) assert.equal(el.tagName, 'BUTTON', key + ': 카드는 button(키보드 기본 동작)');
+  }
+  for (const key of INT_KEYS) {
+    const bar = h.$(key + 'Bar');
+    assert.ok(bar, key + 'Bar 가 없다');
+    assert.equal(Number(bar.min), DECORATION_STATE_DOMAINS[key].min, key);
+    assert.equal(Number(bar.max), DECORATION_STATE_DOMAINS[key].max, key);
+  }
+  // 카드 묶음의 키 합집합 = 스키마의 열거 키 전부(묶음 밖이면 resolver 에 안 묻힌다).
+  const grouped = h.run('Object.values(DECORATION_CARD_GROUPS).flatMap((g) => [...g.keys])');
+  assert.deepEqual([...grouped].sort(), [...ENUM_KEYS].sort());
+});
+
+test('① 심은 결함 — 화면 자리 · 라벨이 빠지면 로드 시점에 던진다(조용히 빈 줄을 세우지 않는다)', () => {
+  assert.throws(() => harness({ missingIds: ['cellDotCards'] }), /cellDotCards/);
+  assert.throws(() => harness({ missingIds: ['qrEyeSatBar'] }), /qrEyeSatBar/);
+  const noLabel = INDEX.replace("inset: 'g1174',", '');
+  assert.notEqual(noLabel, INDEX, '결함 심기 실패 — 라벨 표 철자가 바뀌었다');
+  assert.throws(() => harness({ source: noLabel }), /no label key for (hCellStyle|qrCellStyle)=inset/);
+});
+
+// ── ② 스텁 허용표 = 전부 잠금 + 인라인 사유 ─────────────────────────────────
+
+test('② 스텁 허용표에서 보이는 모든 꾸미기 카드는 잠금 + aria-disabled + 인라인 사유 한 줄이다(끔 카드는 열림)', () => {
+  const OFF = { cellShape: CELL_SHAPE_DEFAULT, hCellStyle: H_CELL_STYLE_DEFAULT, qrColorMode: 'default', qrEye: 'none', qrCellStyle: 'square' };
+  for (const [type, state] of Object.entries(TYPE_STATES)) {
+    // 강도 줄 · H 바탕 줄도 보이게 모양을 하나 골라 둔다(잠겨도 상태는 그대로 — 설계 M10).
+    const h = harness({ state: { ...state, cellShape: 'round', hCellStyle: 'dots' } });
+    h.render();
+    const visibleKeys = ENUM_KEYS.filter((key) => !h.$(key + 'Cards').hidden
+      && !(['cellShape', ...Object.values(CELL_SHAPE_PARAMS).map((d) => d.key)].includes(key) && h.$('cellShapeRhombusGroup').hidden)
+      && !(['hCellStyle', 'hCellGround'].includes(key) && h.$('hCellStyleGroup').hidden)
+      && !(key === 'hCellGround' && h.$('hCellGroundGroup').hidden)
+      && !(key.startsWith('qr') && h.$('qrDecoSection').hidden));
+    assert.ok(visibleKeys.length >= 4, type + ': 보이는 카드 줄이 너무 적다 — ' + visibleKeys.join(','));
+    for (const key of visibleKeys) {
+      for (const el of h.cards(key)) {
+        const value = decorationValueFromInput(key, el.dataset.decoValue);
+        const off = OFF[key] === value;
+        assert.equal(el.getAttribute('aria-disabled'), String(!off), `${type} ${key}=${value}: aria-disabled`);
+        assert.equal(el.classList.contains('disabled'), !off, `${type} ${key}=${value}: .disabled`);
+        assert.equal(el.getAttribute('title'), null, `${type} ${key}=${value}: 사유를 title 툴팁으로 두지 않는다`);
+        if (off) continue;
+        const hintId = el.getAttribute('aria-describedby');
+        assert.ok(hintId, `${type} ${key}=${value}: 사유 줄을 가리키지 않는다`);
+        const hint = h.$(hintId);
+        const reasonKey = h.run(`decorationLockKey(${JSON.stringify(el.dataset.lockReason)})`);
+        const lockKey = el.dataset.lockKey;
+        // 보이는 키 = 사유의 사전 키. 단 exposed-gap 은 권유가 거짓이면 권유 없는 변형을 쓴다.
+        assert.ok(lockKey === reasonKey
+          || (el.dataset.lockReason === 'exposed-gap' && lockKey === h.run('DECORATION_EXPOSED_GAP_PLAIN_KEY')),
+        `${type} ${key}=${value}: 보이는 사유 키(${lockKey})가 사유(${el.dataset.lockReason})와 어긋난다`);
+        // 스텁 표에서는 흰색으로 바꿔도 아무것도 안 열린다 — «흰색으로 두면 열릴 수 있어요» 권유(g1164)는 거짓 안내다.
+        assert.notEqual(lockKey, 'g1164', `${type} ${key}=${value}: 스텁 표인데 «흰색이면 열린다» 고 권유한다`);
+        assert.equal(hint.hidden, false, `${type} ${key}: 사유 줄이 숨어 있다`);
+        assert.ok(hint.textContent.includes(lockKey), `${type} ${key}=${value}: 사유(${lockKey})가 인라인 줄에 없다 — ${hint.textContent}`);
+      }
+    }
+    // 상태는 잠금으로 고쳐지지 않는다.
+    assert.equal(h.state.cellShape, 'round');
+    assert.equal(h.state.hCellStyle, 'dots');
+    // 잠긴 카드를 눌러도(키보드 Enter/Space 는 pointer-events 를 지나 click 으로 온다) 상태 · 눌림 카드 · 렌더 예약이 그대로다.
+    const lockedCards = visibleKeys.flatMap((key) => h.cards(key).filter((el) => el.getAttribute('aria-disabled') === 'true'));
+    assert.ok(lockedCards.length > 0, type + ': 잠긴 카드가 없다 — 자가 비었다');
+    const stateBefore = JSON.stringify(h.state);
+    const activeBefore = visibleKeys.map((key) => h.cards(key).map((el) => el.classList.contains('active')).join()).join('|');
+    h.pending.length = 0;
+    for (const el of lockedCards) el.dispatch('click');
+    assert.equal(JSON.stringify(h.state), stateBefore, type + ': 잠긴 카드 click 이 상태를 바꿨다');
+    assert.equal(visibleKeys.map((key) => h.cards(key).map((el) => el.classList.contains('active')).join()).join('|'), activeBefore,
+      type + ': 잠긴 카드 click 이 눌림 카드를 바꿨다');
+    assert.equal(h.pending.length, 0, type + ': 잠긴 카드 click 이 렌더를 예약했다');
+  }
+});
+
+test('② «흰색으로 두면 열릴 수 있어요» 권유(g1164)는 따르면 실제로 열리는 카드에만 붙는다', () => {
+  const state = { ...TYPE_STATES.Y, bgMode: 'transparent', cellShape: 'round' };
+  // 스텁 표 — 흰색으로 바꿔도 «미측정» 으로 바뀔 뿐이라 권유 없는 문구다.
+  const stub = harness({ state, quietColor: 'none' });
+  stub.render();
+  assert.equal(stub.card('cellShape', 'round').dataset.lockReason, 'exposed-gap', '투명 배경 Y 에서 틈 노출 사유가 아니다 — 전제가 바뀌었다');
+  const plainKey = stub.run('DECORATION_EXPOSED_GAP_PLAIN_KEY');
+  assert.equal(stub.card('cellShape', 'round').dataset.lockKey, plainKey);
+  assert.ok(stub.$('cellShapeLockHint').textContent.includes(plainKey));
+  assert.ok(!stub.$('cellShapeLockHint').textContent.includes('g1164'), '스텁 표인데 권유 문구가 보인다');
+  // 흰 판 문맥에서 열리는 fixture — 권유가 참이 되고, 따르면(안전영역 흰색) 정말 열린다.
+  const probe = harness({ state, quietColor: 'white' });
+  probe.render();
+  const h = harness({ state, quietColor: 'none', allow: { ROWS: openAllCellRows(probe.c.current.deco.ctx) } });
+  h.render();
+  const advised = h.cards('cellShape').filter((el) => el.dataset.lockKey === 'g1164');
+  assert.ok(advised.some((el) => el.dataset.decoValue === 'round'), 'fixture 가 흰 판에서 round 를 여는데 권유가 없다');
+  assert.ok(h.$('cellShapeLockHint').textContent.includes('g1164'));
+  h.c.quietColor = 'white';
+  h.run('maybeRerenderForQuietAuto()');
+  h.render();
+  for (const el of advised) {
+    assert.equal(el.getAttribute('aria-disabled'), 'false', `권유를 따랐는데 ${el.dataset.decoValue} 가 안 열렸다(${el.dataset.lockReason})`);
+  }
+});
+
+test('② C(ultra)는 모든 모양이 «C 는 사각만» 사유로 잠긴다(구조 잠금 — fixture 로도 안 열린다)', () => {
+  const probe = harness({ state: { type: 'O', versionO: 'ultra' } });
+  probe.render();
+  const ctx = probe.c.current.deco.ctx;
+  assert.equal(ctx.type, 'C');
+  const h = harness({ state: { type: 'O', versionO: 'ultra' }, allow: { ROWS: openAllCellRows(ctx) } });
+  h.render();
+  for (const el of h.cards('cellShape')) {
+    if (el.dataset.decoValue === CELL_SHAPE_DEFAULT) continue;
+    assert.equal(el.dataset.lockReason, 'type-c-ultra', el.dataset.decoValue);
+  }
+  assert.ok(h.$('cellShapeLockHint').textContent.includes('g1166'));
+});
+
+// ── ③ 기본값 = 키 부재 ───────────────────────────────────────────────────
+
+test('③ 기본 상태에서는 어떤 타입도 생산자에 꾸미기 키를 넘기지 않는다 — 스텁 · 전부 연 fixture 둘 다', () => {
+  for (const [type, state] of Object.entries(TYPE_STATES)) {
+    const h = harness({ state });
+    h.render();
+    assertNoDecorationKeys(h, type, '스텁');
+    // 다 열어 둔 표에서도 기본(끔)이면 키가 없다 — «끔 = 현재 출력» 은 표가 아니라 기본값이 보장한다.
+    const ctx = h.c.current.deco ? h.c.current.deco.ctx : null;
+    const rows = ctx ? openAllCellRows(ctx) : [];
+    const g = harness({ state, allow: { ROWS: rows } });
+    g.render();
+    assertNoDecorationKeys(g, type, '열린 표');
+  }
+});
+
+// ── ④ fixture → 카드 열림 → 생산자 도달 → 끔 복귀 ─────────────────────────────
+
+function openShapeHarness(type) {
+  const probe = harness({ state: TYPE_STATES[type] });
+  probe.render();
+  const ctx = probe.c.current.deco.ctx;
+  assert.ok(ctx, type + ': 렌더가 셀 모양 문맥을 current 에 안 남겼다');
+  return harness({ state: TYPE_STATES[type], allow: { ROWS: openAllCellRows(ctx) } });
+}
+
+/** K 는 손 조립 경로다 — 카드 클릭이 buildScene 옵션까지 가는가(값 하나로 판정, 심은 결함 비교용). */
+function shapeReachesProducer(type, source) {
+  const probe = harness({ state: TYPE_STATES[type], source });
+  probe.render();
+  const h = harness({ state: TYPE_STATES[type], source, allow: { ROWS: openAllCellRows(probe.c.current.deco.ctx) } });
+  h.render();
+  h.click('cellShape', 'round');
+  const opts = lastOf(type === 'Y' ? h.calls.buildSceneY : h.calls.buildScene);
+  return Boolean(opts.cellShape && opts.cellShape.kind === 'round');
+}
+
+test('④ fixture 허용표 → 마름모 카드가 열리고, 클릭이 O · A · K(손 조립) · Y 생산자까지 가며 미리보기가 바뀐다', () => {
+  for (const type of ['O', 'A', 'K', 'Y']) {
+    const h = openShapeHarness(type);
+    h.render();
+    const before = JSON.stringify(lastOf(h.calls.draws).shapes.map((s) => s.points ?? [s.cx, s.cy, s.r]));
+    for (const el of h.cards('cellShape')) {
+      if (el.dataset.decoValue === 'dot' && type === 'O') continue; // 기본 파인더 문맥에서 dot 은 T3 한정 — 열림 여부는 표가 정한다
+      assert.equal(el.getAttribute('aria-disabled'), 'false', `${type}: ${el.dataset.decoValue} 카드가 fixture 에서도 잠겨 있다(${el.dataset.lockReason})`);
+    }
+    h.click('cellShape', 'round');
+    assert.equal(h.state.cellShape, 'round');
+    const opts = lastOf(type === 'Y' ? h.calls.buildSceneY : h.calls.buildScene);
+    assert.equal(opts.cellShape.kind, 'round', type + ': spec 이 생산자에 안 갔다');
+    assert.equal(opts.cellShape.param, CELL_SHAPE_PARAMS.round.default);
+    assert.equal(JSON.stringify(opts.cellShape.avoid), JSON.stringify([{ r: 255, g: 255, b: 255 }]), type + ': 안전영역 판 색이 avoid 로 안 갔다');
+    const scene = lastOf(h.calls.draws);
+    assert.ok(scene.shapes.some((s) => s.basePoints), type + ': 미리보기 scene 에 꾸민 도형이 없다');
+    assert.notEqual(JSON.stringify(scene.shapes.map((s) => s.points ?? [s.cx, s.cy, s.r])), before, type + ': 미리보기가 안 바뀌었다');
+    // 강도 카드 → 같은 경로
+    h.click('cellRound', 1);
+    assert.equal(lastOf(type === 'Y' ? h.calls.buildSceneY : h.calls.buildScene).cellShape.param, 1);
+    // 켬 → 끔: 키가 다시 사라진다(D1 이 넘긴 «클릭 경로 뒤 부재» 축)
+    h.click('cellShape', CELL_SHAPE_DEFAULT);
+    assertNoDecorationKeys(h, type, '켬→끔');
+  }
+});
+
+test('④ 파생값 트리거 — 렌더 뒤 안전영역 실효 색이 바뀌면 재렌더가 예약되고 resolver 가 새 틈 등급으로 다시 판정한다', () => {
+  const h = openShapeHarness('O');
+  h.render();
+  h.click('cellShape', 'round');
+  assert.equal(lastOf(h.calls.buildScene).cellShape.kind, 'round');
+  assert.equal(h.c.current.deco.ctx.gapGrade, 'white');
+  // 배치 사진 측정 등으로 quiet-auto 가 «판 없음» 으로 바뀐 상황 — 투명 배경이라 틈은 미지 표면이다.
+  h.c.quietColor = 'none';
+  h.pending.length = 0;
+  h.run('maybeRerenderForQuietAuto()');
+  assert.equal(h.pending.length, 1, '실효 색이 바뀌었는데 재렌더가 예약되지 않았다');
+  h.render();
+  assert.equal(h.c.current.deco.ctx.gapGrade, 'unknown');
+  assert.equal('cellShape' in lastOf(h.calls.buildScene), false, '미지 표면인데 노출형 모양이 그대로 나갔다');
+  assert.equal(h.card('cellShape', 'round').dataset.lockReason, 'exposed-gap');
+  assert.equal(h.state.cellShape, 'round', '잠겨도 상태는 그대로(되돌아오면 다시 켜진다)');
+  h.c.quietColor = 'white';
+  h.run('maybeRerenderForQuietAuto()');
+  h.render();
+  assert.equal(lastOf(h.calls.buildScene).cellShape.kind, 'round', '판이 돌아왔는데 모양이 안 돌아왔다');
+});
+
+test('④ 심은 결함 — K 손 조립에서 spec 대입 줄을 지우면 위 자가 빨개진다(자의 판별력)', () => {
+  assert.equal(shapeReachesProducer('K', INDEX), true, '대조군: 실제 index.html 에서는 K 가 spec 을 받아야 한다');
+  const kStart = INDEX.indexOf('\nfunction renderTypeK(');
+  const kBody = INDEX.slice(kStart, INDEX.indexOf('\n}\n', kStart));
+  const line = '  if (deco.spec) sceneOpts.cellShape = deco.spec;\n';
+  assert.ok(kBody.includes(line), 'K 대입 줄 철자가 바뀌었다 — 결함 심기를 갱신할 것');
+  const broken = INDEX.slice(0, kStart) + kBody.replace(line, '') + INDEX.slice(kStart + kBody.length);
+  assert.equal(shapeReachesProducer('K', broken), false, 'spec 대입을 지웠는데도 K 가 spec 을 받는다 — 자가 경로를 안 잰다');
+});
+
+test('④ fixture 허용표 → H 스타일 카드 · 코너 QR 꾸미기가 renderTypeH · hSceneOptions · hQr.deco 까지 간다', () => {
+  const probe = harness({ state: TYPE_STATES.H });
+  probe.render();
+  const hctx = hCellStyleCtx(probe.c.current.encoded, probe.state);
+  const rows = [
+    { table: 'h', ...hctx, ground: H_CELL_GROUND_DEFAULT, hCellStyle: 'dots' },
+    { table: 'qr', host: 'h', qrCellStyle: 'dots', qrColorMode: 'default', eyeMode: 'none' },
+  ];
+  const h = harness({ state: TYPE_STATES.H, allow: { ROWS: rows } });
+  h.render();
+  assert.equal(h.card('hCellStyle', 'dots').getAttribute('aria-disabled'), 'false');
+  assert.equal(h.card('hCellStyle', 'rounded').getAttribute('aria-disabled'), 'true');
+  h.click('hCellStyle', 'dots');
+  assert.equal(lastOf(h.calls.buildHScene).hCellStyle, 'dots', 'renderTypeH 가 H 셀 스타일을 안 받았다');
+  assert.equal(h.run('hSceneOptions()').hCellStyle, 'dots', 'hSceneOptions(회전 · 3D-on · 스냅샷)가 안 받았다');
+  assert.ok(lastOf(h.calls.draws).shapes.some((s) => s.hCellGround), 'H 미리보기에 바탕 도형이 없다');
+  assert.equal(h.card('qrCellStyle', 'dots').getAttribute('aria-disabled'), 'false');
+  h.click('qrCellStyle', 'dots');
+  assert.equal(h.c.current.hQr.deco.cellStyle, 'dots', 'hQr.deco 가 안 실렸다');
+  assert.equal(lastOf(h.calls.withHCornerQr).deco.cellStyle, 'dots');
+  h.click('qrCellStyle', 'square');
+  h.click('hCellStyle', H_CELL_STYLE_DEFAULT);
+  assertNoDecorationKeys(h, 'H', '켬→끔');
+});
+
+test('④ fixture 허용표 → O 코너 QR 꾸미기가 paletteOf(palette.qrDeco)로 생산자까지 가고, Y 호스트는 구조 잠금이다', () => {
+  const rows = [
+    { table: 'qr', host: 'oak', qrCellStyle: 'dots', qrColorMode: 'default', eyeMode: 'none' },
+    { table: 'qr', host: 'oak', qrCellStyle: 'square', qrColorMode: 'match', eyeMode: 'none' },
+    { table: 'qr', host: 'y', qrCellStyle: 'dots', qrColorMode: 'default', eyeMode: 'none' },
+  ];
+  const h = harness({ state: TYPE_STATES.O, allow: { ROWS: rows } });
+  h.render();
+  assert.equal(h.$('qrDecoSection').hidden, false, '코너 QR 이 있는데 꾸미기 섹션이 숨었다');
+  assert.equal(h.card('qrCellStyle', 'dots').getAttribute('aria-disabled'), 'false');
+  assert.equal(h.card('qrColorMode', 'match').getAttribute('aria-disabled'), 'false');
+  // 흑백 + «더 어둡게» 눈은 기본 출력과 같다 → 조용한 무동작 대신 잠금 + 사유.
+  assert.equal(h.card('qrEye', 'darker').dataset.lockReason, 'noop');
+  h.click('qrCellStyle', 'dots');
+  assert.equal(lastOf(h.calls.buildScene).palette.qrDeco.cellStyle, 'dots', 'palette.qrDeco 가 생산자에 안 갔다');
+  assert.ok(lastOf(h.calls.draws).shapes.some((s) => s.selfQuiet && s.noSeam), '꾸민 QR 조각(selfQuiet · noSeam)이 미리보기에 없다');
+  // 조합(dots + match)은 표에 없다 → 그 카드는 잠기고, 고른 조합만 막힌다.
+  assert.equal(h.card('qrColorMode', 'match').dataset.lockReason, 'qr-unmeasured');
+  // Y 호스트: 표에 행이 있어도 구조 잠금(통합자 결정 3).
+  const y = harness({ state: TYPE_STATES.Y, allow: { ROWS: rows } });
+  y.render();
+  assert.equal(y.card('qrCellStyle', 'dots').dataset.lockReason, 'qr-y-host');
+  y.click('qrCellStyle', 'square');
+  assertNoDecorationKeys(y, 'Y', 'Y 구조 잠금');
+});
+
+test('④ 폴백 QR 섹션 노출은 buildConfig().fallback 에서 유도된다(코너 · 중앙+병행 · 없음)', () => {
+  const corner = harness({ state: { type: 'O', qrPosition: 'TL' } });
+  corner.render();
+  assert.equal(corner.$('qrDecoSection').hidden, false);
+  assert.equal(corner.$('qrFixedBwHint').hidden, true);
+  const none = harness({ state: { type: 'O', qrPosition: 'none' } });
+  none.render();
+  assert.equal(none.$('qrDecoSection').hidden, true);
+  const center = harness({ state: { type: 'O', qrPosition: 'inner', finderPatternId: CENTER_QR_FINDER_PATTERN_ID } });
+  center.render();
+  assert.equal(center.$('qrDecoSection').hidden, true, '중앙 QR 단독인데 섹션이 열렸다');
+  assert.equal(center.$('qrFixedBwHint').hidden, false, '중앙 QR 흑백 고정 힌트가 없다');
+  center.state.qrCornerToo = true;
+  center.run('syncDecorationUi()');
+  assert.equal(center.$('qrDecoSection').hidden, false, '중앙 QR + 코너 병행인데 섹션이 숨었다');
+});
+
+// ── ⑤ 사유 · 라벨 사전 ─────────────────────────────────────────────────────
+
+test('⑤ 잠금 사유 id 전부가 사전 키로 매핑되고, 꾸미기 문구 키가 8언어에 모두 있다', () => {
+  const h = harness();
+  const map = h.run('DECORATION_LOCK_REASON_KEYS');
+  const unmapped = DECORATION_LOCK_REASON_IDS.filter((id) => !Object.prototype.hasOwnProperty.call(map, id));
+  assert.deepEqual(unmapped, [], '사전 키가 없는 잠금 사유 — 일반 문구로 조용히 떨어진다');
+  const keys = new Set([
+    ...Object.values(map),
+    ...Object.values(h.run('DECORATION_VALUE_LABEL_KEYS')).flatMap((m) => Object.values(m)),
+    ...Object.values(h.run('CELL_SHAPE_PARAM_LABEL_KEYS')),
+    ...[...INDEX.matchAll(/data-i18n(?:-attr="aria-label:|=")(g1[12]\d\d)"/g)].map((m) => m[1]).filter((k) => Number(k.slice(1)) >= 1151),
+    h.run('DECORATION_EXPOSED_GAP_PLAIN_KEY'),
+    'g1180', 'g1204', 'g1205',
+  ]);
+  assert.ok(keys.size >= 40, '꾸미기 키가 너무 적다 — 파서가 깨졌나: ' + keys.size);
+  // 마름모 셀 라벨은 사각 셀 어휘(H · QR 스타일 9종)와 키를 나누지 않는다 — 공유하면 en «Square» · de «Quadrat» 처럼
+  // 60°/120° 마름모를 정사각형이라 부른다(i18n-coverage 는 이 뜻 충돌을 못 잡는다).
+  const squareKeys = new Set(Object.values(h.run('SQUARE_STYLE_LABEL_KEYS')));
+  const rhombusShared = Object.entries(h.run('DECORATION_VALUE_LABEL_KEYS').cellShape).filter(([, k]) => squareKeys.has(k));
+  assert.deepEqual(rhombusShared, [], '마름모 셀 카드가 사각 셀 라벨 키를 쓴다');
+  for (const lang of LANGS) {
+    const block = langBlock(lang);
+    for (const key of keys) assert.match(block, new RegExp(`"${key}":`), `${lang} 에 ${key} 가 없다`);
+  }
+});
+
+// ── ⑥ data-state-keys 배치 (D1 이양 자) ─────────────────────────────────────
+
+test('⑥ 꾸미기 14키는 #sharedControls 에만, customSat 은 customHue 와 같은 패널들에 있다', () => {
+  const keysOf = (id) => {
+    const m = new RegExp('<div id="' + id + '"[^>]*data-state-keys="([^"]+)"').exec(INDEX);
+    assert.ok(m, id);
+    return m[1].trim().split(/\s+/);
+  };
+  const containers = ['sharedContent', 'sharedControls', 'panelNormal', 'panelAdvanced'];
+  const where = (key) => containers.filter((id) => keysOf(id).includes(key));
+  assert.deepEqual(where('customSat'), where('customHue'));
+  for (const key of DECORATION_STATE_KEYS.filter((k) => k !== 'customSat')) assert.deepEqual(where(key), ['sharedControls'], key);
+  for (const key of DECORATION_STATE_KEYS) assert.ok(exposedGeneratorStateKeys('normal').includes(key), key);
+});
+
+// ── ⑦ Canvas seam ─────────────────────────────────────────────────────────
+
+test('⑦ 실제 Canvas drawScene 은 noSeam 도형에 seam stroke 를 긋지 않는다(qr 도 마찬가지, 보통 도형은 긋는다)', () => {
+  const draw = new Function('window', 'rgbCss', 'backdropShowing', 'paintShading', 'drawSceneImage',
+    'return (' + fnSource(INDEX, 'drawScene') + ');')({ devicePixelRatio: 1 }, (c) => `rgb(${c.r},${c.g},${c.b})`, () => false, () => {}, () => {});
+  const sq = (x, extra = {}) => ({ kind: 'polygon', color: { r: 10, g: 20, b: 30 }, points: [{ x, y: 0 }, { x: x + 1, y: 0 }, { x: x + 1, y: 1 }, { x, y: 1 }], ...extra });
+  const scene = { width: 10, height: 2, background: null, shapes: [sq(0), sq(2, { noSeam: true }), sq(4, { qr: true }), sq(6, { noSeam: true, qr: true })] };
+  const strokes = [];
+  let index = -1;
+  const ctx = { setTransform() {}, clearRect() {}, fillRect() {}, moveTo() {}, lineTo() {}, closePath() {}, arc() {}, fill() {}, beginPath() { index += 1; }, stroke() { strokes.push(index); } };
+  draw(scene, { getContext: () => ctx, classList: { toggle() {} } }, 10);
+  assert.deepEqual(strokes, [0]);
+});
+
+// ── ⑧ 파일명 꼬리표 ────────────────────────────────────────────────────────
+
+test('⑧ 파일명 꼬리표 — 기본이면 빈 문자열, 켜면 렌더된 spec · deco · 채도에서 읽는다', () => {
+  const plain = harness({ state: TYPE_STATES.O });
+  plain.render();
+  assert.equal(plain.run('exportDecorationTag()'), '');
+  const h = openShapeHarness('O');
+  h.render();
+  h.click('cellShape', 'round');
+  assert.equal(h.run('exportDecorationTag()'), '-round70');
+  // 3D · 전개도 · 인쇄 파일은 모양이 안 실린다(§4.4) — 거기엔 모양 꼬리표가 붙지 않는다.
+  assert.equal(h.run("exportDecorationTag('3d')"), '');
+  h.click('cellShape', 'bevel');
+  assert.equal(h.run('exportDecorationTag()'), '-bevel06');
+  // 커스텀으로 바꾸면 팔레트 등급이 slate → custom 이라 fixture(slate 문맥) 행이 안 맞아 bevel 이 잠긴다 —
+  // 꼬리표는 상태가 아니라 **렌더된 것**을 말하므로 -bevel06 이 빠지고 -sat150 만 남는다.
+  h.state.preset = 'custom';
+  h.state.customSat = 150;
+  h.render();
+  assert.equal(h.run('exportDecorationTag()'), '-sat150');
+  assert.equal(h.run("exportDecorationTag('3d')"), '-sat150', '채도는 3D 팔레트에도 닿으므로 3D 파일명에도 붙는다');
+  assert.equal(h.state.cellShape, 'bevel', '잠겨도 상태는 그대로다');
+  // 잠긴 선택(스텁 표)은 렌더되지 않았으므로 꼬리표도 없다.
+  const locked = harness({ state: { ...TYPE_STATES.O, cellShape: 'round', qrCellStyle: 'dots' } });
+  locked.render();
+  assert.equal(locked.run('exportDecorationTag()'), '');
+});
+
+test('⑧ QR 꼬리표 ⇔ 코너 QR 꾸미기가 렌더된 장면을 실제로 바꾼다(폴백 격자 — QR 없음 · 중앙 단독에서는 없다)', () => {
+  // 대조 기준은 index 의 술어가 아니라 **생산자 자신**이다: palette.qrDeco 를 뺀 옵션으로 같은 인코딩을 다시 만들어
+  // 장면이 달라지면 코너 QR 꾸미기가 그려진 것이다. paletteOf 는 폴백 모드를 모른 채 qrDeco 를 붙이므로(QR 없음 ·
+  // 중앙 단독에서도 키가 있다), palette.qrDeco 만 보는 꼬리표는 이 격자에서 빨갛다.
+  const rows = [{ table: 'qr', host: 'oak', qrCellStyle: 'dots', qrColorMode: 'default', eyeMode: 'none' }];
+  const center = { qrPosition: 'inner', finderPatternId: CENTER_QR_FINDER_PATTERN_ID };
+  const grid = [
+    ['O 코너', { type: 'O', qrPosition: 'TL' }],
+    ['O 없음', { type: 'O', qrPosition: 'none' }],
+    ['O 중앙 단독', { type: 'O', ...center }],
+    ['O 중앙+병행', { type: 'O', ...center, qrCornerToo: true }],
+    ['A 코너', { type: 'A', qrPosition: 'BR' }],
+    ['A 없음', { type: 'A', qrPosition: 'none' }],
+    ['K 코너', { type: 'K', qrPosition: 'TL' }],
+    ['K 없음', { type: 'K', qrPosition: 'none' }],
+  ];
+  const seen = { drawn: 0, keyButNotDrawn: 0 };
+  for (const [name, state] of grid) {
+    const h = harness({ state: { ...state, qrCellStyle: 'dots' }, allow: { ROWS: rows } });
+    h.render();
+    const opts = lastOf(h.calls.buildScene);
+    const enc = h.c.current.encoded;
+    const { qrDeco, ...plainPalette } = opts.palette;
+    const drawn = qrDeco !== undefined
+      && JSON.stringify(buildScene(enc, opts)) !== JSON.stringify(buildScene(enc, { ...opts, palette: plainPalette }));
+    if (drawn) seen.drawn += 1;
+    if (qrDeco !== undefined && !drawn) seen.keyButNotDrawn += 1;
+    const tag = h.run('exportDecorationTag()');
+    assert.equal(tag.includes('-qr'), drawn, `${name}: 꼬리표(${tag || '없음'})가 렌더와 어긋난다 — 코너 QR 꾸미기 ${drawn ? '있음' : '없음'}`);
+  }
+  // 자가 비지 않았는가 — 양쪽 진리값과 «키는 있는데 안 그려진» 함정 칸이 모두 격자에 있어야 한다.
+  assert.ok(seen.drawn >= 3, '코너 QR 꾸미기가 그려진 칸이 너무 적다: ' + seen.drawn);
+  assert.ok(seen.keyButNotDrawn >= 3, 'palette.qrDeco 는 있는데 안 그려진 칸이 너무 적다(함정 칸 부재): ' + seen.keyButNotDrawn);
+});
+
+test('채도 바는 커스텀을 고르고 decorationValueFromInput 로 정규화한다(문자열이 기본값으로 튀지 않는다)', () => {
+  const h = harness({ state: { type: 'O', preset: 'slate' } });
+  const bar = h.$('customSatBar');
+  bar.value = '155';
+  bar.dispatch('input');
+  assert.equal(h.state.customSat, 155);
+  assert.equal(h.state.preset, 'custom');
+  assert.equal(h.pending.length > 0, true, '채도 이동이 렌더를 예약하지 않았다');
+  // paletteOf 가 같은 채도로 기저 팔레트를 만든다(커스텀 채도가 렌더 팔레트에 닿는다).
+  h.render();
+  const expected = makeCustomPalette(h.state.customHue, 'x', 155).levels;
+  assert.deepEqual(lastOf(h.calls.buildScene).palette.levels, expected);
+});

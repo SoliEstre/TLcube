@@ -17,12 +17,22 @@
  *   ④ 해석 — `resolveCellShapeSpec(state, ctx, allow)`: 상태 + 렌더 문맥 + 허용표 →
  *      `{spec}` 또는 `{spec:null, lockReason}`. **상태를 고치지 않는다**(조용히 사각으로
  *      떨어뜨리지 않는다 — 잠금은 사유와 함께 보인다, wiring M10).
+ *      **구조 잠금**(설계 1차 잠금 — 통합자 결정 2, 2026-09-26)은 허용표보다 먼저 건다: 표에
+ *      행이 있어도 잠긴다(`cellShapeStructuralLock` · `CELL_SHAPE_STRUCTURAL_LOCK_REASONS`).
+ *   ⑤ 문맥 — `cellShapeCtx(type, encoded, state, render)`: 제품이 resolver 에 넘길 문맥을
+ *      **한 벌만** 유도한다(통합자 결정 1 — 하네스도 이 함수를 import 한다, H 의
+ *      `generator-h.hCellStyleCtx` 가 선례). `cellShapeAllowCtx(ctx)` 는 그 문맥을 허용표 행
+ *      키(`table` + `CELL_SHAPE_ALLOW_KEYS[table]`)로 깎는다 — 영수증 행 allowCtx 모양.
  *
  * 결정성 계약(`raster.js:9` · `sceneY.js:10-11` 과 같다): 삼각함수 · Math.hypot ·
  * Math.random · Date 를 쓰지 않는다. 호의 점은 15° 간격 **닫힌 형태 표**(cos15 =
  * (√6+√2)/4 …)로 만든다 — 같은 입력이면 어느 엔진에서나 같은 비트가 나온다.
  *
- * 의존은 `luminance.js`(면 게인의 sRGB↔선형) 와 `cell-shape-allow.js`(허용표) 뿐이다.
+ * 의존은 `luminance.js`(면 게인의 sRGB↔선형 · 팔레트 등급) · `cell-shape-allow.js`(허용표) ·
+ * `finder-patterns.js`(불스아이 계열 id) · `locatorY.js`(hex-frame id) 뿐이다 — 넷 다
+ * `tools/build-single.mjs` 와 `tools/build-finder-editor.mjs` 의 MODULE_ORDER 에서 이 모듈보다
+ * 앞이다. ⛔ `cellSurfaceFinal.js`(슬롯 레이아웃 목록)는 build-single 에서 **뒤**라 import 할 수
+ * 없다 — 슬롯 판정은 인코딩 결과의 `role:'slot'` 셀(코드 자체)에서 읽는다(`cellShapeCtx`).
  * ⛔ **`sceneY.js` 를 import 하지 않는다**(wiring B1 — scene.js 가 이 모듈을 import 하면
  * sceneY 를 끌어와 번들 위상이 꼬인다). `sceneY.applyFaceGain` 과 같은 계산을
  * `faceGainColor` 로 다시 구현하고, 비트 동일은 `test/cell-shape-geometry.test.js` 가 잠근다.
@@ -34,8 +44,12 @@
  * 그 전까지 `noSeam` 은 **효과가 없다**(gap · dot 에도 seam stroke 가 그려진다).
  */
 
-import { srgbChannelToLinear, relativeLuminance, PRESET_BG_SEPARATION_MIN } from './luminance.js';
+import {
+  srgbChannelToLinear, relativeLuminance, PRESET_BG_SEPARATION_MIN, PRESETS,
+} from './luminance.js';
 import * as DEFAULT_ALLOW from './cell-shape-allow.js';
+import { FINDER_PATTERNS, LEGACY_FINDER_PATTERN_ID } from './finder-patterns.js';
+import { LOCATOR_PROFILE_HEX_FRAME_V1 } from './locatorY.js';
 
 // ── 닫힌 형태 상수 ─────────────────────────────────────────────────────────────
 
@@ -78,6 +92,9 @@ const ARC_STEPS_OBTUSE = 4; // 120° 모서리 — 호 60°
 
 /** 셀 모양 6종. `square` 는 현재 출력(바이트 동일 1순위). */
 export const CELL_SHAPES = Object.freeze(['square', 'round', 'bevel', 'round-bevel', 'gap', 'dot']);
+
+/** 기본 모양 = 꾸미기 끔(현재 출력). 상태 스키마 `cellShape` 의 기본값 정본. */
+export const CELL_SHAPE_DEFAULT = 'square';
 
 /**
  * 모양별 강도 파라미터 — 상태 키 · 도메인 · 기본값 (DESIGN_001 §2.2).
@@ -570,7 +587,7 @@ export function promoteNearT0(faces, t0Shapes, opts = {}) {
 /**
  * 허용표 키(§3.4). 행은 이 키를 **전부** 가져야 하고 문맥과 모두 같아야 허가한다
  * (와일드카드 없음 — v0@13 에서 잰 행이 v0TR@25 를 허가하지 않는다).
- *   gapGrade(실효 틈 등급) ∈ {'white', 'black', 'unknown'} · paletteGrade ∈ {slate, ember, mono, custom}.
+ *   gapGrade(실효 틈 등급) ∈ `CELL_GAP_GRADES` · paletteGrade ∈ {slate, ember, mono, custom}.
  *   Y 의 seamAdjacent 는 «심 인접 1줄 꾸밈» 변형(§3.0 예외).
  */
 export const CELL_SHAPE_ALLOW_KEYS = Object.freeze({
@@ -582,15 +599,62 @@ export const CELL_SHAPE_ALLOW_KEYS = Object.freeze({
   ]),
 });
 
-/** 잠금 사유. UI 는 이 값으로 인라인 사유 문구(i18n)를 고른다. */
+/**
+ * 구조 잠금이 읽는 **표 밖** 문맥 키(허용표 행에는 없다 — 표로 가를 수 없어서 따로 둔다).
+ *   Y: qrPosition(상태 — 'inner' = 윈도 β · 안쪽 QR) · qrWindow(인코딩 `window` — 윈도 β 코드) ·
+ *      qrSlot(인코딩에 `role:'slot'` 셀이 있는가 — 슬롯 레이아웃).
+ * 빠지면 잴 수 없으므로 잠근다(`ctx-incomplete`) — fail-closed. O/A/K 는 표 키(type · finderPatternId)로
+ * 충분하다(C 는 `cellShapeCtx` 가 코드에서 type 'C' 로 판정).
+ */
+export const CELL_SHAPE_LOCK_CTX_KEYS = Object.freeze({
+  oak: Object.freeze([]),
+  y: Object.freeze(['qrPosition', 'qrWindow', 'qrSlot']),
+});
+
+/**
+ * 잠금 사유 — **안정 id**. UI 는 이 값으로 인라인 사유 문구(i18n 키)를 고른다. 문자열을 바꾸면 i18n
+ * 매핑이 끊기므로 바꾸지 않는다(새 사유는 새 id 로).
+ */
 export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
   UNMEASURED: 'unmeasured', // 허용표에 행이 없다(미측정 조합)
   EXPOSED_GAP: 'exposed-gap', // 노출형인데 틈이 검정 판·미지 표면이다
   UNKNOWN_SHAPE: 'unknown-shape',
   PARAM_OUT_OF_DOMAIN: 'param-out-of-domain',
   TYPE_NOT_RHOMBUS: 'type-not-rhombus', // H 등 마름모 셀이 아닌 타입
-  CTX_INCOMPLETE: 'ctx-incomplete', // 문맥에 허용표 키가 빠졌다 — 잴 수 없으면 잠근다
+  CTX_INCOMPLETE: 'ctx-incomplete', // 문맥에 허용표 키 · 구조 잠금 키가 빠졌다 — 잴 수 없으면 잠근다
+  // ── 구조 잠금(설계 1차 잠금 — 허용표에 행이 있어도 잠긴다) ──
+  TYPE_C_ULTRA: 'type-c-ultra', // §3.1 — C(ultra, k ≥ 14)는 모든 모양 미측정
+  Y_TWO_TONE: 'y-two-tone', // §3.2 — Y 2톤(Y*-2T) × 모든 모양
+  Y_INNER_QR: 'y-inner-qr', // §3.2 — 윈도(β) 구성 · qrPosition inner × 모든 모양(inner-QR 레인 영역)
+  Y_QR_SLOT: 'y-qr-slot', // §3.2 — 슬롯 레이아웃(v0TY · v0TRQ · v0TRY …) × 모든 모양
+  Y_HEX_FRAME_EXPOSED: 'y-hex-frame-gap-dot', // §3.2 — hex-frame-v1 × gap/dot
+  BULLSEYE_DOT: 'bullseye-dot', // §3.1 표 — 불스아이 계열(불스아이 · cube-bullseye)은 dot 전면 금지
+  BEVEL_RAISED: 'bevel-raised', // §3.1 safety M13 — 돌출 bevel(게인 > 1, 1.4)은 바닥 띠를 흰 판 쪽으로 넓힌다
 });
+
+/** 구조 잠금 사유 id 전부 — `cellShapeStructuralLock` 이 낼 수 있는 값의 목록(테스트 · i18n 대조용). */
+export const CELL_SHAPE_STRUCTURAL_LOCK_REASONS = Object.freeze([
+  CELL_SHAPE_LOCK_REASONS.TYPE_C_ULTRA,
+  CELL_SHAPE_LOCK_REASONS.Y_TWO_TONE,
+  CELL_SHAPE_LOCK_REASONS.Y_INNER_QR,
+  CELL_SHAPE_LOCK_REASONS.Y_QR_SLOT,
+  CELL_SHAPE_LOCK_REASONS.Y_HEX_FRAME_EXPOSED,
+  CELL_SHAPE_LOCK_REASONS.BULLSEYE_DOT,
+  CELL_SHAPE_LOCK_REASONS.BEVEL_RAISED,
+]);
+
+/**
+ * 불스아이 계열 파인더 id — 라이브러리 불스아이(`LEGACY_FINDER_PATTERN_ID`) + renderKind
+ * 'cube-bullseye' 패턴 전부(패턴 표에서 **유도** — 손 목록 아님). 동심 원판이 셀과 면을 나누는
+ * T0 라서 dot(노출 56 %)은 원판 경계를 흐린다(§3.1 «불스아이 O 는 dot 전면 금지»).
+ */
+export const BULLSEYE_FAMILY_FINDER_PATTERN_IDS = Object.freeze([
+  LEGACY_FINDER_PATTERN_ID,
+  ...FINDER_PATTERNS.filter((p) => p.renderKind === 'cube-bullseye').map((p) => p.id),
+]);
+if (BULLSEYE_FAMILY_FINDER_PATTERN_IDS.length < 2) {
+  throw new Error('cell-shape: 불스아이 계열 유도 실패 — renderKind cube-bullseye 패턴이 없다');
+}
 
 function allowTableOf(type) {
   if (OAK_FAMILY_TYPES.includes(type)) return 'oak';
@@ -599,22 +663,52 @@ function allowTableOf(type) {
 }
 
 /**
+ * 구조 잠금 판정 — 허용표와 **무관하게** 잠그는 조합이면 사유 id, 아니면 null. 순수 함수.
+ * resolver 가 허용표보다 먼저 부른다(측정 영수증에 그 조합의 행이 생겨도 열리지 않는다).
+ * 여는 쪽(측정 레인)이 풀려면 이 함수의 해당 줄을 **먼저 지우고 이유를 적어야** 한다.
+ *
+ * @param {'oak'|'y'} table
+ * @param {string} kind 셀 모양(square 제외)
+ * @param {number|null} param 강도(round-bevel 은 null)
+ * @param {object} ctx `cellShapeCtx` 문맥(표 키 + `CELL_SHAPE_LOCK_CTX_KEYS[table]`)
+ * @returns {string|null}
+ */
+export function cellShapeStructuralLock(table, kind, param, ctx) {
+  const R = CELL_SHAPE_LOCK_REASONS;
+  if (table === 'oak') {
+    if (ctx.type === 'C') return R.TYPE_C_ULTRA;
+    if (kind === 'dot' && BULLSEYE_FAMILY_FINDER_PATTERN_IDS.includes(ctx.finderPatternId)) return R.BULLSEYE_DOT;
+  } else if (table === 'y') {
+    if (ctx.tones === 2) return R.Y_TWO_TONE;
+    if (ctx.qrWindow === true || ctx.qrPosition === 'inner') return R.Y_INNER_QR;
+    if (ctx.qrSlot === true) return R.Y_QR_SLOT;
+    if ((kind === 'gap' || kind === 'dot') && ctx.locatorProfile === LOCATOR_PROFILE_HEX_FRAME_V1) {
+      return R.Y_HEX_FRAME_EXPOSED;
+    }
+  }
+  // 게인 > 1 = 돌출(띠를 흰 쪽으로) — 1.4 가 그 값이다. 도메인이 늘어도 «돌출» 이면 잠근다.
+  if (kind === 'bevel' && typeof param === 'number' && param > 1) return R.BEVEL_RAISED;
+  return null;
+}
+
+/**
  * 상태 + 렌더 문맥 + 허용표 → 셀 모양 spec.
  *
  * - square(키 없음 포함) → `{spec:null}` (잠금 사유 없음 — 기본값이다).
- * - 허용표에 문맥·모양·파라미터가 **모두** 같은 행이 있으면 `{spec:{kind, param}}`.
+ * - 판정 순서: 모양 · 강도 도메인 → 표(타입) → 문맥 완전성(표 키 + 구조 잠금 키) →
+ *   **구조 잠금**(표와 무관) → 허용표 행. 행은 문맥 · 모양 · 파라미터가 **모두** 같아야 연다.
  *   round-bevel 의 param 은 null(고정 조합).
  * - 그 밖은 `{spec:null, lockReason}`. **상태는 읽기만 한다**(동결 객체로도 동작).
  * 강도 키가 없으면 그 모양의 기본값으로 읽는다(«키 없음 ≡ 명시적 기본값», §7.1 (a)).
  *
  * @param {object} state 생성기 상태(cellShape · cellRound · cellBevel · cellGap · cellDot)
- * @param {object} ctx 렌더 시점 문맥 — `type` 과 `CELL_SHAPE_ALLOW_KEYS[표]` 의 키들
+ * @param {object} ctx 렌더 시점 문맥 — `cellShapeCtx` 결과(표 키 + 구조 잠금 키)
  * @param {{ROWS?: object[]}} [allow] 허용표(기본 `src/cell-shape-allow.js`)
  * @returns {{spec: null | {kind:string, param:number|null}, lockReason?: string}}
  */
 export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
-  const kind = state && state.cellShape !== undefined ? state.cellShape : 'square';
-  if (kind === 'square') return { spec: null };
+  const kind = state && state.cellShape !== undefined ? state.cellShape : CELL_SHAPE_DEFAULT;
+  if (kind === CELL_SHAPE_DEFAULT) return { spec: null };
   const R = CELL_SHAPE_LOCK_REASONS;
   if (!CELL_SHAPES.includes(kind)) return { spec: null, lockReason: R.UNKNOWN_SHAPE };
 
@@ -629,7 +723,12 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
   const table = allowTableOf(ctx && ctx.type);
   if (!table) return { spec: null, lockReason: R.TYPE_NOT_RHOMBUS };
   const keys = CELL_SHAPE_ALLOW_KEYS[table];
-  if (keys.some((k) => ctx[k] === undefined)) return { spec: null, lockReason: R.CTX_INCOMPLETE };
+  if ([...keys, ...CELL_SHAPE_LOCK_CTX_KEYS[table]].some((k) => ctx[k] === undefined)) {
+    return { spec: null, lockReason: R.CTX_INCOMPLETE };
+  }
+
+  const structural = cellShapeStructuralLock(table, kind, param, ctx);
+  if (structural !== null) return { spec: null, lockReason: structural };
 
   const rows = (allow && Array.isArray(allow.ROWS)) ? allow.ROWS : [];
   const hit = rows.some((row) => row
@@ -643,4 +742,143 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
     ? R.EXPOSED_GAP
     : R.UNMEASURED;
   return { spec: null, lockReason };
+}
+
+// ── 문맥 (§2.3 ctx · 통합자 결정 1) ──────────────────────────────────────────────
+
+/** 실효 틈 등급(§3.0) — 셀 아래에 실제로 보이는 것: 흰 판·흰 평탄화 / 검정 판·검정 평탄화 / 미지 표면. */
+export const CELL_GAP_GRADES = Object.freeze(['white', 'black', 'unknown']);
+
+/**
+ * `quiet-auto.resolveQuietZoneChoice(...).color` 어휘(QUIET_COLOR_* — white · black · none · surface).
+ * ⚠ 검증되는 사본이다: `quiet-auto.js` 는 build-finder-editor 번들에 없어 이 모듈이 import 할 수 없다.
+ * `test/cell-shape-ctx-locks.test.js` 가 quiet-auto 의 QUIET_COLOR_* 전부가 여기 있는지 잰다.
+ */
+export const CELL_GAP_QUIET_COLORS = Object.freeze(['white', 'black', 'none', 'surface']);
+
+/**
+ * 실효 틈 등급 유도 — **렌더 뒤에야 아는 값**(안전영역 판 색)을 `render.quietColor` 로 받는다.
+ *   quietMode 'contrast' → 'unknown' (설계 §3.0: 판 색이 배치 사진에 따라 바뀐다 — 미지 표면으로 묶는다)
+ *   판 white → 'white' · 판 black → 'black' · 판 surface(배치 사진 지면 색) → 'unknown'
+ *   판 없음 → 배경 평탄화: bgMode white → 'white' · black → 'black' · transparent → 'unknown'
+ *     (Y 기본 = auto 가 판을 안 깐다 + 투명 → 'unknown' — 설계 §3.2 safety B2 «Y 기본은 bevel 만 후보»)
+ * `render.quietColor` 가 없거나 모르는 값이면 undefined(→ resolver `ctx-incomplete` 잠금 — 잴 수 없으면 잠근다).
+ * 파생값 트리거(§2.3): quiet-auto 재렌더 · 배치 사진 변경 · bgMode 변경 때 문맥을 **다시** 유도한다.
+ *
+ * @param {{bgMode?: string, quietMode?: string}} state
+ * @param {{quietColor?: string}|null|undefined} render
+ * @returns {'white'|'black'|'unknown'|undefined}
+ */
+export function cellGapGrade(state, render) {
+  if (state && state.quietMode === 'contrast') return 'unknown';
+  const q = render ? render.quietColor : undefined;
+  if (!CELL_GAP_QUIET_COLORS.includes(q)) return undefined;
+  if (q === 'white' || q === 'black') return q;
+  if (q === 'surface') return 'unknown';
+  const bg = state ? state.bgMode : undefined;
+  if (bg === 'white' || bg === 'black') return bg;
+  return bg === 'transparent' ? 'unknown' : undefined;
+}
+
+/**
+ * 팔레트 등급 {slate, ember, mono, custom} — 상태의 `preset`(스타일 프리셋)에서. 모르는 값은
+ * undefined(문맥 불완전 → 잠금). H(`generator-h.hPaletteGrade`)도 이 함수를 쓴다(한 벌).
+ * custom 의 채도(customSat)는 등급 키가 아니다 — 측정 쪽(gen-allow R5)이 sat 양 끝 · 중점을 모두
+ * 통과한 custom 행만 만든다.
+ */
+export function paletteGradeOf(state) {
+  const preset = state ? state.preset : undefined;
+  if (typeof preset !== 'string') return undefined;
+  if (Object.prototype.hasOwnProperty.call(PRESETS, preset)) return preset;
+  return preset === 'custom' ? 'custom' : undefined;
+}
+
+/** 제품이 그리는 Y 심 인접 1줄 변형. 'decorate' 는 측정 변형(L6)일 뿐 제품 선택지가 아니다. */
+export const Y_SEAM_ADJACENT_PRODUCT = 'keep';
+
+/**
+ * 셀 모양 문맥의 타입 — 생성기 타입(O · A · K · Y) + 상태 + **코드**에서 유도한 실효 타입.
+ *   C  = 인코딩이 `notchC`(ultra — 코드에서 판정, 상태의 versionO 표지가 아니라)
+ *   G  = O + innerSeat 'o-cm' · V = A + turnA (index.html `effectiveEditorTypeFromGenerator` 와 같은 규칙)
+ *   H  = Y + yRepresentation '3d' → null(사각 셀 — `generator-h.hCellStyleCtx` 가 따로 맡는다)
+ * 모르는 타입 → null.
+ */
+export function cellShapeTypeOf(type, encoded, state) {
+  const s = state || {};
+  if (type === 'Y') return s.yRepresentation === '3d' ? null : 'Y';
+  if (type === 'K') return 'K';
+  if (type === 'O') {
+    if (encoded && encoded.notchC === true) return 'C';
+    return s.innerSeat === 'o-cm' ? 'G' : 'O';
+  }
+  if (type === 'A') return s.turnA === true ? 'V' : 'A';
+  return null;
+}
+
+function hasSlotCells(encoded) {
+  const cells = encoded && encoded.cellDigits;
+  if (!cells || typeof cells.values !== 'function') return undefined;
+  for (const entry of cells.values()) if (entry && entry.role === 'slot') return true;
+  return false;
+}
+
+/**
+ * 제품 셀 모양 문맥 — resolver 에 넘기는 값의 **유일한 유도**(하네스도 이것을 쓴다).
+ *
+ * 공통: tones = 인코딩 tones ?? 상태 tone · gapGrade = `cellGapGrade(state, render)` · bgMode = 상태 ·
+ *       paletteGrade = `paletteGradeOf(state)`.
+ * O/A/K(+C/G/V) `table:'oak'`: type(실효 — `cellShapeTypeOf`) · version = 인코딩 · finderPatternId = 상태
+ *       **선택값**(중앙 QR 로 렌더가 양보해도 선택값) · qrPosition = 상태.
+ * Y `table:'y'`: cellSurfaceLayout = 인코딩 ?? 'none' · locatorProfile = 인코딩 ?? 상태 locatorProfileY(해석 뒤) ·
+ *       nBand = String(인코딩 n)(구간 = n 하나) · seamAdjacent = `Y_SEAM_ADJACENT_PRODUCT` ·
+ *       구조 잠금 키 qrPosition(상태) · qrWindow(인코딩 window) · qrSlot(인코딩 role 'slot' 셀 유무).
+ * 값을 모르면 그 키는 undefined 로 남는다 — resolver 가 `ctx-incomplete` 로 잠근다(추측으로 채우지 않는다).
+ *
+ * @param {'O'|'A'|'K'|'Y'} type 생성기 타입(`generatorState.type`)
+ * @param {object} encoded 실제 인코딩 결과(자동 버전 · 레이아웃 해석 뒤)
+ * @param {object} state 생성기 상태
+ * @param {{quietColor?: 'white'|'black'|'none'|'surface'}} [render] 렌더 뒤에야 아는 값 —
+ *   `resolveQuietZoneChoice(...).color`. 없으면 gapGrade 가 undefined(잠금).
+ * @returns {object|null} 문맥, 또는 마름모 셀이 아닌 타입(H 등) · 입력 없음이면 null
+ */
+export function cellShapeCtx(type, encoded, state, render) {
+  if (!encoded || typeof encoded !== 'object' || !state || typeof state !== 'object') return null;
+  const effType = cellShapeTypeOf(type, encoded, state);
+  if (effType === null) return null;
+  const common = {
+    tones: encoded.tones ?? state.tone,
+    gapGrade: cellGapGrade(state, render),
+    bgMode: state.bgMode,
+    paletteGrade: paletteGradeOf(state),
+  };
+  if (effType !== 'Y') {
+    return {
+      table: 'oak', type: effType, version: encoded.version, finderPatternId: state.finderPatternId,
+      qrPosition: state.qrPosition, ...common,
+    };
+  }
+  return {
+    table: 'y',
+    type: 'Y',
+    cellSurfaceLayout: encoded.cellSurfaceLayout ?? 'none',
+    locatorProfile: encoded.locatorProfile ?? state.locatorProfileY,
+    nBand: Number.isInteger(encoded.n) ? String(encoded.n) : undefined,
+    seamAdjacent: Y_SEAM_ADJACENT_PRODUCT,
+    ...common,
+    qrPosition: state.qrPosition,
+    qrWindow: encoded.window === true,
+    qrSlot: hasSlotCells(encoded),
+  };
+}
+
+/**
+ * 문맥 → 허용표 행 문맥(`table` + `CELL_SHAPE_ALLOW_KEYS[table]`, 정확히 그 키만). 영수증 행 allowCtx 의 모양.
+ * 구조 잠금 키 · type(Y) 같은 표 밖 키는 깎는다. 모르는 표면 null.
+ */
+export function cellShapeAllowCtx(ctx) {
+  const keys = ctx && CELL_SHAPE_ALLOW_KEYS[ctx.table];
+  if (!keys) return null;
+  const out = { table: ctx.table };
+  for (const k of keys) out[k] = ctx[k];
+  return out;
 }

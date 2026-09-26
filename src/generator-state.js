@@ -28,7 +28,18 @@ import {
 } from './render-profile.js';
 import {
   H_ROTATION_MODES, H_ROTATION_SPEED_DEFAULT, H_GYRO_ROTATION_SPEED_DEFAULT, H_ROTATION_TILT_DEFAULT_DEG, H_ROTATION_TILT_MAX_DEG, H_ROTATION_TILT_MODES, H_ROTATION_TILT_MODE_DEFAULT, H_PERSPECTIVE_DEFAULT, normalizeHViewControls, reconcileHRotationSpeed,
+  H_CELL_GROUNDS, H_CELL_GROUND_DEFAULT, H_CELL_STYLE_DEFAULT, H_CELL_STYLE_LOCK_REASONS,
 } from './generator-h.js';
+// 셀 꾸미기 · 채도 · 폴백 QR 커스텀 (DESIGN_001 §2.2) — 도메인 · 기본값의 정본은 각 모듈이다(여기는 등록만).
+import {
+  CELL_SHAPES, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_REASONS, CELL_SHAPE_PARAMS,
+} from './cell-shape.js';
+import { SQUARE_CELL_STYLES } from './square-cell-style.js';
+import {
+  QR_COLOR_MODES, QR_DECO_DEFAULTS, QR_DECO_LOCK_REASONS, QR_EYE_MODES,
+  QR_HUE_MAX, QR_HUE_MIN, QR_SAT_MAX, QR_SAT_MIN, QR_SAT_NEUTRAL,
+} from './qr-colors.js';
+import { CUSTOM_SAT_MAX, CUSTOM_SAT_MIN } from './palette-hue.js';
 import {
   DEFAULT_EXPORT_CUSTOM_PX,
   DEFAULT_EXPORT_DITHER,
@@ -71,7 +82,7 @@ import {
 // 촬영 프리셋 선언 — `shotPreset` 허용값의 **유일한 출처**. 이 방향(state → presets)
 // 만 존재한다: 반대로 shot-presets 가 이 파일을 읽으면 순환이다.
 import {
-  SHOT_PRESET_NONE, SHOT_PRESET_STATE_VALUES,
+  SHOT_PRESETS, SHOT_PRESET_NONE, SHOT_PRESET_STATE_VALUES,
   assertNoEmphasisFields, assertShotPresetFields,
 } from './generator-shot-presets.js';
 
@@ -114,6 +125,121 @@ function field(defaultValue, exposure, options) {
     ...(options === undefined ? {} : { options: Object.freeze([...options]) }),
   });
 }
+
+// ── 셀 꾸미기 · 채도 · 폴백 QR 커스텀 상태 도메인 (DESIGN_001 §2.2 + §9.3 운영자 답) ─────────
+//
+// 키 15개의 도메인 · 기본값을 **각 정본 모듈에서 읽어** 한 표로 모은다(복제 금지):
+//   cellShape                     cell-shape CELL_SHAPES · CELL_SHAPE_DEFAULT
+//   cellRound · cellBevel · cellGap · cellDot   cell-shape CELL_SHAPE_PARAMS(키 이름까지 거기서 — 모양마다 따로)
+//   hCellStyle · hCellGround      square-cell-style SQUARE_CELL_STYLES · generator-h H_CELL_GROUNDS/기본값
+//                                 (Q1 = QR 과 같은 메뉴 · 각자 선택, Q2 = level5 기본 + white 옵션)
+//   qrCellStyle · qrColorMode · qrHue · qrSat · qrEye · qrEyeHue · qrEyeSat   qr-colors(Q3 = none/darker/custom 셋 다)
+//   customSat                     palette-hue CUSTOM_SAT_MIN/MAX(기본 = 중점 = 기준 채도 그대로)
+// 스키마 필드는 이 표에서 **유도**한다: 열거형은 options = 도메인 전부, 정수 범위는 customHue 전례처럼
+// options = 왕복 표본(기본 · 하한 · 상한). 노출은 전부 BOTH(§2.2 컨테이너: #sharedControls, customSat 은
+// customHue 와 같은 두 곳 — index.html 의 data-state-keys 는 L5/D3 몫).
+//
+// **정규화**(`normalizeDecorationValue` · `normalizeDecorationState` · `createGeneratorState`):
+//   부재 · 문자열 · 도메인 밖(열거형) · 정수가 아니거나 범위 밖(정수) → 기본값. 조용한 절삭(clamp)을 하지
+//   않는다 — «범위 밖» 은 입력 결함이라 기본값으로 되돌린다. 이 경로를 지난 상태는 `makeCustomPalette`
+//   (sat 도메인 밖이면 RangeError) · `resolveQrDeco`(qr-invalid-state) 에 도메인 밖 값을 절대 넘기지 않는다.
+
+function enumDomain(values, defaultValue) {
+  if (!values.includes(defaultValue)) {
+    throw new Error('꾸미기 상태 도메인: 기본값이 열거 밖이다 — ' + String(defaultValue));
+  }
+  return Object.freeze({ kind: 'enum', values: Object.freeze([...values]), defaultValue });
+}
+
+function intDomain(min, max, defaultValue) {
+  if (![min, max, defaultValue].every(Number.isInteger) || !(min <= defaultValue && defaultValue <= max)) {
+    throw new Error(`꾸미기 상태 도메인: 정수 범위 [${min}, ${max}] · 기본 ${defaultValue} 가 어긋난다`);
+  }
+  const samples = [...new Set([defaultValue, min, max])];
+  return Object.freeze({ kind: 'int', min, max, defaultValue, samples: Object.freeze(samples) });
+}
+
+/** 꾸미기 상태 키 → 도메인 `{kind:'enum', values, defaultValue}` | `{kind:'int', min, max, defaultValue, samples}`. */
+export const DECORATION_STATE_DOMAINS = Object.freeze({
+  cellShape: enumDomain(CELL_SHAPES, CELL_SHAPE_DEFAULT),
+  ...Object.fromEntries(Object.values(CELL_SHAPE_PARAMS)
+    .map((def) => [def.key, enumDomain(def.domain, def.default)])),
+  hCellStyle: enumDomain(SQUARE_CELL_STYLES, H_CELL_STYLE_DEFAULT),
+  hCellGround: enumDomain(H_CELL_GROUNDS, H_CELL_GROUND_DEFAULT),
+  qrCellStyle: enumDomain(SQUARE_CELL_STYLES, QR_DECO_DEFAULTS.qrCellStyle),
+  qrColorMode: enumDomain(QR_COLOR_MODES, QR_DECO_DEFAULTS.qrColorMode),
+  qrHue: intDomain(QR_HUE_MIN, QR_HUE_MAX, QR_DECO_DEFAULTS.qrHue),
+  qrSat: intDomain(QR_SAT_MIN, QR_SAT_MAX, QR_DECO_DEFAULTS.qrSat),
+  qrEye: enumDomain(QR_EYE_MODES, QR_DECO_DEFAULTS.qrEye),
+  qrEyeHue: intDomain(QR_HUE_MIN, QR_HUE_MAX, QR_DECO_DEFAULTS.qrEyeHue),
+  qrEyeSat: intDomain(QR_SAT_MIN, QR_SAT_MAX, QR_DECO_DEFAULTS.qrEyeSat),
+  customSat: intDomain(CUSTOM_SAT_MIN, CUSTOM_SAT_MAX, QR_SAT_NEUTRAL),
+});
+
+/** 꾸미기 상태 키 목록(스키마 등록 순서). */
+export const DECORATION_STATE_KEYS = Object.freeze(Object.keys(DECORATION_STATE_DOMAINS));
+
+/**
+ * 촬영 프리셋이 반드시 «끔» 으로 못 박아야 하는 꾸미기 키(§2.1 wiring M6). QR 키 · customSat 은
+ * 프리셋의 qrPosition none · 프리셋 팔레트가 이미 닫는다. `assertShotPresetDecorationOff` 가 잰다.
+ */
+export const SHOT_PRESET_DECORATION_PINNED_KEYS = Object.freeze(['cellShape', 'hCellStyle', 'hCellGround']);
+
+/**
+ * 잠금 사유 id 합집합 — 셀 모양(cell-shape) · H 셀 스타일(generator-h) · 폴백 QR(qr-colors). UI 가
+ * 인라인 사유 문구(i18n 키)를 고르는 **안정 id** 전부다. 새 사유가 생기면 여기가 자동으로 따라온다.
+ */
+export const DECORATION_LOCK_REASON_IDS = Object.freeze([...new Set([
+  ...Object.values(CELL_SHAPE_LOCK_REASONS),
+  ...Object.values(H_CELL_STYLE_LOCK_REASONS),
+  ...Object.values(QR_DECO_LOCK_REASONS),
+])]);
+
+/**
+ * 꾸미기 상태 값 하나 정규화 — 도메인 안이면 그대로, 아니면 기본값. 꾸미기 키가 아니면 던진다.
+ * @param {string} key `DECORATION_STATE_KEYS` 중 하나
+ * @param {unknown} value
+ */
+export function normalizeDecorationValue(key, value) {
+  const d = DECORATION_STATE_DOMAINS[key];
+  if (d === undefined) throw new RangeError('꾸미기 상태 키가 아니다: ' + key);
+  if (d.kind === 'enum') return d.values.includes(value) ? value : d.defaultValue;
+  return Number.isInteger(value) && value >= d.min && value <= d.max ? value : d.defaultValue;
+}
+
+/**
+ * UI 입력(슬라이더 · select 의 `.value` = 문자열) → 정규화된 꾸미기 값. 숫자 키(정수 범위 · 숫자 열거 —
+ * cellRound 등)는 **먼저** `Number(raw)` 로 바꾸고(customHue 전례 `Number(bar.value)`), 그다음
+ * `normalizeDecorationValue`. 빈 문자열 · 공백은 숫자 0 이 아니라 기본값. 문자열 열거 키는 그대로 정규화.
+ * 문자열을 곧장 `normalizeDecorationValue` 에 넣으면 숫자 키는 언제나 기본값으로 튄다(«켰는데 안 먹는»).
+ * @param {string} key `DECORATION_STATE_KEYS` 중 하나
+ * @param {unknown} raw
+ */
+export function decorationValueFromInput(key, raw) {
+  const d = DECORATION_STATE_DOMAINS[key];
+  if (d === undefined) throw new RangeError('꾸미기 상태 키가 아니다: ' + key);
+  const numeric = d.kind === 'int' || d.values.every((v) => typeof v === 'number');
+  if (numeric && typeof raw === 'string') {
+    return raw.trim() === '' ? d.defaultValue : normalizeDecorationValue(key, Number(raw));
+  }
+  return normalizeDecorationValue(key, raw);
+}
+
+/**
+ * 상태의 꾸미기 키 전부를 정규화한 **새** 객체(입력은 고치지 않는다). 없는 키는 기본값으로 채운다.
+ * 꾸미기 키가 아닌 필드는 그대로 옮긴다.
+ */
+export function normalizeDecorationState(state) {
+  const out = { ...(state || {}) };
+  for (const key of DECORATION_STATE_KEYS) out[key] = normalizeDecorationValue(key, out[key]);
+  return out;
+}
+
+const DECORATION_SCHEMA_FIELDS = Object.freeze(Object.fromEntries(
+  Object.entries(DECORATION_STATE_DOMAINS).map(([key, d]) => [
+    key, field(d.defaultValue, BOTH, d.kind === 'enum' ? d.values : d.samples),
+  ]),
+));
 
 // 선택 가능한 축을 한 곳에 등록한다. UI 노출 대조와 상태 왕복 테스트가 이 스키마를
 // 순회하므로 새 항목을 더하면 일반/고급 누락과 보존 검사가 함께 확장된다.
@@ -299,6 +425,8 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   hRotationTiltMode: field(H_ROTATION_TILT_MODE_DEFAULT, BOTH, H_ROTATION_TILT_MODES),
   hExportLayout: field('faces', BOTH, ['faces','view']),
   customHue: field(210, BOTH, [210, 37]),
+  // 셀 꾸미기 · 채도 · 폴백 QR 커스텀 15키 — 도메인 표(DECORATION_STATE_DOMAINS)에서 유도한다(위 주석).
+  ...DECORATION_SCHEMA_FIELDS,
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),
   // 'surface' = 배치 미리보기에서 잰 지면 색 판 — **Type Y 전용 카드**다 (운영자
   // 결정 2026-09-01). 스키마는 타입을 모르므로 허용값에만 넣고, 어느 타입에서 카드가
@@ -463,6 +591,30 @@ assertNoEmphasisFields();
 // 「고르면 3D 로 안 바뀌는」 프리셋이 조용히 선다 — 상태 대조 자로는 안 보인다.
 assertOrbitStateFields(GENERATOR_STATE_SCHEMA);
 
+/**
+ * 촬영 프리셋의 꾸미기 키 = «끔»(스키마 기본값) — 로드 시 단언(§2.1 wiring M6). shot-presets 의
+ * hCellStyle · hCellGround 는 번들 순서상 정본(generator-h)을 import 못 하는 «검증되는 사본» 이라 여기서
+ * 잰다. 모든 프리셋이 SHOT_PRESET_DECORATION_PINNED_KEYS 를 세우고, 세운 꾸미기 키는 전부 기본값이어야 한다.
+ */
+export function assertShotPresetDecorationOff(presets = SHOT_PRESETS) {
+  for (const preset of presets) {
+    for (const key of SHOT_PRESET_DECORATION_PINNED_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(preset.fields, key)) {
+        throw new Error('촬영 프리셋 ' + preset.id + ' 가 꾸미기 키를 끔으로 못 박지 않았다: ' + key);
+      }
+    }
+    for (const [key, value] of Object.entries(preset.fields)) {
+      const d = DECORATION_STATE_DOMAINS[key];
+      if (d !== undefined && !Object.is(value, d.defaultValue)) {
+        throw new Error('촬영 프리셋 ' + preset.id + ' 의 꾸미기 키 ' + key + ' 가 끔(기본 '
+          + String(d.defaultValue) + ')이 아니다: ' + String(value));
+      }
+    }
+  }
+  return true;
+}
+assertShotPresetDecorationOff();
+
 export function createGeneratorState(overrides = {}) {
   const state = {};
   for (const [key, descriptor] of Object.entries(GENERATOR_STATE_SCHEMA)) {
@@ -472,6 +624,8 @@ export function createGeneratorState(overrides = {}) {
     if (!(key in GENERATOR_STATE_SCHEMA)) throw new RangeError('알 수 없는 생성기 상태 키: ' + key);
     state[key] = value;
   }
+  // 꾸미기 키는 복원 입력이 도메인 밖이면 기본값으로 되돌린다(부재 · 문자열 · 범위 밖 — 위 도메인 주석).
+  for (const key of DECORATION_STATE_KEYS) state[key] = normalizeDecorationValue(key, state[key]);
   // 옛 저장에는 intent가 없었어요. 명시 속도는 사용자가 고른 값으로 읽어 축 전환에서 보존해요.
   if (overrides.hRotationSpeed !== undefined && overrides.hRotationSpeedIntent === undefined) {
     state.hRotationSpeedIntent = 'manual';
