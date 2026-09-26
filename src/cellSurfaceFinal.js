@@ -1186,6 +1186,48 @@ export const CENTER_QR_FINDER_MODULES = Object.freeze([
 ]);
 
 /**
+ * Type Y 안쪽 QR(윈도 β · 슬롯)의 QR 모듈 (qx 열, qy 행) → 면 T 틀 좌표 (u, v) — **정본 사상**이에요.
+ * u 는 e_i(a) 방향, v 는 e_j(b) 방향 모듈 칸이고, 0 이 틀 원점(윈도·슬롯 원점) 쪽이에요.
+ * 2.5D 렌더러(`sceneY` renderWindowQr · renderSlotQr) · 3D 미리보기(`y3d-slot-qr`) · 3D 데이터 출력의 윈도 β
+ * (`generator-cube-export`) · 디코더 파인더 코어(아래 `centerQrFinderCoreCells`)가 모두 이 함수 하나를 봐요.
+ *
+ * ## 왜 전치인가 (2026-09-26 거울 수정)
+ *
+ * 면 셀 틀 (e_i, e_j) 는 SPEC §14 규범이고(T = C1·C5, `ygrid.js` FACE_BASIS), 화면(x 오른쪽 · y 아래)에서
+ * det(e_i, e_j) = −√3/2 — **왼손 틀**이에요. 데이터 셀은 디코더도 같은 틀로 읽어서 상관없지만, QR 은 외부 리더가
+ * 읽는 표준 심볼이라 그림 자체가 거울이면 안 돼요. 예전 사상(u = qx, v = qy · 뒤집기면 둘 다 20 − ·)은 QR 열을 e_i,
+ * 행을 e_j 에 그대로 얹어 왼손 틀을 물려받았고, 2.5D 부터 모든 안쪽 QR 이 qrMatrix 와 **반사로만** 맞았어요
+ * (19/19 — 윈도 β · 슬롯 6종 × n × 톤). 뒤집기(20 − qx, 20 − qy)는 틀 안 180° 회전이라 반사를 못 없애요.
+ * 열을 e_j, 행을 e_i 로 보내면(전치) det(e_j, e_i) = +√3/2 라 화면에서 **회전만** 남아요.
+ *
+ * ## 무엇이 그대로인가
+ *
+ * 새 사상은 뒤집기 유무와 관계없이 **옛 사상 ∘ (QR 좌표 전치 (x,y) → (y,x))** 예요(뒤집기면 결과가 반전치
+ * (x,y) → (20−y, 20−x) 가 돼요). 파인더 중심 집합 {(3,3), (17,3), (3,17)} 과 파인더 없는 코너 (20,20) 은 **전치에 불변**이라,
+ * 새 사상도 파인더 셋 · 콰이어트 프레임 · 정렬 코너(파인더 없는 코너)를 수정 전과 같은 (u, v) 에 놓고 방향 규약도 그대로예요:
+ *   · `flip=false` (seam) — 좌상단 파인더(0,0 코너)가 Y-심 쪽.
+ *   · `flip=true` (far · 윈도 β) — 파인더 없는 코너 (20,20) 이 틀 원점(Y-심 쪽), 파인더 셋은 바깥 꼭짓점 쪽.
+ * (반전치 자체는 파인더 집합을 보존하지 않아요 — (3,3) → (17,17). 보존되는 것은 «옛 flip 이 보낸 자리» 예요.)
+ * 바뀌는 것은 데이터 · 포맷 · 타이밍 모듈의 배치(전치)뿐이고, 디코더가 재는 파인더 코어 값은 한 비트도 안 바뀌어요.
+ *
+ * ## 스캔 동작 — «불변» 이 아니에요
+ *
+ * 디코더 코드는 그대로라 **수정 전 인쇄물**은 예전과 똑같이 읽혀요. 하지만 **새로 그린 윈도 β** 는 파인더 둘레의 포맷 ·
+ * 타이밍 모듈이 전치돼 QR 파인더 중심 추정이 서브픽셀만큼 움직이고(같은 삼중점 후보 · 중심만 약 0.4 px 차이를 실측), 그 포즈로
+ * 읽는 한계 기하에서 복호 결과가 프레임마다 뒤집혀요 — 잃는 프레임과 얻는 프레임이 둘 다 있고 순효과는 정해지지 않았어요.
+ * 회귀 자는 `test/decoder-frontend.test.js` 「윈도 β 스캔 회귀」(전수 범위)예요. 슬롯 레이아웃은 쌍 스윕에서 차이가 없었어요.
+ *
+ * @param {number} qx QR 열 (0..20)
+ * @param {number} qy QR 행 (0..20)
+ * @param {boolean} [flip=false] far 앵커 · 윈도 β 의 뒤집기
+ * @returns {{u: number, v: number}}
+ */
+export function insetQrModuleUv(qx, qy, flip = false) {
+  const last = CENTER_QR_MODULE_GRID - 1;
+  return flip ? { u: last - qy, v: last - qx } : { u: qy, v: qx };
+}
+
+/**
  * 슬롯 안에서 QR 심볼이 **닿지 않는** 셀 (콰이어트 프레임). T 면의 이 셀들은
  * 언제나 밝다(콰이어트 패치) — 내용 무관 앵커의 밝은 쪽 표본이다.
  * 심볼은 a,b ∈ [4·pitch, 25·pitch] 를 차지하므로 그 밖의 정수 셀이 프레임이다.
@@ -1286,19 +1328,25 @@ export function centerQrSlotOriginFor(id, n) {
 
 /**
  * QR 파인더 3개의 **암 코어** 슬롯-로컬 (a,b) 파라메트릭 좌표 (셀 단위).
- * 렌더러가 그리는 자리와 디코더가 재는 자리를 **같은 함수**에서 낸다 — 뒤집기 규약이
+ * 렌더러가 그리는 자리와 디코더가 재는 자리를 **같은 사상**(`insetQrModuleUv`)에서 낸다 — 뒤집기 규약이
  * 한쪽에만 반영되면 «QR 다움» 판별이 조용히 엉뚱한 3점을 보게 된다.
+ *
+ * 반환 순서는 **기하로 정해요**: 직각 꼭짓점 → a 다리(같은 v) → b 다리(같은 u). 소비자(`buildCenterQrPatch`)가
+ * 이 순서로 점을 쌓아 Pearson 합산 순서가 되므로, 사상이 전치로 바뀌어도(2026-09-26 거울 수정) 값과 순서가
+ * 예전과 바이트 동일해야 슬롯 «QR 다움» 판별이 한 비트도 안 흔들려요. `CENTER_QR_FINDER_MODULES[0]` 은 좌상단(직각)
+ * 파인더라 어떤 정사각 대칭으로 옮겨도 직각 꼭짓점으로 남아요. 값 · 순서는 `test/cellSurfaceFinal.test.js` 가 슬롯
+ * 7·8·9 × 뒤집기 전부를 배열 그대로 핀으로 잠가요.
  */
 export function centerQrFinderCoreCells(slotCells, flip = false) {
   const pitch = centerQrModulePitchCells(slotCells);
-  return Object.freeze(CENTER_QR_FINDER_MODULES.map(({ qx, qy }) => {
-    const u = flip ? (CENTER_QR_MODULE_GRID - 1 - qx) : qx;
-    const v = flip ? (CENTER_QR_MODULE_GRID - 1 - qy) : qy;
-    return Object.freeze({
-      a: (CENTER_QR_QUIET_MODULES + u + 0.5) * pitch,
-      b: (CENTER_QR_QUIET_MODULES + v + 0.5) * pitch,
-    });
-  }));
+  const cores = CENTER_QR_FINDER_MODULES.map(({ qx, qy }) => insetQrModuleUv(qx, qy, flip));
+  const corner = cores[0];
+  const aLeg = cores.find((core) => core !== corner && core.v === corner.v);
+  const bLeg = cores.find((core) => core !== corner && core.u === corner.u);
+  return Object.freeze([corner, aLeg, bLeg].map(({ u, v }) => Object.freeze({
+    a: (CENTER_QR_QUIET_MODULES + u + 0.5) * pitch,
+    b: (CENTER_QR_QUIET_MODULES + v + 0.5) * pitch,
+  })));
 }
 
 /** QR 슬롯 셀 (레이아웃별 · 절대 셀 인덱스). 슬롯 없는 레이아웃은 빈 배열. */

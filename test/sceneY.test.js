@@ -644,10 +644,12 @@ describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
   test('방향 규약 — 파인더 없는 QR 코너(행렬 (20,20))가 윈도 안쪽(Y-심 쪽, u=v=4)에 매핑된다', () => {
     // qr.js FINDER_CENTERS = [[3,3],[17,3],[3,17]] — 행렬 코너 (20,20) 은 어느
     // 파인더에도 속하지 않는다(파인더 없는 코너). renderWindowQr 매핑:
-    // u = 4+(20-qx), v = 4+(20-qy) → qx=qy=20 이면 u=v=4(윈도 안쪽 경계 — 콰이어트
+    // u = 4+(20-qy), v = 4+(20-qx) (뒤집기 + 전치 — 2026-09-26 거울 수정) → qx=qy=20 이면 u=v=4(윈도 안쪽 경계 — 콰이어트
     // 4 QR모듈 바로 다음 첫 데이터 모듈), qx=qy=3(파인더 중심)이면 u=v=21(윈도
     // 바깥쪽, 실루엣 꼭짓점 쪽) — 순수 좌표 매핑 공식이므로 payload 내용(다크/밝음)
     // 과 무관하게 항상 성립한다(모듈 값 자체는 payload 의존이라 별도로 단언하지 않는다).
+    // ⚠ 아래 (20,20) · (3,3) 단언은 대각선(qx = qy) 위라 전치 전후 식이 같은 값을 내요 — 이 테스트는 두 식을
+    //   가르지 못해요. 전치(= 거울 여부)는 바로 아래 «방향 규약 강고정» 전좌표 대조가 가려요.
     assert.equal(4 + (20 - 20), 4, '파인더 없는 코너(20,20) → u=4(안쪽)');
     assert.equal(4 + (20 - 3), 21, '파인더 중심(3,3) → u=21(바깥쪽)');
     assert.ok(21 > 4, '파인더 쪽이 파인더 없는 코너보다 항상 바깥쪽(더 큰 u,v)에 매핑된다');
@@ -680,13 +682,19 @@ describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
     assert.ok(found, '파인더 중심(3,3) 다크 모듈이 예상 위치(u=v=21, 바깥쪽)에 그려지지 않았다');
   });
 
-  test('방향 규약 강고정 — T 면 윈도 다크 모듈 전좌표 집합 = 뒤집기 매핑된 qrMatrix (미러·무플립 뮤테이션 검출)', () => {
+  test('방향 규약 강고정 — T 면 윈도 다크 모듈 전좌표 집합 = 뒤집기 + 전치 매핑된 qrMatrix (미러·무플립 뮤테이션 검출)', () => {
     // 검증 lane 지적(2026-08-09): (21,21) 위치의 '다크 존재' 단독 검사는 미러 시
     // 우상 파인더 중심(항상 다크)이, 무플립 시 payload 의존 다크가 그 자리로 사상돼
     // 우연 통과한다. 여기서는 T 면 윈도 다크 shape **전체**의 첫 꼭짓점 좌표 집합을
-    // 뒤집기 매핑(u=4+(20-qx), v=4+(20-qy)) 기대 집합과 완전 대조한다 — 무플립·
-    // 단축 미러(카이럴리티 파괴)·전치 어느 쪽도 집합이 달라져 반드시 잡힌다.
+    // 뒤집기 + 전치 매핑(u=4+(20-qy), v=4+(20-qx)) 기대 집합과 완전 대조한다 — 무플립·
+    // 단축 미러(카이럴리티 파괴)·전치 누락 어느 쪽도 집합이 달라져 반드시 잡힌다.
     // 블록 = [T 콰이어트, T 다크 ×N, L 필러, R 필러] (상단면 QR 단독 규약).
+    //
+    // ⚠ 의도적 갱신 (2026-09-26 거울 수정): 기대식이 u=4+(20-qx), v=4+(20-qy) 에서 **전치**됐어요.
+    //   옛 식은 QR 열을 e_i 에 얹어 면 틀의 왼손성(det(e_i, e_j) = −√3/2)을 물려받아 화면에서 거울이었어요
+    //   (정본 설명: `cellSurfaceFinal.js` §insetQrModuleUv). 옛 식은 아래에서 «잡혀야 하는 뮤턴트» 로 남겨 대조해요.
+    //   기대식을 정본 함수로 부르지 않고 여기 따로 적는 이유: 이 테스트는 렌더러와 독립된 두 번째 증언이라서예요
+    //   (방향 자체는 cube-data-orientation 의 2.5D 락이 구현 틀 없이 재요).
     const encoded = makeWindowEncoded();
     const cellSize = 5;
     const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT, cellSize });
@@ -711,12 +719,14 @@ describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
 
     // T 면 다크 전좌표 집합 대조.
     const expected = new Set();
+    const mirroredBefore = new Set(); // 수정 전(거울) 식 — 잡혀야 하는 뮤턴트.
     for (let qy = 0; qy < qr.size; qy += 1) {
       for (let qx = 0; qx < qr.size; qx += 1) {
         if (qr.modules[qy * qr.size + qx] !== 1) continue;
-        const u = 4 + (20 - qx);
-        const v = 4 + (20 - qy);
+        const u = 4 + (20 - qy);
+        const v = 4 + (20 - qx);
         expected.add(key(pointOn('T', lo + u * half, lo + v * half)));
+        mirroredBefore.add(key(pointOn('T', lo + (4 + (20 - qx)) * half, lo + (4 + (20 - qy)) * half)));
       }
     }
     assert.equal(expected.size, darkCount, '기대 집합 좌표 충돌 — 매핑이 단사가 아니다');
@@ -726,8 +736,10 @@ describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
     );
     assert.equal(got.size, darkCount, '렌더 다크 모듈 좌표 충돌/누락');
     for (const k of expected) {
-      assert.ok(got.has(k), `기대 다크 좌표 (${k}) 부재 — 방향 규약(뒤집기 매핑) 위반`);
+      assert.ok(got.has(k), `기대 다크 좌표 (${k}) 부재 — 방향 규약(뒤집기 + 전치 매핑) 위반`);
     }
+    // 대조군: 수정 전 거울 식의 집합은 렌더와 달라야 이 자가 전치 누락(= 거울 회귀)을 가려요.
+    assert.ok([...mirroredBefore].some((k) => !got.has(k)), '수정 전 거울 식과 렌더가 같으면 자가 거울을 못 가려요');
 
     // L/R 필러가 각 면의 윈도 bbox 사각과 정확히 일치하는지 (기하 고정).
     const fillers = scene.shapes.slice(wStart + 1 + darkCount);

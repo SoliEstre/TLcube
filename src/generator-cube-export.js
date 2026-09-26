@@ -4,10 +4,12 @@ import { buildOrbitMesh } from './y3d-viewer.js';
 import { yLevelTables, applyFaceGain, DEFAULT_FACE_GAINS } from './sceneY.js';
 import { slotQrFaceQuads } from './y3d-slot-qr.js';
 import { WINDOW_SIZE_Y, WINDOW_SUPPORTED_N } from './capacityY.js';
+import { insetQrModuleUv } from './cellSurfaceFinal.js';
 import { qrMatrix } from './qr.js';
 
 /** 윈도 β의 2.5D 도형을 export 전용 3D 면 패치로 옮겨요.
  * sceneY.renderWindowQr와 전수 좌표/색 대조하는 테스트가 사본 drift를 막아요.
+ * 모듈 자리는 renderWindowQr 과 같은 정본 사상 `insetQrModuleUv(qx, qy, true)`(열·행 전치 — 거울 아님)를 불러요.
  * 데이터 격자/검출기/기존 3D 미리보기에는 영향을 주지 않아요. */
 export function windowCubeFaceQuads({n,qrText,palette}) {
   if(n!==WINDOW_SUPPORTED_N)throw new RangeError('윈도 QR 큐브 크기가 맞지 않아요');
@@ -20,7 +22,8 @@ export function windowCubeFaceQuads({n,qrText,palette}) {
   const dark=applyFaceGain(palette.bullseyeDark,gains.T);
   for(let qy=0;qy<qr.size;qy++)for(let qx=0;qx<qr.size;qx++){
     if(qr.modules[qy*qr.size+qx]!==1)continue;
-    out.push({face:'T',a:lo+(qr.size-1-qx+quietModules)*pitch,b:lo+(qr.size-1-qy+quietModules)*pitch,size:pitch,color:dark});
+    const {u,v}=insetQrModuleUv(qx,qy,true);
+    out.push({face:'T',a:lo+(u+quietModules)*pitch,b:lo+(v+quietModules)*pitch,size:pitch,color:dark});
   }
   for(const face of ['L','R'])out.push({face,a:lo,b:lo,size:WINDOW_SIZE_Y,color:applyFaceGain(palette.levels[0],gains[face])});
   return out;

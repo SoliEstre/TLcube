@@ -88,7 +88,7 @@ Y's locators, shading or Y-style inset QR (window β / slot); H's own inset QR g
 - **Exports.** PNG/SVG as a sheet of all data faces or the current view only. The Y group's 3D data section adds
   glTF 2.0 models, Minecraft `.schem` structures with nearest-color concrete (not complete worlds) and PNG/SVG cube
   nets, all in the same physical coordinates as the maker files: seen from outside, every face reads the same way as the preview (not mirrored).
-  One exception: the preview already draws Type Y's inset QR (window β / slot) mirrored, and these files keep that orientation.
+  Type Y's inset QR (window β / slot) is no exception: the preview, PNG/SVG and these files all draw it unmirrored.
 - **Maker files.** Paper patterns and 3D-printing files for a physical cube (details below). A cube folded from the
   one-sheet net has been read by the scanner; the wrap skin, the board pieces and a 3D-printed cube have not yet
   been verified with a real scan.

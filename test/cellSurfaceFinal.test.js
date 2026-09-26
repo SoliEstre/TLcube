@@ -2279,6 +2279,26 @@ test('v0WY 는 **진짜 와이어 id** 다 — 먼 코너 슬롯 64셀 · 데이
   assert.notEqual(key(centerQrFinderCoreCells(8, true)), key(centerQrFinderCoreCells(8, false)));
   assert.equal(centerQrFinderCoreCells(8, true).length, 3);
 
+  // 값 **과 순서** 핀 (2026-09-26 안쪽 QR 거울 수정). 사상이 전치로 바뀌면서 반환 순서를 기하(직각 꼭짓점 →
+  // a 다리 → b 다리)로 다시 맞췄어요 — 소비자 `buildCenterQrPatch` 가 이 순서로 점을 쌓아 Pearson 합산 순서가
+  // 되므로, 순서만 바뀌어도 디코더의 부동소수 합산이 조용히 달라져요. 위 두 줄(뒤집기 ≠ · 길이 3)로는 두 다리가
+  // 바뀐 뮤턴트가 초록이라, 슬롯 7·8·9 × 뒤집기 전부를 수정 전과 같은 배열로 잠가요. 의도적으로 바꿀 때만 고쳐요.
+  //   flip=false → 모듈 (3,3) · (17,3) · (3,17),  flip=true → (17,17) · (3,17) · (17,3)
+  //   좌표 = (콰이어트 4 + 모듈 + 0.5) × 피치(= 슬롯 셀 / 29).
+  const PINNED_CORE_MODULES = Object.freeze({
+    false: [[3, 3], [17, 3], [3, 17]],
+    true: [[17, 17], [3, 17], [17, 3]],
+  });
+  for (const slotCells of [7, 8, 9]) {
+    const pitch = slotCells / 29;
+    assert.equal(centerQrModulePitchCells(slotCells), pitch, `슬롯 ${slotCells}: 피치 = 슬롯 셀 / 29`);
+    for (const flip of [false, true]) {
+      const expected = PINNED_CORE_MODULES[flip].map(([u, v]) => ({ a: (4 + u + 0.5) * pitch, b: (4 + v + 0.5) * pitch }));
+      assert.deepEqual(centerQrFinderCoreCells(slotCells, flip).map((c) => ({ ...c })), expected,
+        `슬롯 ${slotCells} flip=${flip}: 파인더 암코어 배열(값 · 순서)이 바뀌었어요 — 디코더 합산 순서가 흔들려요`);
+    }
+  }
+
   // v0W 는 **안 바뀐다** — 편입은 형제를 건드리지 않는다.
   const v0w = cellSurfaceFinal(21, 'v0w');
   assert.equal(v0w.declaredDataCells, 341);

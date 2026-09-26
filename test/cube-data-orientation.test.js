@@ -7,8 +7,11 @@
  *   - 전개도: 인쇄면을 바깥으로 접은 큐브에서 모든 데이터 면이 거울 없이 읽혀 원문으로 복호돼요.
  *   - .schem: 바깥에서 본 코드 면 격자가 정본 면 시트와 회전으로만 모든 셀이 맞아요(콘크리트 색 근사라 검출기 대신 표본으로 재요).
  *   - 타입 Y glTF: 같은 카메라로 본 그림이 Y 복호기로 원문까지 읽혀요.
- *   - 타입 Y 안쪽 QR(윈도 β · 슬롯): 알려진 예외예요. 2.5D 미리보기부터 거울로 그려지고 출력은 미리보기를 따라요 — 양성 락으로 잠가요.
+ *   - 타입 Y 안쪽 QR(윈도 β · 슬롯): 2.5D 미리보기부터 거울이 아니에요(2026-09-26 뿌리 수정 — QR 열·행을 면 틀에 전치해서 얹어요).
+ *     2.5D 그림 · 면 카메라로 본 glTF · 접은 전개도가 모두 qrMatrix 와 회전으로만 맞아요. 수정 전에는 반사로만 맞던 «알려진 예외» 의
+ *     양성 락이었고, 뿌리를 고치며 의도적으로 뒤집었어요.
  * 심은 결함: writer 앞에서 한 번 더 뒤집은(= 수정 전과 같은 좌표) 모델은 같은 자에서 전부 «거울» 로 떨어져요.
+ *   안쪽 QR 은 2.5D 에서 모듈을 수정 전 사상으로 되돌린(= 면 T 의 세로 대각선에 대해 좌우 반사) 장면이 반사로만 맞아 떨어져요.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,6 +31,8 @@ import {rasterize} from '../src/raster.js';
 import {detectH} from '../src/h-detect.js';
 import {createHScanRuntime} from '../src/h-scan-runtime.js';
 import {decodeFrontend} from '../src/decoder/frontend.js';
+import {CELL_SURFACE_FINAL_IDS,CELL_SURFACE_FINAL_NS,hasCenterQrSlot,centerQrSlotPlacementFor,centerQrSlotCellsFor,centerQrSlotOriginFor,centerQrFinderCoreCells} from '../src/cellSurfaceFinal.js';
+import {faceBasis} from '../src/ygrid.js';
 import {fullOnly} from './helpers/scope.mjs';
 import {ISO_FRONT,ISO_BACK,forwardOf,cross,dot,sceneField,mirrorX,faceCameras} from './helpers/h-physical-camera.mjs';
 import {gltfQuads,imageLookup,viewScene,foldCubeNet,faceViewScene,schemFaceScenes} from './helpers/cube-data-view.mjs';
@@ -232,14 +237,20 @@ test('타입 Y glTF 왕복: 같은 오른손 카메라로 본 glTF 가 Y 복호�
   assert.deepEqual(yRead(remirror(model)),{original:null,mirrored:'orient y'});
 });
 
-// ── 타입 Y 안쪽 QR(윈도 β · 슬롯): 알려진 예외의 양성 락 ─────────────────────────────────────────────
-// 2.5D 미리보기가 Y 안쪽 QR 을 이미 거울로 그려요(sceneY renderWindowQr · renderSlotQr 가 QR 열·행을 면 T 의 (a, b) 에 두는데,
-// 그 (a, b) 틀이 화면에서 반사예요). 3D 데이터 출력은 미리보기와 같은 물체라 그 거울을 그대로 물려받아요. 두 성질을 따로 잠가요.
-//   ① 출력 = 미리보기: glTF 를 오른손 ISO_FRONT 로 본 QR 모듈 배치가 2.5D 와 같은 그림이에요 — 뿌리를 고쳐도 지켜야 할 성질.
-//   ② 알려진 거울: 면 카메라로 본 glTF · 접은 전개도의 QR 이 qrMatrix 와 반사로만 441/441 이에요 — 양성 락.
-//      뿌리(QR → (a, b) 사상, 2.5D 까지 바뀌는 별도 결정)를 고치면 ② 는 의도적으로 뒤집고 ① 은 초록이어야 해요.
+// ── 타입 Y 안쪽 QR(윈도 β · 슬롯): 2.5D 부터 거울 아님 ─────────────────────────────────────────────
+// 면 셀 틀 (e_i, e_j) 는 화면에서 왼손(det = −√3/2)이라, QR 열·행을 (a, b) 에 그대로 두면 그림이 반사였어요(수정 전 19/19 반사로만
+// 441/441). 2026-09-26 뿌리 수정으로 정본 사상 `insetQrModuleUv` 가 열·행을 전치해서 얹어요 — 파인더 셋의 자리는 전치에 불변이라
+// 디코더가 재는 앵커 자리는 그대로예요. 단 «스캔 결과가 그대로» 는 아니에요: 새 윈도 β 그림은 파인더 둘레 모듈이 바뀌어 같은
+// 디코더에서도 한계 기하의 복호 결과가 프레임마다 뒤집혀요(두 방향 · 이 파일은 안 재요 — decoder-frontend 「윈도 β 스캔 회귀」).
+// 세 성질을 따로 잠가요.
+//   ① 출력 = 미리보기: glTF 를 오른손 ISO_FRONT 로 본 QR 모듈 배치가 2.5D 와 같은 그림이에요(수정 전후 모두 지켜야 할 성질).
+//   ② 비거울(뒤집은 락): 면 카메라로 본 glTF · 접은 전개도의 QR 이 qrMatrix 와 회전으로만 441/441 이에요.
+//      수정 전에는 이 자리가 «반사로만 맞는다» 는 알려진 예외의 양성 락이었어요 — 의도적으로 뒤집었어요.
+//   ③ 2.5D 자체: 화면 그림이 qrMatrix 와 회전으로만 맞아요(윈도 β · 슬롯 6종 × n × 톤 전수). 심은 결함(수정 전 사상 = 면 T 의
+//      세로 대각선에 대한 좌우 반사)은 같은 자에서 반사로만 맞아 떨어져요.
 // .schem 은 같은 물리 좌표 사상(physicalCubeModel)을 지나지만 이 락은 재지 않아요 — 블록 격자에서 QR 모듈만 골라내는 자를
 // 따로 세우지 않았어요(이 축을 덮으려면 Y .schem 의 T 평면 블록을 QR 판 영역으로 잘라 같은 D4 로 대조하면 돼요).
+// 표준 QR 리더가 실제로 읽는지(외부 리더 판독)도 이 파일은 재지 않아요 — 저장소에 QR 복호기가 없어요. 방향(거울 여부)만 재요.
 const Y_QR_TEXT=tlReaderUrlWithHint('Y'),Y_QR=qrMatrix(Y_QR_TEXT);
 const Y_D4=(()=>{const n=Y_QR.size;return [['rot0',(r,c)=>[r,c]],['rot90',(r,c)=>[c,n-1-r]],['rot180',(r,c)=>[n-1-r,n-1-c]],['rot270',(r,c)=>[n-1-c,r]],
   ['mirLR',(r,c)=>[r,n-1-c]],['mirUD',(r,c)=>[n-1-r,c]],['transpose',(r,c)=>[c,r]],['antiTranspose',(r,c)=>[n-1-c,n-1-r]]];})();
@@ -255,11 +266,15 @@ function yQrFaceD4(quads){
   assert.equal(outs.length,1,`QR 모듈이 한 면에 있어야 해요: ${outs}`);
   const camera=faceCameras(outs[0].split(',').map(Number))[0];
   const centers=modules.map(q=>{const c=quadCenter(q);return {x:dot(c,camera.right),y:dot(c,camera.down)};});
+  return {count:modules.length,...gridD4(centers,pitch)};
+}
+/** 화면(x 오른쪽 · y 아래)의 모듈 중심 · 피치를 격자로 읽어 qrMatrix 와 정사각형 대칭 8가지로 대조해요(앞 넷 = 회전, 뒤 넷 = 반사). */
+function gridD4(centers,pitch){
   const x0=Math.min(...centers.map(p=>p.x)),y0=Math.min(...centers.map(p=>p.y)),n=Y_QR.size;
   const cells=new Set(centers.map(p=>`${Math.round((p.y-y0)/pitch)},${Math.round((p.x-x0)/pitch)}`));
   const hits=Y_D4.map(([,map])=>{let h=0;for(let r=0;r<n;r++)for(let c=0;c<n;c++){const [i,j]=map(r,c);if(cells.has(`${r},${c}`)===(Y_QR.modules[i*n+j]===1))h++;}return h;});
   const best=hits.indexOf(Math.max(...hits));
-  return {count:modules.length,name:Y_D4[best][0],reflection:best>=4,hits:hits[best],rotationBest:Math.max(...hits.slice(0,4)),reflectionBest:Math.max(...hits.slice(4))};
+  return {name:Y_D4[best][0],reflection:best>=4,hits:hits[best],rotationBest:Math.max(...hits.slice(0,4)),reflectionBest:Math.max(...hits.slice(4))};
 }
 /** 두 점 집합이 외접 사각형 정규화(평행이동 · 축별 배율, 방향 보존) 뒤 같은지 세요. */
 function samePointSet(a,b,tol=1e-4){
@@ -277,7 +292,7 @@ function yQrCase(encoded){
   const sceneOpts={palette:Y_PALETTE,qrText:Y_QR_TEXT,cornerQr:false},scene=buildSceneY(encoded,sceneOpts);
   return {scene,model:generatorCubeModel({type:'Y',encoded,scene,sceneOpts},Y_PALETTE)};
 }
-test('타입 Y 안쪽 QR(윈도 β · 슬롯) 양성 락: 출력은 2.5D 와 같은 그림이고, 그 QR 은 미리보기부터 거울이라 glTF · 접은 전개도에서도 반사로만 맞아요',()=>{
+test('타입 Y 안쪽 QR(윈도 β · 슬롯): 출력은 2.5D 와 같은 그림이고, 그 QR 은 거울이 아니라 glTF · 접은 전개도에서도 회전으로만 맞아요',()=>{
   const dark=Y_QR.modules.reduce((s,v)=>s+(v===1),0),cells=Y_QR.size*Y_QR.size;
   for(const [label,encoded] of [
     ['윈도 β',encodeY('window export',{version:2,tones:2,eccLevel:'M',window:true})],
@@ -293,12 +308,62 @@ test('타입 Y 안쪽 QR(윈도 β · 슬롯) 양성 락: 출력은 2.5D 와 같
     assert.equal(samePointSet(flat,iso.map(project)).miss,0,`${label}: glTF 를 ISO_FRONT 로 본 QR 이 2.5D 와 같은 그림이어야 해요`);
     const before=yQrModules3d(gltfQuads(cubeModelToGltf(remirror(model)))).modules.map(project);
     assert.ok(samePointSet(flat,before).miss>0,`${label}: 대조군 — 수정 전 좌표의 glTF 는 2.5D 와 다른(반전된) 그림이어야 자가 방향을 가려요`);
-    // ② 알려진 거울(양성 락): 면 카메라로 본 glTF · 접은 전개도의 QR 은 반사로만 모든 모듈이 맞아요.
+    // ② 비거울(2026-09-26 뒤집은 락): 면 카메라로 본 glTF · 접은 전개도의 QR 은 회전으로만 모든 모듈이 맞아요.
     for(const [output,quads] of [['glTF',gltf],['전개도',foldCubeNet(cubeNetScene(model)).quads]]){
       const row=yQrFaceD4(quads);
       assert.equal(row.count,dark,`${label} ${output}: QR 모듈 수`);assert.equal(row.hits,cells,`${label} ${output}: ${row.name}`);
-      assert.equal(row.reflection,true,`${label} ${output}: Y 안쪽 QR 은 미리보기부터 거울이에요(${row.name}) — 뿌리를 고쳤다면 이 락을 의도적으로 뒤집어요`);
-      assert.ok(row.rotationBest<cells,`${label} ${output}: 회전으로도 맞으면 거울 여부를 가를 수 없어요`);
+      assert.equal(row.reflection,false,`${label} ${output}: Y 안쪽 QR 이 거울이에요(${row.name}) — 바깥에서 봐서 회전으로만 맞아야 해요`);
+      assert.ok(row.reflectionBest<cells,`${label} ${output}: 반사로도 맞으면 거울 여부를 가를 수 없어요`);
+    }
+    // 심은 결함: 한 번 더 뒤집은 모델(수정 전 writer 좌표)의 glTF 는 같은 자에서 반사로만 맞아요 — 자가 거울을 가려요.
+    const defect=yQrFaceD4(gltfQuads(cubeModelToGltf(remirror(model))));
+    assert.deepEqual([defect.hits,defect.reflection],[cells,true],`${label}: 심은 결함 glTF 는 반사로만 맞아야 해요(${defect.name})`);
+  }
+});
+
+/**
+ * 2.5D 장면의 가장 작은 사각형(= 안쪽 QR 어두운 모듈)을 방향 보존 사상 «y 를 √3 배 → 45° 회전»(둘 다 행렬식 > 0)으로 펴서
+ * 격자로 읽어요. 면 T 마름모는 이 사상에서 축 정렬 정사각이 되고, 구현의 (a, b) 틀은 쓰지 않아요(화면 그림만 봐요).
+ * 피치는 모듈 한 변(첫 두 꼭짓점)을 같은 사상으로 옮긴 길이예요.
+ */
+function flatQrD4(scene){
+  const area=s=>{let a=0;for(let k=0;k<4;k++){const p=s.points[k],q=s.points[(k+1)%4];a+=p.x*q.y-q.x*p.y;}return Math.abs(a/2);};
+  const polys=scene.shapes.filter(s=>s.kind==='polygon'&&s.points.length===4),min=Math.min(...polys.map(area));
+  const modules=polys.filter(s=>area(s)<min*1.5),c=Math.SQRT1_2,r3=Math.sqrt(3);
+  const flat=p=>({x:c*p.x-c*p.y*r3,y:c*p.x+c*p.y*r3});
+  const centers=modules.map(s=>flat({x:s.points.reduce((t,p)=>t+p.x/4,0),y:s.points.reduce((t,p)=>t+p.y/4,0)}));
+  const a=flat(modules[0].points[0]),b=flat(modules[0].points[1]);
+  return {count:modules.length,modules,...gridD4(centers,Math.hypot(b.x-a.x,b.y-a.y))};
+}
+/** 심은 결함: QR 모듈만 수정 전 사상으로 되돌린 장면 — 면 T 에서 a↔b 교환은 원점을 지나는 세로선 x = originX 에 대한 좌우 반사예요. */
+function remirrorFlatQr(scene,modules){
+  const own=new Set(modules),ox=scene.layout.originX;
+  return {...scene,shapes:scene.shapes.map(s=>own.has(s)?{...s,points:s.points.map(p=>({x:2*ox-p.x,y:p.y}))}:s)};
+}
+function insideConvex(p,pts){let sign=0;for(let k=0;k<pts.length;k++){const a=pts[k],b=pts[(k+1)%pts.length],z=(b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x);if(Math.abs(z)<1e-12)continue;if(sign===0)sign=Math.sign(z);else if(Math.sign(z)!==sign)return false;}return true;}
+test('타입 Y 안쪽 QR 2.5D 락: 윈도 β · 슬롯 전 레이아웃 × n × 톤의 화면 그림이 qrMatrix 와 회전으로만 맞고, 심은 결함(수정 전 사상)은 반사로만 맞아요',()=>{
+  const dark=Y_QR.modules.reduce((s,v)=>s+(v===1),0),cells=Y_QR.size*Y_QR.size;
+  // 목록은 손으로 들지 않고 정본에서 유도해요 — 새 슬롯 레이아웃이 생기면 자동으로 재요.
+  const slotIds=CELL_SURFACE_FINAL_IDS.filter(hasCenterQrSlot);
+  const cases=[{label:'윈도 β n25 2톤',encoded:encodeY('window flat',{version:2,tones:2,eccLevel:'M',window:true})}];
+  for(const id of slotIds)for(const n of CELL_SURFACE_FINAL_NS[id])for(const tones of [2,3])
+    cases.push({label:`슬롯 ${id} n${n} ${tones}톤`,id,encoded:encodeY('slot flat',{cellSurface:true,cellSurfaceLayout:id,version:n===21?1:2,tones,eccLevel:'M'})});
+  assert.ok(slotIds.length>0,'슬롯 레이아웃을 하나도 못 찾으면 무해 표적이에요');
+  // 두 뒤집기 규약(seam · far)을 모두 지나야 해요 — 한쪽만 재면 다른 쪽 사상이 빠져요.
+  assert.deepEqual([...new Set(slotIds.map(id=>centerQrSlotPlacementFor(id).flip))].sort(),[false,true],'seam · far 둘 다 재야 해요');
+  for(const {label,id,encoded} of cases){
+    const scene=buildSceneY(encoded,{palette:Y_PALETTE,qrText:Y_QR_TEXT,cornerQr:false}),row=flatQrD4(scene);
+    assert.equal(row.count,dark,`${label}: 2.5D QR 모듈 수`);
+    assert.deepEqual([row.hits,row.reflection],[cells,false],`${label}: 2.5D 안쪽 QR 이 회전으로만 맞아야 해요(${row.name})`);
+    assert.ok(row.reflectionBest<cells,`${label}: 반사로도 맞으면 거울 여부를 가를 수 없어요`);
+    const defect=flatQrD4(remirrorFlatQr(scene,row.modules));
+    assert.deepEqual([defect.hits,defect.reflection],[cells,true],`${label}: 심은 결함(수정 전 사상)은 반사로만 맞아야 자가 거울을 가려요(${defect.name})`);
+    // 소비자 정합: 디코더가 재는 파인더 암코어(centerQrFinderCoreCells) 세 점이 새 그림에서도 어두운 QR 모듈 위에 있어요.
+    if(id===undefined)continue;
+    const origin=centerQrSlotOriginFor(id,encoded.n),{ei,ej}=faceBasis('T'),L=scene.layout;
+    for(const core of centerQrFinderCoreCells(centerQrSlotCellsFor(id),centerQrSlotPlacementFor(id).flip)){
+      const a=origin.i+core.a,b=origin.j+core.b,p={x:L.originX+(a*ei.x+b*ej.x)*L.size,y:L.originY+(a*ei.y+b*ej.y)*L.size};
+      assert.ok(row.modules.some(s=>insideConvex(p,s.points)),`${label}: 파인더 코어 (${core.a.toFixed(3)}, ${core.b.toFixed(3)}) 가 어두운 모듈 위에 없어요`);
     }
   }
 });

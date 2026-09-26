@@ -49,6 +49,7 @@ import {
   centerQrSlotOriginFor,
   centerQrSlotPlacementFor,
   hasCenterQrSlot,
+  insetQrModuleUv,
 } from './cellSurfaceFinal.js';
 import { CENTER_QR_SIDE_FILL } from './sceneY.js';
 import { qrMatrix } from './qr.js';
@@ -100,9 +101,9 @@ export function slotQrFaceQuads(spec) {
   for (let qy = 0; qy < CENTER_QR_MODULE_GRID; qy += 1) {
     for (let qx = 0; qx < CENTER_QR_MODULE_GRID; qx += 1) {
       if (qr.modules[qy * qr.size + qx] !== 1) continue;
-      // renderSlotQr 과 **같은 사상** — source(qx,qy) → dest(u,v).
-      const u = flip ? (CENTER_QR_MODULE_GRID - 1 - qx) : qx;
-      const v = flip ? (CENTER_QR_MODULE_GRID - 1 - qy) : qy;
+      // renderSlotQr 과 **같은 사상 함수** — source(qx,qy) → dest(u,v). 열·행 전치라 바깥에서 봐서 거울이
+      // 아니에요(2026-09-26 거울 수정 — 사본으로 옮겨 적지 않고 정본 `insetQrModuleUv` 를 불러요).
+      const { u, v } = insetQrModuleUv(qx, qy, flip);
       quads.push({
         face: 'T',
         a: origin.i + (CENTER_QR_QUIET_MODULES + u) * pitch,

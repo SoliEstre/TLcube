@@ -51,7 +51,7 @@ import { locatorToneCellSurfaceLayout } from './cellSurfaceLayouts.js';
 import {
   CENTER_QR_MODULE_GRID, CENTER_QR_QUIET_MODULES, CENTER_QR_SLOT_CELLS,
   centerQrModulePitchCells, centerQrSlotCellsFor, centerQrSlotOriginFor,
-  centerQrSlotPlacementFor, hasCenterQrSlot,
+  centerQrSlotPlacementFor, hasCenterQrSlot, insetQrModuleUv,
   isCellSurfaceFinalId, locatorToneCellSurfaceFinal,
 } from './cellSurfaceFinal.js';
 import {
@@ -222,7 +222,14 @@ function rectsOverlap(a, b) {
 // 방향(사용자 확정 6, ADR 0003 D1): 정렬 패턴(파인더 없는 코너 — qr.js
 // FINDER_CENTERS 가 (3,3)/(SIZE-4,3)/(3,SIZE-4) 뿐이라 행렬 코너 (SIZE-1,SIZE-1)
 // 이 파인더 없음)이 Y-심 쪽((n-13,n-13) 쪽) 을 향한다. QR 행렬 좌표(qx,qy, 0..20)
-// 를 뒤집어 안쪽(윈도 원점)에 가깝게 매핑한다: u = QUIET + (20-qx), v = QUIET + (20-qy).
+// 를 뒤집어 안쪽(윈도 원점)에 가깝게 매핑한다.
+//
+// ⭐ 사상은 `insetQrModuleUv(qx, qy, true)` 하나예요 (2026-09-26 거울 수정):
+//   u = QUIET + (20 − qy), v = QUIET + (20 − qx) — 열·행을 **전치**해서 얹어요.
+//   예전 식(u = QUIET + (20 − qx), v = QUIET + (20 − qy))은 QR 열을 e_i 에 얹어 면 틀의
+//   왼손성(det(e_i, e_j) = −√3/2)을 물려받았고, 그래서 2.5D 부터 QR 이 거울이었어요.
+//   파인더 셋 · 정렬 코너의 자리는 전치에 불변이라 위 방향 규약은 그대로예요
+//   (정본 설명: `cellSurfaceFinal.js` §insetQrModuleUv).
 
 /** 면 (a,b) 파라메트릭 좌표 → 절대 픽셀. ygrid.moduleQuad 내부 facePoint 와 동일
  *  공식이지만 ygrid.js 가 그 헬퍼를 export 하지 않으므로 여기서 재구성한다
@@ -241,6 +248,10 @@ function renderWindowQr(shapes, n, layout, qrText, palette, faceGains) {
     // 방어적 가드 — 코너 QR 블록과 동일 전제(qr.js v1 고정).
     throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
   }
+  if (CENTER_QR_MODULE_GRID !== QR_MODULE_GRID) {
+    // 사상 `insetQrModuleUv` 는 CENTER_QR_MODULE_GRID 로 뒤집어요 — 두 상수가 갈리면 그림이 조용히 밀려요.
+    throw new Error('안쪽 QR 모듈 격자 상수 불일치: ' + CENTER_QR_MODULE_GRID + ' vs ' + QR_MODULE_GRID);
+  }
   const lo = n - WINDOW_SIZE_Y; // 윈도 안쪽 모서리(Y-심 쪽) 데이터 셀 좌표.
   const half = 0.5; // QR 모듈 = 데이터 모듈 피치의 절반(D1).
 
@@ -252,7 +263,7 @@ function renderWindowQr(shapes, n, layout, qrText, palette, faceGains) {
   //     명백하도록 면 전체 단일 톤 — 디코더는 어차피 이 좌표를 읽지 않는다.
   //   · T 면 잉크도 면 게인을 받는다 (D2 정합 — 기본 게인 T=1 에서 무게인과 동일).
 
-  // ① T 면: 콰이어트 패치 + QR 다크 모듈 (뒤집기 매핑 — 위 주석).
+  // ① T 면: 콰이어트 패치 + QR 다크 모듈 (뒤집기 + 전치 매핑 — 위 주석).
   {
     const quiet = applyFaceGain(palette.bullseyeLight, faceGains.T);
     const dark = applyFaceGain(palette.bullseyeDark, faceGains.T);
@@ -269,8 +280,9 @@ function renderWindowQr(shapes, n, layout, qrText, palette, faceGains) {
     for (let qy = 0; qy < qr.size; qy += 1) {
       for (let qx = 0; qx < qr.size; qx += 1) {
         if (qr.modules[qy * qr.size + qx] !== 1) continue;
-        const u = (QR_MODULE_GRID - 1 - qx) + QR_QUIET_MODULES;
-        const v = (QR_MODULE_GRID - 1 - qy) + QR_QUIET_MODULES;
+        const cell = insetQrModuleUv(qx, qy, true);
+        const u = cell.u + QR_QUIET_MODULES;
+        const v = cell.v + QR_QUIET_MODULES;
         const a0 = lo + u * half;
         const b0 = lo + v * half;
         shapes.push({
@@ -388,14 +400,16 @@ export const CENTER_QR_SIDE_FILL = 'data-dark';
 /**
  * 슬롯 QR 을 T 면 파라메트릭 좌표에 그린다.
  *
- * 방향 규약 (`flip` 이 가른다):
- *   · `flip=false` (Y-심 앵커 — v0xq·v0wq): (qx,qy) → (quiet + qx, quiet + qy)·pitch.
+ * 방향 규약 (`flip` 이 가른다) — 사상은 `insetQrModuleUv` 하나이고, 열·행을 **전치**해서 얹어요
+ * (2026-09-26 거울 수정 — 면 틀이 화면에서 왼손이라 그대로 얹으면 QR 이 거울이었어요):
+ *   · `flip=false` (Y-심 앵커 — v0xq·v0wq): (qx,qy) → (quiet + qy, quiet + qx)·pitch.
  *     QR 의 **좌상단 파인더가 Y-심 쪽**에 온다 — 세 파인더가 만드는 직각 삼중점이
  *     그대로 **중앙 앵커**가 되기 때문이다 (detectQrFinderTriples 의 kind 'window').
- *   · `flip=true` (먼 코너 앵커 — v0wy): (qx,qy) → (quiet + (20−qx), quiet + (20−qy))·pitch.
+ *   · `flip=true` (먼 코너 앵커 — v0wy): (qx,qy) → (quiet + (20−qy), quiet + (20−qx))·pitch.
  *     **윈도 β 와 같은 뒤집기** — 정렬 패턴(파인더 없는 코너)이 큐브 안쪽(Y-심 쪽)을
  *     향하고 파인더 셋이 실루엣 바깥 꼭짓점 쪽에 모인다. 운영자 스펙이 «윈도 β 식» 이라
  *     지정했고, 파인더가 콰이어트가 넓은 바깥쪽에 붙는 편이 QR 리더에 유리하다.
+ *   파인더 셋의 자리는 전치에 불변이라 두 규약 모두 수정 전과 같은 자리에 파인더가 있어요.
  *
  * @param {{i:number,j:number}} origin 슬롯 원점 (셀 인덱스).
  */
@@ -430,8 +444,7 @@ function renderSlotQr(shapes, layout, qrText, palette, faceGains, slotCells, ori
   for (let qy = 0; qy < qr.size; qy += 1) {
     for (let qx = 0; qx < qr.size; qx += 1) {
       if (qr.modules[qy * qr.size + qx] !== 1) continue;
-      const u = flip ? (CENTER_QR_MODULE_GRID - 1 - qx) : qx;
-      const v = flip ? (CENTER_QR_MODULE_GRID - 1 - qy) : qy;
+      const { u, v } = insetQrModuleUv(qx, qy, flip);
       const a0 = oa + (CENTER_QR_QUIET_MODULES + u) * pitch;
       const b0 = ob + (CENTER_QR_QUIET_MODULES + v) * pitch;
       shapes.push({

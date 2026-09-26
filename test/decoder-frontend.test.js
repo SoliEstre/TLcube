@@ -35,6 +35,9 @@ import {
   scaleImage,
 } from './harness/distort.mjs';
 import { listLumaDumps, lumaToRaster, readLumaDump } from '../tools/read-luma.mjs';
+import { tlReaderUrlWithHint } from '../src/qr.js';
+import { fullOnly } from './helpers/scope.mjs';
+import { PALETTE as Y_FACE_PALETTE, embed960 } from './cellSurface-block-locator.helpers.mjs';
 
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
@@ -866,6 +869,107 @@ test('중앙 QR 축: Type O/A 중앙 슬롯과 Type Y 윈도 β를 앞단이 복
       assert.equal(result.hypothesis.centerQr, true);
     }
   }
+});
+
+/*
+ * 윈도 β 스캔 회귀 (2026-09-26 안쪽 QR 거울 수정의 스캔 축 — 전수 범위에서만 돌아요).
+ *
+ * 거울 수정은 디코더를 한 줄도 안 바꿨고 수정 전 인쇄물은 예전과 똑같이 읽혀요. 하지만 **새로 그린** 윈도 β 는 QR 파인더
+ * 둘레 모듈(포맷 · 타이밍)이 전치돼 같은 디코더가 파인더 중심을 서브픽셀만큼 다르게 잡고, 그 포즈로 읽는 한계 기하에서
+ * 결과가 프레임마다 뒤집혀요 — 잃는 프레임과 얻는 프레임이 둘 다 있어요. 위 «중앙 QR 축» 은 ppu 12 깨끗한 한 장만 봐서
+ * 이 축을 못 지켜요.
+ *
+ * 격자: 생성기 기본 QR 문구 tlReaderUrlWithHint('Y') · n25 2톤 ECC M · 960 틀 · 정식 스캐너 1차 패스 옵션.
+ *   깨끗한 프레임 ppu 8…16 을 0.25 간격(33장) — 해상도 구멍이 ppu 를 따라 드문드문 나서 정수 ppu 만 보면 표본 운이에요.
+ *   왜곡 22장 — ppu 12 회전 4 · 기울기 10…35 · 원근 6/10/15/20° 가로·세로, ppu 10 기울기 15/25 · 원근 10° 가로·세로.
+ * 실측 (쌍 스윕 — 같은 격자 · 같은 디코더, 그림만 수정 전/후):
+ *   수정 전 그림  깨끗 30/33 (ppu 8.75 · 10.25 · 12.25 실패) · 왜곡 16/22
+ *   수정 후 그림  깨끗 30/33 (ppu 10 · 10.25 · 12.25 실패)   · 왜곡 19/22 (ppu 12 기울기 25 · 35 · 원근 20° 세로 실패)
+ *   왜곡 격자의 결과는 페이로드가 아니라 기하를 따랐어요(페이로드 4개가 기하마다 같은 결과) — 그래서 페이로드 하나로 재요.
+ * 하한은 수정 후 실측값이에요(깨끗 하한은 수정 전 그림과도 같은 값). 내려가면 새 인쇄물의 스캔이 나빠진 거예요 — 그림
+ * (QR 사상 · 윈도 배치 · 기본 QR 문구)이나 디코더 포즈 경로를 일부러 바꿨다면 쌍 스윕으로 다시 재고 이 주석과 함께 고쳐요.
+ * 안 재는 축: 실카메라 사진 · 사용자 지정 QR 문구 · ECC L/H · 스캐너 2차(daehan) 패스 · 시험판 옵션 · 외부 QR 리더 판독.
+ */
+const WINDOW_BETA_SCAN = Object.freeze({
+  payload: 'https://tl.estre.so',
+  cleanFloor: 30,
+  distortedFloor: 19,
+  // sites/tlscan/scanner.js 의 runPass(1차 · 라이브 · 정식) 와 같은 옵션 — 시험판 로케이터는 끈다.
+  options: Object.freeze({
+    bootstrap: { cellFinderDaehan: false, family: { cube: { enableLocatorY: false } } },
+  }),
+});
+
+function windowBetaScanGrid() {
+  const clean = [];
+  for (let quarter = 32; quarter <= 64; quarter += 1) {
+    clean.push({ name: `clean ppu${quarter / 4}`, ppu: quarter / 4, distortion: null });
+  }
+  const distorted = [];
+  for (const rotation of [30, 90, 200, 337]) {
+    distorted.push({ name: `rot${rotation} ppu12`, ppu: 12, distortion: { rotation } });
+  }
+  for (const tilt of [10, 15, 20, 25, 30, 35]) {
+    distorted.push({ name: `tilt${tilt} ppu12`, ppu: 12, distortion: { tilt } });
+  }
+  for (const degrees of [6, 10, 15, 20]) {
+    for (const axis of ['horizontal', 'vertical']) {
+      distorted.push({ name: `persp${degrees}${axis[0]} ppu12`, ppu: 12, distortion: { perspective: { degrees, axis } } });
+    }
+  }
+  for (const tilt of [15, 25]) {
+    distorted.push({ name: `tilt${tilt} ppu10`, ppu: 10, distortion: { tilt } });
+  }
+  for (const axis of ['horizontal', 'vertical']) {
+    distorted.push({ name: `persp10${axis[0]} ppu10`, ppu: 10, distortion: { perspective: { degrees: 10, axis } } });
+  }
+  return { clean, distorted };
+}
+
+/** 윈도 β 새 그림을 격자 프레임마다 정식 1차 패스로 읽어 하한과 대조해요. 오독은 하한과 무관하게 즉시 실패예요. */
+function assertWindowBetaScanFloor(label, frames, floor) {
+  const { payload, options } = WINDOW_BETA_SCAN;
+  const encoded = encodeY(payload, { version: 2, tones: 2, eccLevel: 'M', window: true });
+  assert.equal(encoded.window, true, '픽스처가 윈도 β 가 아니에요');
+  const scene = buildSceneY(encoded, {
+    palette: Y_FACE_PALETTE,
+    margin: 4,
+    qrText: tlReaderUrlWithHint('Y'),
+    cornerQr: false,
+  });
+  const bases = new Map();
+  const baseFor = (ppu) => {
+    if (!bases.has(ppu)) bases.set(ppu, embed960(rasterize(scene, { pixelsPerUnit: ppu, supersample: 2 })));
+    return bases.get(ppu);
+  };
+  const rows = frames.map((frame) => {
+    const base = baseFor(frame.ppu);
+    const image = frame.distortion ? distortImage(base, { ...frame.distortion, fill: FILL }) : base;
+    const result = decodeFrontend(image, options);
+    assert.ok(!(result.ok === true && result.text !== payload), `${frame.name}: 오독 ${JSON.stringify(result.text)}`);
+    return { name: frame.name, ok: result.ok === true && result.text === payload, reason: result.ok ? null : result.reason };
+  });
+  const decoded = rows.filter((row) => row.ok).length;
+  const failed = rows.filter((row) => !row.ok).map((row) => `${row.name}(${row.reason})`);
+  assert.ok(decoded >= floor,
+    `윈도 β ${label} ${decoded}/${frames.length} < 하한 ${floor} — 실패: ${failed.join(', ')}`);
+}
+
+fullOnly(() => {
+  const grid = windowBetaScanGrid();
+  test('윈도 β 스캔 회귀 (전수) ① 깨끗: 생성기 기본 QR 문구로 그린 새 그림이 ppu 8…16(0.25 간격 33장)에서 하한 이상 복호', {
+    timeout: 600_000,
+  }, () => {
+    assert.equal(grid.clean.length, 33, '격자 크기가 주석의 실측과 달라요');
+    assertWindowBetaScanFloor('깨끗', grid.clean, WINDOW_BETA_SCAN.cleanFloor);
+  });
+  // 대조군(쌍 스윕 실측 · 여기선 안 돌려요): 수정 전 그림은 이 격자에서 16/22 라 하한 19 에서 떨어져요 — 자가 그림 변화를 가려요.
+  test('윈도 β 스캔 회귀 (전수) ② 왜곡: 같은 새 그림이 회전 · 기울기 · 원근 22장에서 하한 이상 복호', {
+    timeout: 600_000,
+  }, () => {
+    assert.equal(grid.distorted.length, 22, '격자 크기가 주석의 실측과 달라요');
+    assertWindowBetaScanFloor('왜곡', grid.distorted, WINDOW_BETA_SCAN.distortedFloor);
+  });
 });
 
 test('O/A 중앙 QR 기본 경로는 직각 회전 뒤에도 포맷 네임스페이스와 본문을 복호한다', {
