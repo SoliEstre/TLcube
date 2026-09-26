@@ -74,8 +74,7 @@ import { qrMatrix } from './qr.js';
 import {
   CELL_SHAPES, CELL_TIERS, cellShapeTier, promoteNearT0, shapeCellFace,
 } from './cell-shape.js';
-import { styledGridShapes } from './square-cell-style.js';
-import { qrModuleColor, qrModuleRole } from './qr-function-map.js';
+import { qrStyledModulePieces } from './qr-function-map.js';
 
 /** 콰이어트 존 기본 배수 — margin 미지정 시 `cellSize · DEFAULT_MARGIN_FACTOR`. */
 const DEFAULT_MARGIN_FACTOR = 2;
@@ -471,18 +470,13 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette, deco = null
     y: blockOrigin.y + QR_QUIET_MODULES * qrModuleSize,
   };
   if (deco !== null) {
-    // 꾸민 코너 QR. 기능 모듈(파인더+분리자 · 타이밍 · 포맷 · dark module)은 qr-function-map 이
-    // 'fixed'(사각) 로, 데이터 모듈만 'data'(스타일)로 가른다. 색은 눈(파인더 7×7)만 deco.eye,
-    // 나머지는 deco.dark. ⚠ 태그 `{selfQuiet, noSeam}` 은 **필수**다 — 색을 바꾸면 안전영역
-    // 제외의 색 경로(②)가 무너져 태그 경로(①)만 남는다(A 하단 BL·BR «213/213 삼킴» 사고의
-    // 기전, quietzone.js 제외 주석). 빠지면 styledGridShapes 가 던진다.
-    shapes.push(...styledGridShapes({
-      rows: qr.size,
-      cols: qr.size,
-      style: deco.cellStyle,
-      host: 'qr',
-      role: (row, col) => qrModuleRole(qr, row, col),
-      color: (row, col) => qrModuleColor(deco, row, col),
+    // 꾸민 코너 QR — 세 호스트 공유 `qrStyledModulePieces`(qr-function-map). 기능 모듈(파인더+분리자 ·
+    // 타이밍 · 포맷 · dark module)은 밝든 어둡든 'fixed'(사각 · liquid 필렛 금지 — 밝은 기능 사각은
+    // 버림), 데이터 모듈만 스타일. 색은 눈(파인더 7×7)만 deco.eye, 나머지는 deco.dark.
+    // ⚠ 태그 `{selfQuiet, noSeam}` 은 **필수**다 — 색을 바꾸면 안전영역 제외의 색 경로(②)가
+    // 무너져 태그 경로(①)만 남는다(A 하단 BL·BR «213/213 삼킴» 사고의 기전, quietzone.js 제외
+    // 주석). 빠지면 styledGridShapes 가 던진다.
+    shapes.push(...qrStyledModulePieces(qr, deco, {
       map: (x, y) => ({ x: qrOrigin.x + x * qrModuleSize, y: qrOrigin.y + y * qrModuleSize }),
       tags: { selfQuiet: true, noSeam: true },
     }));

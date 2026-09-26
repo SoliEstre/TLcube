@@ -227,9 +227,12 @@ function caseSpec(id) {
   throw new Error('케이스 명세를 모른다: ' + id);
 }
 /** 대표 케이스 — 타입 O·A·K·C·G·V·Y × 틈 등급 3 × 배경 · 팔레트(custom) · QR 없음 · Y 레이아웃(hex-frame · 슬롯 · 2톤). */
-const CASES = [
+// custom 팔레트 케이스는 손으로 적지 않는다 — 하네스의 hue 표본 집합(lib-color-samples)이 바뀌면 이름이 사라진다
+// (2026-09-26: 단계 F2 가 표본을 wheel6 으로 바꾸자 옛 «custom210/sat200» 이 없어져 하네스가 이 케이스를 거부했다).
+// ⑥ 안에서 하네스 기본 표본 중 210° 에 가장 가까운 hue · sat 200 으로 유도해 CASES 에 더한다.
+const CASES_BASE = [
   'o-pinwheel', 'o-pinwheel|gap=black', 'o-pinwheel|gap=unknown', 'o-pinwheel|bg=white',
-  'o-pinwheel|palette=custom210/sat200', 'o-pinwheel|qr=none', 'O|bullseye',
+  'o-pinwheel|qr=none', 'O|bullseye',
   'a-n7|gap=white', 'k-n7|gap=white', 'C|pinwheel-c2-2-1100-cw', 'G|pinwheel-c2-2-1100-cw', 'V|pinwheel-c2-2-1100-cw',
   'y-v0', 'y-v0|gap=white', 'y-v0|gap=black', 'y-v0|gap=unknown', 'y-v0|bg=white',
   'Y|hex-frame-v1|t3', 'Y|cell-surface-v0ty|t3', 'Y|off|t2',
@@ -251,6 +254,9 @@ test('⑥ L0 하네스 allowCtx 유도 ≡ 제품 cellShapeCtx (대표 케이스
   for (const f of [script, join(L0, 'lib-assemble.mjs'), join(L0, 'lib-tree.mjs')]) {
     assert.ok(existsSync(f), `TL_L0_DIR 이 설정됐는데 하네스 파일이 없다(skip 아님 — 경로 오류): ${f}`);
   }
+  const { HUE_SAMPLE_SETS, HUE_SET_DEFAULT } = await import(pathToFileURL(join(L0, 'lib-color-samples.mjs')).href);
+  const customHue = HUE_SAMPLE_SETS[HUE_SET_DEFAULT].reduce((a, h) => (Math.abs(h - 210) < Math.abs(a - 210) ? h : a));
+  const CASES = [...CASES_BASE, `o-pinwheel|palette=custom${customHue}/sat200`];
   const out = mkdtempSync(join(tmpdir(), 'tl-ctx-locks-'));
   try {
     const SHARDS = 4;
@@ -266,7 +272,16 @@ test('⑥ L0 하네스 allowCtx 유도 ≡ 제품 cellShapeCtx (대표 케이스
       for (const line of readFileSync(p, 'utf8').split('\n')) if (line.trim()) rows.push(JSON.parse(line));
     });
     const controls = rows.filter((r) => r.arm === 'control');
-    assert.deepEqual(controls.map((r) => r.case).sort(), [...CASES].sort(), '케이스마다 대조군 행 하나');
+    // 통합자 결정 4(2026-09-26, 단계 E2): gap=unknown 케이스는 어두운 · 밝은 표면을 **각각** 잰다 —
+    // 대조군 행은 케이스마다가 아니라 (케이스, 표면)마다 하나다. 원격 전수 deco-full-001 에서 옛 기대
+    // «케이스마다 하나» 가 unknown 두 케이스에서 빨개져 이 모양으로 옮겼다(하네스 쪽이 맞는 새 사실).
+    assert.deepEqual([...new Set(controls.map((r) => r.case))].sort(), [...CASES].sort(), '모든 케이스에 대조군 행');
+    const surfaceKeys = controls.map((r) => `${r.case}@${r.surface}`);
+    assert.equal(new Set(surfaceKeys).size, surfaceKeys.length, '(케이스, 표면)마다 대조군 행 하나');
+    for (const c of CASES.filter((x) => /\|gap=unknown$/.test(x))) {
+      const surfaces = new Set(controls.filter((r) => r.case === c).map((r) => r.surface));
+      assert.ok(surfaces.size >= 2, `${c}: unknown 등급은 표면 둘 이상을 잰다(결정 4) — ${[...surfaces].join(',')}`);
+    }
 
     const { loadModules, assemble } = await import(pathToFileURL(join(L0, 'lib-assemble.mjs')).href);
     const { openTree } = await import(pathToFileURL(join(L0, 'lib-tree.mjs')).href);

@@ -10774,7 +10774,8 @@ function syncStyleUi() {
   }
   const satDefault = sat === DECORATION_STATE_DOMAINS.customSat.defaultValue;
   els.hueValue.textContent = satDefault ? tf('g431', { hue }) : tf('g1180', { hue, sat });
-  els.hueValueAdv.textContent = satDefault ? `Hue ${hue}°` : `Hue ${hue}° · ${sat}%`;
+  // 고급 줄도 같은 사전 문구 — 8언어를 탄다(외부 검토 grok minor, 2026-09-26).
+  els.hueValueAdv.textContent = satDefault ? tf('g431', { hue }) : tf('g1180', { hue, sat });
   els.customSatHint.hidden = generatorState.preset === 'custom';
   // 배경 분리 수치는 레벨 색에 의존하므로 스타일이 바뀔 때마다 다시 계산한다.
   syncBgModeUi();

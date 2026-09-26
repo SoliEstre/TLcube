@@ -65,8 +65,7 @@ import { finderRenderKindOf } from './finder-render-kind.js';
 import {
   CELL_SHAPES, CELL_TIERS, cellShapeTier, promoteNearT0, shapeCellFace,
 } from './cell-shape.js';
-import { styledGridShapes } from './square-cell-style.js';
-import { qrModuleColor, qrModuleRole } from './qr-function-map.js';
+import { qrStyledModulePieces } from './qr-function-map.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -997,18 +996,13 @@ export function buildSceneY(encoded, options) {
       y: blockOrigin.y + QR_QUIET_MODULES * qrModuleSize,
     };
     if (cornerDeco !== null) {
-      // 꾸민 코너 QR — scene.js pushQrBlock 과 같은 방식. 기능 모듈(파인더+분리자 · 타이밍 · 포맷 ·
-      // dark module)은 qr-function-map 이 'fixed'(사각)로, 데이터 모듈만 'data'(스타일)로 가른다.
-      // 색은 눈(파인더 7×7)만 deco.eye, 나머지는 deco.dark. ⚠ 태그 `{selfQuiet, noSeam}` 은
-      // **필수**다 — 색을 바꾸면 안전영역 제외의 색 경로가 무너져 태그 경로만 남는다
-      // (quietzone.js 제외 주석). 빠지면 styledGridShapes 가 던진다.
-      shapes.push(...styledGridShapes({
-        rows: qr.size,
-        cols: qr.size,
-        style: cornerDeco.cellStyle,
-        host: 'qr',
-        role: (row, col) => qrModuleRole(qr, row, col),
-        color: (row, col) => qrModuleColor(cornerDeco, row, col),
+      // 꾸민 코너 QR — scene.js pushQrBlock 과 같은 공유 함수 `qrStyledModulePieces`(qr-function-map).
+      // 기능 모듈(파인더+분리자 · 타이밍 · 포맷 · dark module)은 밝든 어둡든 'fixed'(사각 · liquid
+      // 필렛 금지 — 밝은 기능 사각은 버림), 데이터 모듈만 스타일. 색은 눈(파인더 7×7)만 deco.eye,
+      // 나머지는 deco.dark. ⚠ 태그 `{selfQuiet, noSeam}` 은 **필수**다 — 색을 바꾸면 안전영역
+      // 제외의 색 경로가 무너져 태그 경로만 남는다(quietzone.js 제외 주석). 빠지면
+      // styledGridShapes 가 던진다.
+      shapes.push(...qrStyledModulePieces(qr, cornerDeco, {
         map: (x, y) => ({ x: qrOrigin.x + x * qrModuleSize, y: qrOrigin.y + y * qrModuleSize }),
         tags: { selfQuiet: true, noSeam: true },
       }));

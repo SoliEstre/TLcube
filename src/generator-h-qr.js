@@ -4,8 +4,8 @@
 import {qrMatrix} from './qr.js';
 import {hImageTargets} from './h-face-arrangement.js';
 import {hModeFaces} from './h-profile.js';
-import {SQUARE_CELL_STYLES,styledGridShapes} from './square-cell-style.js';
-import {qrFunctionMapV1} from './qr-function-map.js';
+import {SQUARE_CELL_STYLES} from './square-cell-style.js';
+import {qrFunctionMapV1,qrStyledModulePieces} from './qr-function-map.js';
 const CORNERS=Object.freeze(['TL','TR','BL','BR']);
 const QUIET=4,TARGET_RATIO=.17,INSET_RATIO=.035,GAP_RATIO=.01;
 /** 회전 불변인 투영 외접구 밖에 QR을 놓아 큐브 중심·크기를 유지해요. */
@@ -61,26 +61,14 @@ export function hQrDecoKey(deco){
  * 데이터 어두운 모듈만 스타일을 받아요. 눈(파인더 7×7)의 어두운 모듈은 deco.eye, 나머지 어두운 모듈은 deco.dark.
  * 모든 조각에 {qr, selfQuiet, noSeam} 을 붙여요(host 'qr' 필수 태그 — safety M3 · wiring M12).
  * CPU 장면(withHCornerQr)과 GPU 텍스처(h-preview-renderer qrTexture)가 이 한 함수를 써서 같은 다각형을 그려요.
+ * 역할 규칙(밝은 기능 모듈도 'fixed' — liquid 오목 필렛 금지)과 밝은 기능 사각 버리기는 O/A/K · Y 와 같은
+ * 공유 함수 `qrStyledModulePieces`(qr-function-map)가 해요 — 여기는 H 의 deco 검증 · 태그만 더해요.
  */
 export function hStyledQrPieces(qr,deco,map){
   hQrDecoKey(deco);
   const fn=qrFunctionMapV1();
   if(qr?.size!==fn.size)throw new RangeError(`H QR deco 는 v1(${fn.size}×${fn.size}) 전용이에요: ${qr?.size}`);
-  const dark=(r,c)=>qr.modules[r*qr.size+c]===1;
-  // 밝은 기능 모듈(분리자 · 파인더 흰 고리 · 타이밍 흰 칸 등)도 'fixed' 로 넘겨요 — null(빈 칸)이면 liquid 오목 필렛이
-  // 그 모서리를 어두운 색으로 칠해 검출 요소를 바꿔요. 그 자리의 흰 사각 조각은 밝은 판과 같아 버려요(모듈 로컬에서 가른 뒤 map).
-  const local=styledGridShapes({rows:qr.size,cols:qr.size,style:deco.cellStyle,host:'qr',
-    role:(r,c)=>fn.isFunctionModule(c,r)?'fixed':dark(r,c)?'data':null,
-    color:(r,c)=>!dark(r,c)?deco.light:fn.isEyeModule(c,r)?deco.eye:deco.dark,
-    map:(x,y)=>({x,y}),tags:{qr:true,selfQuiet:true,noSeam:true}});
-  const out=[];
-  for(const piece of local){
-    let sx=0,sy=0;for(const point of piece.points){sx+=point.x;sy+=point.y;}
-    const r=Math.floor(sy/piece.points.length),c=Math.floor(sx/piece.points.length);
-    if(fn.isFunctionModule(c,r)&&!dark(r,c))continue;
-    out.push({...piece,points:piece.points.map(point=>map(point.x,point.y))});
-  }
-  return out;
+  return qrStyledModulePieces(qr,deco,{map,tags:{qr:true,selfQuiet:true,noSeam:true}});
 }
 // 회전 프레임마다 같은 조각을 다시 펴지 않게 모듈 로컬 조각을 한 칸 보관해요. 키 = 문구 + deco 서명 —
 // 문구 캐시(cornerQrMatrix)와 따로라 기본 경로(deco 없음)의 키·동작은 그대로예요.

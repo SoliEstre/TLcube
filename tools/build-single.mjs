@@ -139,7 +139,8 @@ export const MODULE_ORDER = [
   //   번들이 상대 import 를 그대로 안고 나가 **라이브에서만** 404 로 죽는다.
   'luminance', 'palette-hue',
   // 꾸미기 모듈(2026-09-26, DESIGN_001 §4.1) — 전부 luminance·palette-hue 뒤, scene·sceneY·
-  // h-render 앞이다. cell-shape-allow·square-cell-style·qr-function-map 은 의존 0 인 잎,
+  // h-render 앞이다. cell-shape-allow·square-cell-style 은 의존 0 인 잎, qr-function-map 은
+  // square-cell-style 을 쓴다(2026-09-26 단계 F — 세 호스트 공유 조각 함수 qrStyledModulePieces),
   // cell-shape 는 luminance·cell-shape-allow, qr-colors 는 palette-hue·square-cell-style·
   // cell-shape-allow 를 쓴다. ⚠ qr-colors 는 palette-hue 와 같은 부류다 — src 안에선
   // 아무도 import 하지 않고 index.html app 코드만 부르므로 위상 순회로는 안 잡힌다.

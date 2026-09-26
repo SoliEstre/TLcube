@@ -6,9 +6,10 @@
 //   ② 이웃 규칙 단위 사례(qr-code-styling dot 규칙과 같은 뜻 — 설계 §3.3 표 문장 그대로).
 //   ③ styleSafety · verifyStyleSafety 가 심은 결함(C_MIN 미달 · 표–기하 불일치)을 거부한다.
 //   ④ rasterCellCoverage 가 cellContours 와 같은 면적을 낸다(같은 다각형을 칠한다).
-//   ⑤ styledGridShapes: tags 필수(QR 은 selfQuiet · noSeam), 실제 qrMatrix 를 폈을 때 모든
-//      어두운 모듈 중심은 그 모듈 색으로, 모든 밝은 모듈 중심은 **아무 조각도 덮지 않는다**
-//      (liquid 오목 필렛 포함) — 디코더가 모듈 중심을 보는 한 스타일이 비트를 바꾸지 않는다.
+//   ⑤ styledGridShapes: tags 필수(QR 은 selfQuiet · noSeam), 실제 qrMatrix 를 호스트 공유 경로
+//      (qr-function-map qrStyledModulePieces)로 폈을 때 모든 어두운 모듈 중심은 그 모듈 색으로, 모든 밝은
+//      모듈 중심은 **아무 조각도 덮지 않는다**(liquid 오목 필렛 포함) — 디코더가 모듈 중심을 보는 한 스타일이
+//      비트를 바꾸지 않는다. 밝은 기능 모듈 «코너» 침범(중심 밖)은 test/qr-function-module-intrusion 이 잰다.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -31,7 +32,7 @@ import {
   styledGridShapes,
 } from '../src/square-cell-style.js';
 import { qrMatrix, TL_READER_URL, tlReaderUrlWithHint } from '../src/qr.js';
-import { qrModuleRole, qrModuleColor } from '../src/qr-function-map.js';
+import { qrModuleColor, qrStyledModulePieces } from '../src/qr-function-map.js';
 
 const { N, E, S, W, NE, SE, SW, NW } = NEIGHBOR_BITS;
 const ALL_MASKS = Array.from({ length: 256 }, (_, i) => i);
@@ -378,16 +379,16 @@ test('styledGridShapes: 모르는 역할은 던지고(fail-closed), fixed 는 �
 
 const PAYLOADS = ['', 'A', TL_READER_URL, tlReaderUrlWithHint('Y'), tlReaderUrlWithHint('K'), 'HELLO WORLD 12345'];
 
+// 세 호스트가 실제로 타는 공유 경로(qrStyledModulePieces)를 편다. 옛 역할(qrModuleRole — 밝은 모듈 null)로
+// 펴면 이 «중심» 자는 통과하지만 liquid 오목 필렛이 밝은 기능 모듈 **코너**를 칠한다(포맷 (8,8)·(8,13),
+// 2026-09-26 외부 검토) — 그 축은 중심 표본이 아니라 다각형 교집합으로 test/qr-function-module-intrusion 이 잰다.
 test('실제 qrMatrix 를 9 스타일로 펴도: 어두운 모듈 중심은 그 모듈 색(눈은 eye), 밝은 모듈 중심은 어떤 조각도 덮지 않는다', () => {
   const tags = { selfQuiet: true, noSeam: true };
-  const deco = { dark: BLACK, eye: EYE };
+  const deco = { dark: BLACK, eye: EYE, light: { r: 255, g: 255, b: 255 } };
   for (const text of PAYLOADS) {
     const qr = qrMatrix(text);
     for (const style of SQUARE_CELL_STYLES) {
-      const shapes = styledGridShapes({
-        rows: qr.size, cols: qr.size, style, host: 'qr', tags, map: ident,
-        role: (r, c) => qrModuleRole(qr, r, c), color: (r, c) => qrModuleColor(deco, r, c),
-      });
+      const shapes = qrStyledModulePieces(qr, { ...deco, cellStyle: style }, { map: ident, tags });
       for (let r = 0; r < qr.size; r += 1) {
         for (let c = 0; c < qr.size; c += 1) {
           const hits = shapes.filter((s) => inside(c + 0.5, r + 0.5, s.points));

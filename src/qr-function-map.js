@@ -19,8 +19,11 @@
  * 좌표는 `qr.js` 와 같다: x = 열, y = 행, 모듈 인덱스 = y·21 + x.
  * 눈(eye)은 파인더 7×7(분리자 제외) — «로케이터 진한 색» 옵션이 칠하는 영역이다(§5.2 ④).
  *
- * 의존 없음(잎 모듈).
+ * 의존: square-cell-style.js(`styledGridShapes` — 꾸민 모듈 조각 생성, `qrStyledModulePieces`) 하나.
+ * 빌드 모듈 순서(tools/build-single.mjs · build-finder-editor.mjs)에서 square-cell-style 이 이미 앞이다.
  */
+
+import { styledGridShapes } from './square-cell-style.js';
 
 /** QR v1 한 변 모듈 수. */
 export const QR_V1_SIZE = 21;
@@ -131,9 +134,12 @@ export function qrFunctionMapV1() {
 }
 
 /**
- * 꾸민 QR 을 `styledGridShapes` 로 펼 때의 역할 콜백 값 — 세 호스트(O/A/K · Y · H)가 같은
- * 규칙을 쓰도록 여기 하나로 둔다. 밝은 모듈 → null(그리지 않음: 밝은 판이 바탕),
- * 어두운 기능 모듈 → 'fixed'(사각), 어두운 데이터 모듈 → 'data'(스타일).
+ * 모듈 분류(읽기용) — 밝은 모듈 → null, 어두운 기능 모듈 → 'fixed', 어두운 데이터 모듈 → 'data'.
+ *
+ * ⚠ **`styledGridShapes` 의 역할 콜백으로 쓰지 않는다.** 밝은 기능 모듈이 null(빈 칸)이면 liquid 오목
+ * 필렛이 그 칸 모서리를 어두운 색으로 칠한다 — 실측(2026-09-26 외부 검토 grok·agy): 포맷 (8,8) · (8,13)
+ * 이 밝고 직교 두 이웃 + 대각이 어두운 데이터인 문구(예: 'P5' · 'P1024')에서 필렛이 검출 요소를 침범했다.
+ * 그리기는 세 호스트 모두 `qrStyledModulePieces`(역할 규칙 `qrStyledModuleRole`)를 탄다.
  *
  * @param {{size:number, modules:Uint8Array}} qr `qrMatrix` 출력
  * @param {number} row y
@@ -143,6 +149,62 @@ export function qrModuleRole(qr, row, col) {
   if (qr.size !== SIZE) throw new RangeError(`qr-function-map: v1(21) 전용이다: size ${qr.size}`);
   if (qr.modules[row * SIZE + col] !== 1) return null;
   return qrFunctionMapV1().isFunctionModule(col, row) ? 'fixed' : 'data';
+}
+
+/**
+ * 꾸민 QR 을 `styledGridShapes` 로 펼 때의 역할 규칙 — 세 호스트(O/A/K · Y · H)가 같은 규칙을 쓰도록
+ * 여기 하나로 둔다(DESIGN_001 §4.1). **기능 모듈은 밝든 어둡든 'fixed'**(사각 · 그 칸엔 필렛 없음),
+ * 어두운 데이터 모듈 → 'data'(스타일), 밝은 데이터 모듈 → null(빈 칸 — 오목 필렛은 여기에만 생긴다).
+ * 밝은 기능 모듈이 내는 흰 사각은 `qrStyledModulePieces` 가 버린다(밝은 판이 바탕).
+ */
+export function qrStyledModuleRole(qr, row, col) {
+  if (qr.size !== SIZE) throw new RangeError(`qr-function-map: v1(21) 전용이다: size ${qr.size}`);
+  if (qrFunctionMapV1().isFunctionModule(col, row)) return 'fixed';
+  return qr.modules[row * SIZE + col] === 1 ? 'data' : null;
+}
+
+/**
+ * 꾸민 코너 QR 모듈 조각 — O/A/K(scene.js pushQrBlock) · Y(sceneY 코너) · H(generator-h-qr
+ * hStyledQrPieces → CPU 장면 · GPU 텍스처)가 **이 한 함수**로 편다. 규칙:
+ *   ① 역할 = `qrStyledModuleRole`(기능 모듈은 밝든 어둡든 'fixed' — liquid 필렛이 검출 요소에 못 들어간다).
+ *   ② 색 = 밝은 모듈 deco.light, 어두운 모듈 `qrModuleColor`(눈만 deco.eye).
+ *   ③ 모듈 로컬 좌표(1 = 한 모듈)로 먼저 펴서 조각 무게중심의 모듈로 가르고, **밝은 기능 모듈의 사각은 버린다**
+ *      (호스트가 밝은 판을 먼저 깐다). 남은 조각에만 `map` 을 적용한다.
+ * 규칙이 H 의 종전 구현(2026-09-26 generator-h-qr)과 같아 H 출력은 바이트 동일하고, O/A/K · Y 는
+ * 밝은 기능 모듈 위 필렛만 사라진다(나머지 조각 · 순서 · 꼭짓점 불변).
+ *
+ * @param {{size:number, modules:Uint8Array}} qr `qrMatrix` 출력(v1 전용)
+ * @param {{dark:{r,g,b}, light:{r,g,b}, eye:{r,g,b}, cellStyle:string}} deco `resolveQrDeco` 의 deco
+ * @param {{map:(x:number,y:number)=>{x:number,y:number}, tags:object}} opts 모듈 로컬 → 장면 좌표 · 조각 태그
+ *        (host 'qr' 필수 태그 selfQuiet · noSeam 은 styledGridShapes 가 강제한다)
+ * @returns {Array<{kind:'polygon', points:{x,y}[], color:{r,g,b}}>}
+ */
+export function qrStyledModulePieces(qr, deco, { map, tags }) {
+  if (qr?.size !== SIZE) throw new RangeError(`qr-function-map: v1(21) 전용이다: size ${qr?.size}`);
+  if (typeof map !== 'function') throw new TypeError('qrStyledModulePieces: map 은 함수여야 한다');
+  const fn = qrFunctionMapV1();
+  const dark = (r, c) => qr.modules[r * SIZE + c] === 1;
+  const local = styledGridShapes({
+    rows: SIZE,
+    cols: SIZE,
+    style: deco.cellStyle,
+    host: 'qr',
+    role: (r, c) => qrStyledModuleRole(qr, r, c),
+    color: (r, c) => (!dark(r, c) ? deco.light : qrModuleColor(deco, r, c)),
+    map: (x, y) => ({ x, y }),
+    tags,
+  });
+  const out = [];
+  for (const piece of local) {
+    let sx = 0;
+    let sy = 0;
+    for (const point of piece.points) { sx += point.x; sy += point.y; }
+    const r = Math.floor(sy / piece.points.length);
+    const c = Math.floor(sx / piece.points.length);
+    if (fn.isFunctionModule(c, r) && !dark(r, c)) continue;
+    out.push({ ...piece, points: piece.points.map((point) => map(point.x, point.y)) });
+  }
+  return out;
 }
 
 /**

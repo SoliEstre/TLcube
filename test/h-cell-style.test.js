@@ -323,9 +323,10 @@ test('코너 QR deco: 기능 모듈은 모듈 사각 · 눈은 deco.eye · 조�
   assert.deepEqual(withHCornerQr(base, { text, corner: 'BR', deco: DECO }), scene, '같은 deco 는 같은 출력');
   assert.throws(() => withHCornerQr(base, { text, corner: 'BR', deco: { style: 'dots' } }), TypeError, '모양이 틀린 deco');
   // liquid 오목 필렛은 밝은 **데이터** 모듈 모서리에만 — 밝은 기능 모듈(분리자 · 흰 고리 · 타이밍)은 건드리지 않아요.
-  // ⚠ 판별력 한계(2026-09-26 실측): v1 기하에서는 밝은 기능 모듈이 직교 두 데이터 이웃을 가진 자리가 없어, 밝은 기능
-  // 모듈을 null 로 넘기던 옛 규칙도 이 문구 · «데이터 전부 어두움» 합성 행렬 둘 다에서 0 조각이었어요. 그래서 이 단언은
-  // v1 에서는 성질을 지키는 가드일 뿐 결함 검출 증거가 아니에요 — 역할 맵이 바뀔 때(다른 버전 등) 판별력이 생겨요.
+  // ⚠ 정정(2026-09-26 단계 F): 여기 적혀 있던 «v1 기하에서는 밝은 기능 모듈이 직교 두 데이터 이웃을 가진 자리가 없다»
+  // 는 **반박됐어요** — 포맷 모듈 (8,8) · (8,13) 은 이웃 데이터 셋이 어두우면 닿아요(3000 문구 중 206, 외부 검토
+  // grok · agy 가 O/A/K · Y 경로에서 짚음). 이 문구 하나는 우연히 안 닿는 입력이라 여기 단언은 가드일 뿐이고, 판별력
+  // 있는 자는 test/qr-function-module-intrusion.test.js(세 호스트 × 9 스타일 × 닿는 문구 포함, 다각형 교집합)예요.
   // (H 면 쪽 같은 결함은 위 «자기 셀 안» 자가 레퍼런스 셀 5,5 에서 실제로 잡았어요.)
   const liquid = hStyledQrPieces(qr, { ...DECO, cellStyle: 'liquid' }, (x, y) => ({ x, y }));
   let concave = 0;
