@@ -58,6 +58,15 @@ import {
   DETECTOR_EMPHASIS_RENDER_KINDS, detectorCellLevelPalettes,
 } from './centralN7Emphasis.js';
 import { finderRenderKindOf } from './finder-render-kind.js';
+// 셀 꾸미기 · 코너 QR 꾸미기 (DESIGN_001 §3.0 · §3.2 · §4.2 sceneY.js · §5.2, 레인 L3 2026-09-26).
+// 기본값(`opts.cellShape` 없음 · `palette.qrDeco` 없음)에서는 아래 셋의 함수가 **하나도 불리지
+// 않는다** — «꾸미기 끔 = 종전 출력과 바이트 동일» 은 «새 경로를 안 탄다» 로 구조 보장한다(§1.1 · §2.3).
+// ⚠ cell-shape 는 sceneY 를 import 하지 않는다(wiring B1) — 방향은 이쪽 하나뿐이다.
+import {
+  CELL_SHAPES, CELL_TIERS, cellShapeTier, promoteNearT0, shapeCellFace,
+} from './cell-shape.js';
+import { styledGridShapes } from './square-cell-style.js';
+import { qrModuleColor, qrModuleRole } from './qr-function-map.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -524,6 +533,141 @@ function assertPalette(palette) {
   return palette;
 }
 
+// ── 셀 꾸미기 (DESIGN_001 §3.0 · §3.2 · §4.2 sceneY.js, 레인 L3) ─────────────
+
+/** 등급 술어에 넘기는 타입 — buildSceneY 는 Type Y 의 유일한 생산자다. */
+const Y_TIER_TYPE = 'Y';
+
+/**
+ * 심 인접 1줄 변형(§3.0 예외 · §3.4 Y 표 키 `seamAdjacent`).
+ *   'keep'     — 기본. 심 인접 셀을 T1 처럼 사각으로 둔다(보수적 — 심 대비 측정 위치
+ *                `cube-detect.js:925-975`, n=13 에서 약 0.18셀이 인접 셀 안에 있다).
+ *   'decorate' — 측정 변형. 심 인접 셀도 술어 등급대로 꾸민다(L6 가 허용표로 판정).
+ */
+export const Y_SEAM_ADJACENT_MODES = Object.freeze(['keep', 'decorate']);
+
+/**
+ * 심 인접 판정 문턱(셀 = 면 변 길이 단위). 심은 셀 경계 **위의** 선이라 첫 줄은 심 도형과
+ * 겹치고(거리 0 — 반폭 0.075셀이 셀 안으로 들어온다), 둘째 줄은 마름모 높이 √3/2 − 반폭
+ * ≈ 0.79셀 떨어진다. 그 사이 값이면 «1줄» 만 잡힌다 — 0.5 는 양쪽에서 0.29셀 이상 여유다.
+ */
+const SEAM_ADJACENT_CELLS = 0.5;
+
+/**
+ * `opts.cellShape`(resolver `resolveCellShapeSpec` 의 spec + Y 변형) 정규화. 없음 · null ·
+ * square → null(= 종전 경로 — 함수 호출도 새 키도 없다). 그 밖은 `{kind, param?, avoid?,
+ * seamAdjacent?}` 여야 한다 — 모르는 모양 · 모르는 심 변형은 조용히 사각으로 떨어뜨리지
+ * 않고 던진다(잠금은 resolver 가 사유와 함께 이미 걸렀다). scene.js 의 같은 이름 함수와
+ * 규칙이 같다 — sceneY 가 scene.js 를 import 하지 않으므로 여기 따로 둔다.
+ */
+function cellShapeSpecOfY(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'object' || typeof raw.kind !== 'string') {
+    throw new TypeError('cellShape 는 {kind, param} spec 이어야 한다 (resolveCellShapeSpec 결과)');
+  }
+  if (!CELL_SHAPES.includes(raw.kind)) {
+    throw new RangeError(`cellShape.kind 를 모른다: ${raw.kind}`);
+  }
+  if (raw.kind === 'square') return null;
+  if (raw.avoid !== undefined && raw.avoid !== null && !Array.isArray(raw.avoid)) {
+    throw new TypeError('cellShape.avoid 는 {r,g,b} 배열이어야 한다');
+  }
+  if (raw.seamAdjacent !== undefined && !Y_SEAM_ADJACENT_MODES.includes(raw.seamAdjacent)) {
+    throw new RangeError(
+      `cellShape.seamAdjacent 는 ${Y_SEAM_ADJACENT_MODES.join(' | ')} 중 하나여야 한다: ${raw.seamAdjacent}`,
+    );
+  }
+  return raw;
+}
+
+function isRgbY(c) {
+  return c !== null && typeof c === 'object'
+    && Number.isFinite(c.r) && Number.isFinite(c.g) && Number.isFinite(c.b);
+}
+
+/**
+ * 코너 QR 꾸미기(`palette.qrDeco`). 키가 없으면 null(= 종전 흑백·사각 경로). 있으면
+ * `resolveQrDeco` 의 deco 모양 `{dark, light, eye, cellStyle}` 이어야 한다 — 반쯤 빈 deco 를
+ * 조용히 기본으로 메우면 «켰는데 안 먹는» 상태가 된다.
+ * ⚠ **코너 QR 만** 읽는다. 윈도 β · 슬롯 QR 은 TL 검출 입력이라 흑백·사각 고정이다(§1.3).
+ * ⚠ `bullseyeDark/Light` 는 읽지도 바꾸지도 않는다 — 심 · 중심 도트 · 윈도 · 슬롯이 공유한다.
+ */
+function cornerQrDecoOfY(palette) {
+  const deco = palette.qrDeco;
+  if (deco === undefined || deco === null) return null;
+  if (typeof deco !== 'object' || !isRgbY(deco.dark) || !isRgbY(deco.light) || !isRgbY(deco.eye)
+    || typeof deco.cellStyle !== 'string') {
+    throw new TypeError('palette.qrDeco 는 {dark, light, eye, cellStyle} 여야 한다 (resolveQrDeco 결과)');
+  }
+  return deco;
+}
+
+/**
+ * 기록해 둔 셀 면을 꾸민 도형으로 **한 번에** 치환한 새 도형 배열을 돌려준다(§4.2 sceneY.js).
+ *
+ * 왜 return 직전인가: Y 의 T0(슬롯 QR · 심 3선 · 중심 도트 · hex-frame · 코너 QR · 윈도 β)는
+ * 전부 셀 루프 **뒤에** 그려진다. 치환 시점엔 그 도형이 모두 배열에 있어 발자국 승격이 한 번에
+ * 끝나고, 기록한 index 는 buildSceneY 안에 다른 splice · filter 가 없으므로 밀리지 않는다.
+ *
+ * 등급:
+ *   ① 술어 — `cellShapeTier('Y', entry)`: **role** 로 가른다(tones 가 아니다 — 구 레이아웃은
+ *      tones 없이 톤을 유도한다, §3.0 정정 2). locator · reference · 모르는 role → T1.
+ *   ② 발자국 승격 — `promoteNearT0(faces, t0Shapes)`: 셀과 면을 나누는 T0(심 제외)에서 1셀
+ *      미만인 면을 T1 로. **셀 단위로 넓힌다**(한 면이라도 올라가면 그 셀 (i,j) 세 면 전부).
+ *   ③ 심 인접 1줄 — 심은 승격 대신 측정 변형이다(§3.0 예외). 'keep' 이면 심 도형에서
+ *      `SEAM_ADJACENT_CELLS` 미만인 셀을 T1 처럼 둔다(역시 셀 단위). 'decorate' 면 건너뛴다.
+ *   T1 면은 **원 도형 객체 그대로** 둔다(키 · 순서 · 참조 모두).
+ *
+ * @param {object[]} shapes 모든 도형이 놓인 배열(읽기만 한다)
+ * @param {Array<{index:number, points:object[], cellKey:string, entry:object}>} faces 기록한 셀 면
+ * @param {{kind:string, param?:number|null, avoid?:object[], seamAdjacent?:string}} spec
+ * @param {object[]} t0Shapes 셀과 면을 나누는 T0 도형(심 제외)
+ * @param {object[]} seamShapes 심 3선 도형
+ * @param {{r,g,b}|null} background 장면 배경(bevel 띠 클램프의 avoid 에 더한다; 투명이면 null)
+ */
+function applyCellShapesY(shapes, faces, spec, t0Shapes, seamShapes, background) {
+  const predicate = faces.map((f) => cellShapeTier(Y_TIER_TYPE, f.entry));
+  const asFaces = faces.map((f, i) => ({ points: f.points, tier: predicate[i] }));
+  const promoted = promoteNearT0(asFaces, t0Shapes);
+  const liftedCells = new Set();
+  for (let i = 0; i < faces.length; i += 1) {
+    if (promoted[i] === CELL_TIERS.T1 && predicate[i] !== CELL_TIERS.T1) liftedCells.add(faces[i].cellKey);
+  }
+  const seamMode = spec.seamAdjacent === undefined ? 'keep' : spec.seamAdjacent;
+  if (seamMode === 'keep') {
+    const nearSeam = promoteNearT0(asFaces, seamShapes, { cells: SEAM_ADJACENT_CELLS });
+    for (let i = 0; i < faces.length; i += 1) {
+      if (nearSeam[i] === CELL_TIERS.T1 && predicate[i] !== CELL_TIERS.T1) liftedCells.add(faces[i].cellKey);
+    }
+  }
+  // bevel 띠 클램프(§3.1): 생산자가 확실히 아는 것은 장면 배경 하나다. Y 기본(투명)은 배경이
+  // null 이라 더하지 않는다 — 실제 표면 · 안전영역 판 색은 호출자(L5)가 `spec.avoid` 로 준다.
+  const avoid = Array.isArray(spec.avoid) ? spec.avoid.slice() : [];
+  if (isRgbY(background)) avoid.push(background);
+  const faceSpec = { kind: spec.kind, param: spec.param, avoid };
+
+  const replaced = new Map();
+  for (let i = 0; i < faces.length; i += 1) {
+    const f = faces[i];
+    const tier = liftedCells.has(f.cellKey) ? CELL_TIERS.T1 : promoted[i];
+    if (tier !== CELL_TIERS.T2 && tier !== CELL_TIERS.T3) continue;
+    const original = shapes[f.index];
+    // dot 은 Y data 만 — `cellShapeAllowedKinds` 가 셀 정체(`cell`)로 거른다(§3.2).
+    const out = shapeCellFace(f.points, original.color, faceSpec, tier, { type: Y_TIER_TYPE, entry: f.entry });
+    // 그 셀에 허용되지 않는 모양(T2 의 dot · filler 의 dot 등)은 원 도형 사본이 온다 — 원 객체를 둔다.
+    if (out.length === 1 && out[0].basePoints === undefined) continue;
+    replaced.set(f.index, out);
+  }
+  if (replaced.size === 0) return shapes;
+  const next = [];
+  for (let i = 0; i < shapes.length; i += 1) {
+    const r = replaced.get(i);
+    if (r === undefined) next.push(shapes[i]);
+    else for (const s of r) next.push(s);
+  }
+  return next;
+}
+
 // ── 조립 ────────────────────────────────────────────────────────────────
 
 /**
@@ -586,7 +730,14 @@ export function yLevelTables(palette, locatorProfile, centralN7Emphasis) {
  *   palette: {background:{r,g,b}, levels:[{r,g,b},{r,g,b},{r,g,b}], bullseyeDark:{r,g,b}, bullseyeLight:{r,g,b}, faceGains?:{T,L,R}},
  *   qrText?: string, cellSize?: number, margin?: number, qrCorner?: 'TL'|'TR'|'BL'|'BR',
  *   locatorProfile?: 'off'|'hex-frame-v1'|'cell-surface-v1',
+ *   // 셀 꾸미기 (DESIGN_001 §3.2, 2026-09-26) — `resolveCellShapeSpec` 의 spec + Y 변형.
+ *   // 없거나 square 면(기본) 종전 경로 그대로다. `avoid` 는 bevel 띠 클램프용 실효 틈 색
+ *   // ({r,g,b}[], 선택 — 장면 배경은 생산자가 더한다). `seamAdjacent` 는 심 인접 1줄 변형
+ *   // ('keep' 기본 | 'decorate' 측정 변형, `Y_SEAM_ADJACENT_MODES`).
+ *   cellShape?: {kind: string, param?: number|null, avoid?: Array<{r,g,b}>, seamAdjacent?: 'keep'|'decorate'} | null,
  * }} [options]
+ *   `palette.qrDeco`(선택, `resolveQrDeco` 의 deco `{dark, light, eye, cellStyle}`)는 **코너 QR
+ *   에만** 쓴다. 윈도 β · 슬롯 QR 은 읽지 않는다(TL 검출 입력 — 흑백·사각 고정).
  * @returns {{n:number, layout:object, width:number, height:number, background:{r,g,b}, shapes:Array}}
  */
 export function buildSceneY(encoded, options) {
@@ -647,6 +798,11 @@ export function buildSceneY(encoded, options) {
 
   const shapes = [];
 
+  // 셀 꾸미기 기록(§4.2 sceneY.js) — 루프(데이터 분기)에서는 **적기만** 한다. 치환은 return 직전
+  // 한 번. spec 이 null(기본)이면 기록 · 치환이 전부 건너뛰어진다. 로케이터 분기는 T1 이라 안 적는다.
+  const cellShapeSpec = cellShapeSpecOfY(opts.cellShape);
+  const decoFaces = cellShapeSpec === null ? null : [];
+
   // ① 전 모듈 폴리곤 — 셀 (i,j) 를 j→i 오름차순(바깥 j, 안쪽 i, 둘 다 오름차순),
   // 셀마다 YFACES 순서 [T,L,R]. cellDigits 에 없는 (i,j) 는 건너뛴다.
   //
@@ -690,9 +846,14 @@ export function buildSceneY(encoded, options) {
           points: moduleQuad(face, i, j, layout),
           color: gainedLevels[face][levelIndex],
         });
+        if (decoFaces !== null) {
+          decoFaces.push({ index: shapes.length - 1, points: shapes[shapes.length - 1].points, cellKey: key, entry });
+        }
       }
     }
   }
+  // [cellEnd, …) 부터가 T0 다(슬롯 QR · 심 · 중심 도트 · 로케이터 도형 · 코너 QR · 윈도 β).
+  const cellEnd = shapes.length;
 
   // ①½ 슬롯 QR (v0xq·v0wq = Y-심 · v0wy = 먼 코너) — 슬롯 셀 자리에 T면 QR +
   // L/R 필러. 셀 폴리곤 **다음**, Y-심 3선·중심 도트 **앞**이다. 심선·도트는
@@ -726,6 +887,7 @@ export function buildSceneY(encoded, options) {
   // hexgrid.SAMPLE_FRACTION_DEFAULT 기본값 기준) 안쪽이라 심선이 샘플링 원판을
   // 침범하지 않는다. 길이는 큐브 반경 R = n·cellSize(중심→꼭짓점, cubeBounds 유도와
   // 동일 닫힌 형태) 만큼 — Y-심에서 육각 실루엣 꼭짓점까지 정확히 닿는다.
+  const seamStart = shapes.length; // 셀 꾸미기: 심 도형 구간 표지(출력 불변 — 심 인접 판정용).
   const seamHalfWidth = 0.075 * cellSize;
   const R = n * cellSize;
   const center = { x: layout.originX, y: layout.originY };
@@ -744,6 +906,7 @@ export function buildSceneY(encoded, options) {
       color: palette.bullseyeDark,
     });
   }
+  const seamEnd = shapes.length;
 
   // ③ 중심 도트 — 반지름 0.18·cellSize, bullseyeDark.
   shapes.push({
@@ -785,6 +948,9 @@ export function buildSceneY(encoded, options) {
   const cornerQr = opts.cornerQr === undefined
     ? !(window || centerQrSlot > 0)
     : opts.cornerQr;
+  // [cornerStart, cornerEnd) 는 코너 QR 이다 — 발자국 승격 T0 목록에서 뺀다(scene.js 와 같다:
+  // §3.0 «셀과 면을 나누는 T0» 목록 밖 — 실루엣 밖에 자기 콰이어트를 가진 별도 덩어리).
+  const cornerStart = shapes.length;
   if (opts.qrText !== undefined && cornerQr) {
     const qr = qrMatrix(opts.qrText);
     if (qr.size !== QR_MODULE_GRID) {
@@ -811,6 +977,8 @@ export function buildSceneY(encoded, options) {
     // 콰이어트 패치 — 블록 전체를 덮는 밝은 사각형(어두운 스킨에서도 QR 리더가
     // 콰이어트 존을 확보하도록 렌더러가 보장, SPEC §14).
     // selfQuiet: scene.js pushQrBlock 과 같은 태그 — 안전영역 제외의 정본 신호.
+    // 코너 QR 꾸미기(`palette.qrDeco`, §5.2)는 **이 블록에서만** 읽는다 — 없으면 종전 경로.
+    const cornerDeco = cornerQrDecoOfY(palette);
     shapes.push({
       kind: 'polygon',
       points: [
@@ -819,7 +987,7 @@ export function buildSceneY(encoded, options) {
         { x: blockRect.maxX, y: blockRect.maxY },
         { x: blockRect.minX, y: blockRect.maxY },
       ],
-      color: palette.bullseyeLight,
+      color: cornerDeco === null ? palette.bullseyeLight : cornerDeco.light,
       selfQuiet: true,
     });
 
@@ -828,7 +996,25 @@ export function buildSceneY(encoded, options) {
       x: blockOrigin.x + QR_QUIET_MODULES * qrModuleSize,
       y: blockOrigin.y + QR_QUIET_MODULES * qrModuleSize,
     };
-    for (let y = 0; y < qr.size; y += 1) {
+    if (cornerDeco !== null) {
+      // 꾸민 코너 QR — scene.js pushQrBlock 과 같은 방식. 기능 모듈(파인더+분리자 · 타이밍 · 포맷 ·
+      // dark module)은 qr-function-map 이 'fixed'(사각)로, 데이터 모듈만 'data'(스타일)로 가른다.
+      // 색은 눈(파인더 7×7)만 deco.eye, 나머지는 deco.dark. ⚠ 태그 `{selfQuiet, noSeam}` 은
+      // **필수**다 — 색을 바꾸면 안전영역 제외의 색 경로가 무너져 태그 경로만 남는다
+      // (quietzone.js 제외 주석). 빠지면 styledGridShapes 가 던진다.
+      shapes.push(...styledGridShapes({
+        rows: qr.size,
+        cols: qr.size,
+        style: cornerDeco.cellStyle,
+        host: 'qr',
+        role: (row, col) => qrModuleRole(qr, row, col),
+        color: (row, col) => qrModuleColor(cornerDeco, row, col),
+        map: (x, y) => ({ x: qrOrigin.x + x * qrModuleSize, y: qrOrigin.y + y * qrModuleSize }),
+        tags: { selfQuiet: true, noSeam: true },
+      }));
+    }
+    // 종전 경로(꾸미기 없음) — 아래 루프는 한 글자도 안 바뀌었다.
+    if (cornerDeco === null) for (let y = 0; y < qr.size; y += 1) {
       for (let x = 0; x < qr.size; x += 1) {
         if (qr.modules[y * qr.size + x] !== 1) continue;
         const mx = qrOrigin.x + x * qrModuleSize;
@@ -847,6 +1033,7 @@ export function buildSceneY(encoded, options) {
       }
     }
   }
+  const cornerEnd = shapes.length;
 
   // ⑤ 면 내 QR 윈도(β, ADR 0003 D1 + [C7 Q7]) — encoded.window===true 이고 qrText
   // 가 있을 때만(코너 QR 과 동일하게 qrText 미지정이면 조용히 생략). 코너 QR 과
@@ -858,6 +1045,21 @@ export function buildSceneY(encoded, options) {
   // (⑥ 자리에 있던 «큐브 바깥 면-평면 QR» 호출은 2026-08-17 재설계로 제거됐다 —
   //  지금의 v0WY 는 ①½ 슬롯 QR 의 `far` 앵커 변형이다.)
 
+  // ⑦ 셀 꾸미기 치환(§4.2 sceneY.js) — 모든 T0 가 놓인 뒤 한 번. 기본값이면 건너뛴다.
+  //   T0(발자국 승격) = 슬롯 QR [cellEnd, seamStart) · 중심 도트 · 로케이터 도형 [seamEnd, cornerStart)
+  //                     · 윈도 β [cornerEnd, …). 심 [seamStart, seamEnd) 은 승격 대신 심 인접 변형.
+  //   코너 QR [cornerStart, cornerEnd) 는 빼고, 셀 루프 앞에는 도형이 없다(shapes 가 빈 채 시작).
+  const finalShapes = decoFaces === null
+    ? shapes
+    : applyCellShapesY(
+      shapes,
+      decoFaces,
+      cellShapeSpec,
+      [...shapes.slice(cellEnd, seamStart), ...shapes.slice(seamEnd, cornerStart), ...shapes.slice(cornerEnd)],
+      shapes.slice(seamStart, seamEnd),
+      palette.background,
+    );
+
   return {
     n,
     layout,
@@ -865,6 +1067,6 @@ export function buildSceneY(encoded, options) {
     height: layout.height,
     background: palette.background,
     locatorProfile,
-    shapes,
+    shapes: finalShapes,
   };
 }
