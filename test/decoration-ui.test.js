@@ -4,8 +4,10 @@
  * 무엇을 재나 (성질 — 철자가 아니라 실제 index.html 함수를 vm 에서 돌려 잰다):
  *   ① 선택지는 상태 스키마에서 유도된다 — 카드 줄의 값 = DECORATION_STATE_DOMAINS 의 열거, 슬라이더 폭 = 정수 도메인.
  *      화면 자리(#${key}Cards · #${key}Bar)나 라벨이 빠지면 로드 시점에 던진다(심은 결함으로 확인).
- *   ② 스텁 허용표(제품 기본 — 전부 잠금)에서는 보이는 **모든** 꾸미기 카드가 잠금 + aria-disabled + 인라인 사유
- *      한 줄(툴팁 title 아님)이다. «끔» 카드는 언제나 눌린다.
+ *   ② 빈 허용표(스텁 모양을 **주입** — 제품 기본표는 2026-09-27 부터 L6 생성본)에서는 보이는 **모든** 꾸미기 카드가
+ *      잠금 + aria-disabled + 인라인 사유 한 줄(툴팁 title 아님)이다. «끔» 카드는 언제나 눌린다.
+ *      제품 기본표(생성본)에서는 셀 모양 카드 열림 ⇔ «렌더 문맥에 맞는 표 행이 있다» 이고(행은 표에서 유도 — 박제 없음),
+ *      제품 기본 Y(투명 배경 · 판 없음)에서 하나 이상 열려 그 카드는 사유 없이 생산자까지 간다.
  *   ③ 기본 상태에서는 어떤 타입(O · A · K · Y · H)도 생산자에 꾸미기 키를 넘기지 않는다 — sceneOpts.cellShape ·
  *      palette.qrDeco · hQr.deco · hCellStyle 부재(D1 이 넘긴 «이름 붙인 미측정 축»). 켬 → 끔 클릭 경로 뒤에도.
  *   ④ fixture 허용표를 주입하면(테스트 전용 경로 — decorationAllow 만 바꾼다) 카드가 열리고, 카드를 누르면
@@ -29,8 +31,9 @@ import {
   decorationValueFromInput, exposedGeneratorStateKeys, versionStateKey,
 } from '../src/generator-state.js';
 import {
-  CELL_SHAPE_DEFAULT, CELL_SHAPE_PARAMS, cellShapeAllowCtx, cellShapeCtx, resolveCellShapeSpec,
+  CELL_SHAPE_DEFAULT, CELL_SHAPE_PARAMS, cellShapeAllowCtx, cellShapeCtx, cellShapeStructuralLock, resolveCellShapeSpec,
 } from '../src/cell-shape.js';
+import * as DEFAULT_ALLOW from '../src/cell-shape-allow.js';
 import { qrDecoHostOf, resolveQrDeco } from '../src/qr-colors.js';
 import {
   H_CELL_GROUND_DEFAULT, H_CELL_STYLE_DEFAULT, hCellStyleCtx, hMaskLuminance, hPreviewOptions, hUiLabel,
@@ -67,11 +70,15 @@ import { hPlanarPreviewOptions, reconcileHPositionMode } from '../src/h-preview-
 import { TL_READER_URL, tlReaderUrlWithHint } from '../src/qr.js';
 import { payloadByteLength } from '../src/header.js';
 import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
+import { resolveAutoY } from '../src/generator-auto-y.js';
+import { LOCATOR_PROFILE_CELL_SURFACE_V0TR } from '../src/locatorY.js';
 
 const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const LANGS = ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt'];
 const ENUM_KEYS = DECORATION_STATE_KEYS.filter((k) => DECORATION_STATE_DOMAINS[k].kind === 'enum');
 const INT_KEYS = DECORATION_STATE_KEYS.filter((k) => DECORATION_STATE_DOMAINS[k].kind === 'int');
+/** 명시적 빈 표 — «전부 잠금» 스텁 모양(행 0 · 영수증 없음). 하네스 allow 로 주입한다(제품 기본표는 생성본). */
+const STUB = Object.freeze({ ROWS: Object.freeze([]), RECEIPT_SHA256: null, MEASURED_AT: null, FINGERPRINT: null });
 
 /** 최상위 함수 하나(열 0 의 `}` 로 닫힌다). */
 function fnSource(text, name) {
@@ -132,9 +139,13 @@ function makeNode(id = null, tag = 'div') {
 /**
  * vm 하네스 — 실제 index.html 의 꾸미기 블록 · paletteOf · buildConfig · 렌더 함수 · render · 재렌더 훅을 꽂는다.
  * 생산자(buildScene · buildSceneY · buildHScene · withHCornerQr)는 실제 함수를 감싸 받은 옵션을 기록한다.
- * @param {{state?: object, allow?: object, source?: string, missingIds?: string[], quietColor?: string}} opts
+ * autoLocatorY: 제품의 Y 로케이터 자동 정책(index.html `resolveAutoLocatorProfileY` · `resolveAutoYSafe` — 실물 함수)을
+ *   이 하네스 상태에 적용한다. 제품은 detectorAutoY = true 가 기본이라 Y 상태의 locatorProfileY 는 스키마 기본('off')이 아니라
+ *   이 정책의 값이다. (QR 위치 파생 `deriveYLocatorForQrPosition` 은 inner · v0T/v0TR 계열에만 손대므로 싣지 않는다 —
+ *   그 계열이 나오면 아래에서 던진다.)
+ * @param {{state?: object, allow?: object, source?: string, missingIds?: string[], quietColor?: string, autoLocatorY?: boolean}} opts
  */
-function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColor = 'white' } = {}) {
+function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColor = 'white', autoLocatorY = false } = {}) {
   const nodes = new Map();
   const $ = (id) => {
     if (missingIds.includes(id) || !HTML_IDS.has(id)) return null;
@@ -206,6 +217,15 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
   }
   vm.runInContext(decorationBlock(source), c);
   if (allow !== undefined) c.decorationAllow = () => allow;
+  if (autoLocatorY) {
+    Object.assign(c, { resolveAutoY, LOCATOR_PROFILE_CELL_SURFACE_V0TR });
+    for (const name of ['resolveAutoYSafe', 'resolveAutoLocatorProfileY']) vm.runInContext(fnSource(source, name), c);
+    const profile = vm.runInContext('resolveAutoLocatorProfileY()', c);
+    if (generatorState.qrPosition === 'inner' || /^cell-surface-v0t/.test(profile)) {
+      throw new Error('autoLocatorY: QR 위치 파생이 손대는 조합(' + generatorState.qrPosition + ' · ' + profile + ') — 하네스에 파생을 실어라');
+    }
+    generatorState.locatorProfileY = profile;
+  }
   const run = (code) => vm.runInContext(code, c, { timeout: 60000 });
   const render = () => {
     run('render()');
@@ -276,13 +296,13 @@ test('① 심은 결함 — 화면 자리 · 라벨이 빠지면 로드 시점�
   assert.throws(() => harness({ source: noLabel }), /no label key for (hCellStyle|qrCellStyle)=inset/);
 });
 
-// ── ② 스텁 허용표 = 전부 잠금 + 인라인 사유 ─────────────────────────────────
+// ── ② 빈 허용표(스텁 주입) = 전부 잠금 + 인라인 사유 ─────────────────────────
 
-test('② 스텁 허용표에서 보이는 모든 꾸미기 카드는 잠금 + aria-disabled + 인라인 사유 한 줄이다(끔 카드는 열림)', () => {
+test('② 빈 허용표(스텁 주입)에서 보이는 모든 꾸미기 카드는 잠금 + aria-disabled + 인라인 사유 한 줄이다(끔 카드는 열림)', () => {
   const OFF = { cellShape: CELL_SHAPE_DEFAULT, hCellStyle: H_CELL_STYLE_DEFAULT, qrColorMode: 'default', qrEye: 'none', qrCellStyle: 'square' };
   for (const [type, state] of Object.entries(TYPE_STATES)) {
     // 강도 줄 · H 바탕 줄도 보이게 모양을 하나 골라 둔다(잠겨도 상태는 그대로 — 설계 M10).
-    const h = harness({ state: { ...state, cellShape: 'round', hCellStyle: 'dots' } });
+    const h = harness({ state: { ...state, cellShape: 'round', hCellStyle: 'dots' }, allow: STUB });
     h.render();
     const visibleKeys = ENUM_KEYS.filter((key) => !h.$(key + 'Cards').hidden
       && !(['cellShape', ...Object.values(CELL_SHAPE_PARAMS).map((d) => d.key)].includes(key) && h.$('cellShapeRhombusGroup').hidden)
@@ -332,8 +352,8 @@ test('② 스텁 허용표에서 보이는 모든 꾸미기 카드는 잠금 + a
 
 test('② «흰색으로 두면 열릴 수 있어요» 권유(g1164)는 따르면 실제로 열리는 카드에만 붙는다', () => {
   const state = { ...TYPE_STATES.Y, bgMode: 'transparent', cellShape: 'round' };
-  // 스텁 표 — 흰색으로 바꿔도 «미측정» 으로 바뀔 뿐이라 권유 없는 문구다.
-  const stub = harness({ state, quietColor: 'none' });
+  // 빈 표(스텁 주입) — 흰색으로 바꿔도 «미측정» 으로 바뀔 뿐이라 권유 없는 문구다.
+  const stub = harness({ state, quietColor: 'none', allow: STUB });
   stub.render();
   assert.equal(stub.card('cellShape', 'round').dataset.lockReason, 'exposed-gap', '투명 배경 Y 에서 틈 노출 사유가 아니다 — 전제가 바뀌었다');
   const plainKey = stub.run('DECORATION_EXPOSED_GAP_PLAIN_KEY');
@@ -356,6 +376,64 @@ test('② «흰색으로 두면 열릴 수 있어요» 권유(g1164)는 따르�
   }
 });
 
+/**
+ * 렌더된 셀 모양 문맥에서 제품 기본표(생성본)가 여는 행 — 표에서 유도한다(특정 행을 박제하지 않는다).
+ * 행의 표 키가 문맥과 전부 같고 구조 잠금(제품 함수)이 안 걸리는 행.
+ */
+function tableRowsFor(ctx) {
+  const base = cellShapeAllowCtx(ctx);
+  if (!base) return [];
+  return DEFAULT_ALLOW.ROWS.filter((row) => Object.keys(base).every((k) => row[k] === base[k])
+    && cellShapeStructuralLock(ctx.table, row.cellShape, row.param, ctx) === null);
+}
+
+test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문맥에 맞는 표 행 · 제품 기본 Y(투명)에서 하나 이상 열리고 사유 없이 생산자까지 간다', () => {
+  assert.notEqual(DEFAULT_ALLOW.RECEIPT_SHA256, null, '제품 기본표가 스텁이다 — 이 자는 생성본을 잰다');
+  // 제품 기본 상태(타입만 고른다) — Y 는 기본 투명 배경 + 판 없음(quiet auto 가 Y 에 판을 안 깐다 → 틈 등급 unknown) +
+  // 제품 기본 «자동» 로케이터(autoLocatorY — 실물 정책 함수). 스키마 기본 'off' 그대로는 제품 화면이 아니다.
+  const CASES = [['O', TYPE_STATES.O, 'white', false], ['A', TYPE_STATES.A, 'white', false], ['K', TYPE_STATES.K, 'white', false],
+    ['Y', TYPE_STATES.Y, 'none', true]];
+  const openedByType = {};
+  for (const [type, state, quietColor, autoLocatorY] of CASES) {
+    const probe = harness({ state, quietColor, autoLocatorY });
+    probe.render();
+    const ctx = probe.c.current.deco.ctx;
+    assert.ok(ctx, type + ': 렌더가 셀 모양 문맥을 안 남겼다');
+    const rows = tableRowsFor(ctx);
+    openedByType[type] = { ctx: cellShapeAllowCtx(ctx), rows: rows.length };
+    // 동치: 카드(지금 상태의 강도로 묻는다)가 열림 ⇔ 그 (모양, 강도) 행이 표에 있다. 끔 카드는 늘 열림.
+    for (const el of probe.cards('cellShape')) {
+      const kind = el.dataset.decoValue;
+      const def = CELL_SHAPE_PARAMS[kind];
+      const param = def ? probe.state[def.key] : null;
+      const want = kind === CELL_SHAPE_DEFAULT || rows.some((r) => r.cellShape === kind && r.param === param);
+      assert.equal(el.getAttribute('aria-disabled'), String(!want),
+        `${type} ${kind}(${param}): 카드 ${want ? '열림' : '잠금'} 기대 — 표 행 ${want ? '있음' : '없음'}, 사유 ${el.dataset.lockReason || '없음'}`);
+      if (!want) assert.ok(el.dataset.lockReason, `${type} ${kind}: 잠겼는데 사유가 없다`);
+    }
+    // 연 행마다: 그 상태로 UI 를 세우면 카드 · 강도 카드가 열리고, 인라인 사유가 없고, spec 이 생산자까지 간다.
+    for (const row of rows) {
+      const def = CELL_SHAPE_PARAMS[row.cellShape];
+      const chosen = { ...state, cellShape: row.cellShape, ...(def ? { [def.key]: row.param } : {}) };
+      const h = harness({ state: chosen, quietColor, autoLocatorY });
+      h.render();
+      const where = `${type} ${row.cellShape}(${row.param})`;
+      const card = h.card('cellShape', row.cellShape);
+      assert.equal(card.getAttribute('aria-disabled'), 'false', where + ': 카드가 잠겼다 ' + card.dataset.lockReason);
+      assert.equal(card.dataset.lockReason, '', where);
+      assert.equal(card.getAttribute('aria-describedby'), null, where + ': 열린 카드가 사유 줄을 가리킨다');
+      if (def) assert.equal(h.card(def.key, row.param).getAttribute('aria-disabled'), 'false', where + ': 강도 카드가 잠겼다');
+      assert.ok(!h.$('cellShapeLockHint').textContent.includes('g1205'), where + ': «고른 모양이 잠겼다» 문구가 보인다');
+      const opts = lastOf(type === 'Y' ? h.calls.buildSceneY : h.calls.buildScene);
+      assert.ok(opts.cellShape, where + ': spec 이 생산자에 안 갔다');
+      assert.equal(opts.cellShape.kind, row.cellShape, where);
+      assert.equal(opts.cellShape.param, row.param, where);
+    }
+  }
+  // 표가 UI 경로에서 비지 않았다 — 제품 기본 Y(투명)에서 셀 모양 하나 이상(수치는 박제하지 않는다).
+  assert.ok(openedByType.Y.rows > 0, '제품 기본 Y(투명 배경)에서 여는 행이 생성 표에 없다 — ' + JSON.stringify(openedByType));
+});
+
 test('② C(ultra)는 모든 모양이 «C 는 사각만» 사유로 잠긴다(구조 잠금 — fixture 로도 안 열린다)', () => {
   const probe = harness({ state: { type: 'O', versionO: 'ultra' } });
   probe.render();
@@ -372,11 +450,14 @@ test('② C(ultra)는 모든 모양이 «C 는 사각만» 사유로 잠긴다(�
 
 // ── ③ 기본값 = 키 부재 ───────────────────────────────────────────────────
 
-test('③ 기본 상태에서는 어떤 타입도 생산자에 꾸미기 키를 넘기지 않는다 — 스텁 · 전부 연 fixture 둘 다', () => {
+test('③ 기본 상태에서는 어떤 타입도 생산자에 꾸미기 키를 넘기지 않는다 — 빈 표 · 제품 기본표(생성본) · 전부 연 fixture 셋 다', () => {
   for (const [type, state] of Object.entries(TYPE_STATES)) {
+    const stub = harness({ state, allow: STUB });
+    stub.render();
+    assertNoDecorationKeys(stub, type, '빈 표');
     const h = harness({ state });
     h.render();
-    assertNoDecorationKeys(h, type, '스텁');
+    assertNoDecorationKeys(h, type, '제품 기본표');
     // 다 열어 둔 표에서도 기본(끔)이면 키가 없다 — «끔 = 현재 출력» 은 표가 아니라 기본값이 보장한다.
     const ctx = h.c.current.deco ? h.c.current.deco.ctx : null;
     const rows = ctx ? openAllCellRows(ctx) : [];
@@ -612,8 +693,8 @@ test('⑧ 파일명 꼬리표 — 기본이면 빈 문자열, 켜면 렌더된 s
   assert.equal(h.run('exportDecorationTag()'), '-sat150');
   assert.equal(h.run("exportDecorationTag('3d')"), '-sat150', '채도는 3D 팔레트에도 닿으므로 3D 파일명에도 붙는다');
   assert.equal(h.state.cellShape, 'bevel', '잠겨도 상태는 그대로다');
-  // 잠긴 선택(스텁 표)은 렌더되지 않았으므로 꼬리표도 없다.
-  const locked = harness({ state: { ...TYPE_STATES.O, cellShape: 'round', qrCellStyle: 'dots' } });
+  // 잠긴 선택(빈 표 주입)은 렌더되지 않았으므로 꼬리표도 없다.
+  const locked = harness({ state: { ...TYPE_STATES.O, cellShape: 'round', qrCellStyle: 'dots' }, allow: STUB });
   locked.render();
   assert.equal(locked.run('exportDecorationTag()'), '');
 });

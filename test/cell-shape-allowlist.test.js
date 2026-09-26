@@ -6,7 +6,8 @@
 //      빨개지는지 따로 잰다.
 //   ② UI 가 열거하는 선택지 전부(스키마 DECORATION_STATE_DOMAINS 에서 **유도** — 손 목록 없음)를 실제 인코딩에서 유도한
 //      대표 문맥(cellShapeCtx · hCellStyleCtx · QR 호스트)마다 resolver 에 넣으면, 결과는 «허용»(spec/deco) ·
-//      «기본값(사유 없는 null)» · «잠금 + 안정 사유 id» 셋 중 하나다. 스텁 표에서는 비기본 전부가 잠금 + 사유.
+//      «기본값(사유 없는 null)» · «잠금 + 안정 사유 id» 셋 중 하나다. 빈 표(스텁 모양 STUB 을 **주입** — 기본 모듈은
+//      2026-09-27 부터 L6 생성본이다)에서는 비기본 전부가 잠금 + 사유. 생성본 자체의 성질은 cell-shape-allow-generated.test.js.
 //   ③ 구조 잠금 — 그 조합의 행을 **정확히** 넣은 «전부 열림» 표(심은 결함)로도 잠긴다. 판별력: 잠금 조건 하나만 뒤집은
 //      문맥(같은 표)에서는 같은 선택이 열린다. 구조 잠금 사유 7(셀) + 1(QR) + 2(H) 가 모두 실제 문맥에서 한 번 이상 난다.
 //   ④ resolver 는 상태를 고치지 않는다(동결 상태 · JSON 전후 동일).
@@ -20,7 +21,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import * as STUB_ALLOW from '../src/cell-shape-allow.js';
+import * as DEFAULT_ALLOW from '../src/cell-shape-allow.js';
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
 import { encodeK } from '../src/encodeK.js';
@@ -59,6 +60,9 @@ function deepFreeze(o) {
   }
   return o;
 }
+
+/** 명시적 빈 표 — «전부 잠금» 스텁 모양(행 0 · 영수증 없음). 기본 모듈이 생성본이 된 뒤에도 빈 표 성질을 그대로 잰다. */
+const STUB = deepFreeze({ ROWS: [], RECEIPT_SHA256: null, MEASURED_AT: null, FINGERPRINT: null });
 
 // ── 선택지 — 스키마 도메인에서 유도 ─────────────────────────────────────────
 
@@ -209,10 +213,13 @@ function tableProblems(allow) {
   return out;
 }
 
-test('① 허용표 내부 일관성 · 지문 — 기본 표(스텁)는 결함 0 · 전부 잠금 스텁 모양', () => {
-  assert.deepEqual(tableProblems(STUB_ALLOW), []);
-  assert.ok(Object.isFrozen(STUB_ALLOW.ROWS));
-  if (STUB_ALLOW.ROWS.length === 0) assert.equal(STUB_ALLOW.RECEIPT_SHA256, null, '스텁: 영수증 없음');
+test('① 허용표 내부 일관성 · 지문 — 기본 표(생성본)와 주입 스텁 표 둘 다 결함 0', () => {
+  assert.deepEqual(tableProblems(DEFAULT_ALLOW), []);
+  assert.ok(Object.isFrozen(DEFAULT_ALLOW.ROWS));
+  if (DEFAULT_ALLOW.ROWS.length === 0) assert.equal(DEFAULT_ALLOW.RECEIPT_SHA256, null, '빈 기본 표: 영수증 없음');
+  // 스텁 모양(빈 표 · 메타 셋 다 null)도 일관이다 — 판정 함수가 «행 0 = 영수증 없음» 을 허용한다.
+  assert.deepEqual(tableProblems(STUB), []);
+  assert.equal(STUB.ROWS.length, 0);
 });
 
 test('① 판정 함수 판별력 — 심은 결함 표마다 해당 결함을 잡는다', () => {
@@ -252,7 +259,7 @@ function assertClassified(res, isDefault, key, where) {
   return 'locked';
 }
 
-test('② 스텁 표: 셀 모양 선택지 전부 × 대표 문맥 전부 → 기본값이거나 «잠금 + 사유» · 상태 불변', () => {
+test('② 빈 표(스텁 주입): 셀 모양 선택지 전부 × 대표 문맥 전부 → 기본값이거나 «잠금 + 사유» · 상태 불변', () => {
   const choices = cellChoices();
   assert.equal(choices.length, 1 + 3 + 2 + 1 + 2 + 2, '스키마 유도 선택지 수(모양 × 강도)');
   for (const [name, { ctx }] of Object.entries(CTXS)) {
@@ -260,8 +267,8 @@ test('② 스텁 표: 셀 모양 선택지 전부 × 대표 문맥 전부 → �
     for (const c of choices) {
       const st = deepFreeze({ ...FRESH, ...c });
       const before = JSON.stringify(st);
-      const kind = assertClassified(resolveCellShapeSpec(st, ctx), isCellDefault(c), 'spec', `${name} ${JSON.stringify(c)}`);
-      assert.notEqual(kind, 'allowed', `${name} ${JSON.stringify(c)}: 스텁에서 열렸다`);
+      const kind = assertClassified(resolveCellShapeSpec(st, ctx, STUB), isCellDefault(c), 'spec', `${name} ${JSON.stringify(c)}`);
+      assert.notEqual(kind, 'allowed', `${name} ${JSON.stringify(c)}: 빈 표에서 열렸다`);
       assert.equal(JSON.stringify(st), before);
     }
   }
@@ -307,7 +314,7 @@ test('③ 구조 잠금 문맥 키가 빠지면 잠근다(fail-closed) — 추�
   assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, noRender, openCellFixture(v0)).lockReason, CELL_SHAPE_LOCK_REASONS.CTX_INCOMPLETE);
 });
 
-test('② · ③ H: 스텁 전부 잠금 · 열림 표에서도 2톤 · corners 는 구조 잠금 · 상태 불변', () => {
+test('② · ③ H: 빈 표(스텁 주입) 전부 잠금 · 열림 표에서도 2톤 · corners 는 구조 잠금 · 상태 불변', () => {
   const hit = new Set();
   for (const [name, { ctx, expect }] of Object.entries(H_CTXS)) {
     const open = openHFixture(ctx);
@@ -315,7 +322,7 @@ test('② · ③ H: 스텁 전부 잠금 · 열림 표에서도 2톤 · corners 
       const st = deepFreeze({ ...H_STATE, ...c });
       const before = JSON.stringify(st);
       const where = `${name} ${JSON.stringify(c)}`;
-      const stub = assertClassified(resolveHCellStyleSpec(st, ctx), isHDefault(c), 'spec', where);
+      const stub = assertClassified(resolveHCellStyleSpec(st, ctx, STUB), isHDefault(c), 'spec', where);
       assert.notEqual(stub, 'allowed', where);
       const res = resolveHCellStyleSpec(st, ctx, open);
       assertClassified(res, isHDefault(c), 'spec', where);
@@ -329,7 +336,7 @@ test('② · ③ H: 스텁 전부 잠금 · 열림 표에서도 2톤 · corners 
   assert.deepEqual([...hit].sort(), [H_CELL_STYLE_LOCK_REASONS.CORNERS_FINDER, H_CELL_STYLE_LOCK_REASONS.TWO_TONE].sort());
 });
 
-test('② · ③ 폴백 QR: 선택지 전부 × 호스트 3 — 스텁 전부 잠금 · 열림 표에서 y 호스트만 구조 잠금 · 상태 불변', () => {
+test('② · ③ 폴백 QR: 선택지 전부 × 호스트 3 — 빈 표(스텁 주입) 전부 잠금 · 열림 표에서 y 호스트만 구조 잠금 · 상태 불변', () => {
   const choices = qrChoices();
   assert.ok(choices.length > 100, '스키마 유도 선택지');
   let yLocked = 0;
@@ -338,7 +345,7 @@ test('② · ③ 폴백 QR: 선택지 전부 × 호스트 3 — 스텁 전부 �
       const st = deepFreeze({ ...FRESH, ...c });
       const before = JSON.stringify(st);
       const where = `${host} ${JSON.stringify(c)}`;
-      const stub = assertClassified(resolveQrDeco(st, SLATE, host), isQrDefault(c), 'deco', where);
+      const stub = assertClassified(resolveQrDeco(st, SLATE, host, STUB), isQrDefault(c), 'deco', where);
       assert.notEqual(stub, 'allowed', where);
       const res = resolveQrDeco(st, SLATE, host, OPEN_QR);
       const kind = assertClassified(res, isQrDefault(c), 'deco', where);

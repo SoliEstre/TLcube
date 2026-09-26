@@ -13,7 +13,8 @@
  *      꾸밈 셀 전부 0, white 바탕은 셀 중심(데이터) 0 · 덮이지 않은 모서리(바탕) 255.
  *   ⑦ 스타일 켬 GPU 텍스처(셰이더 식 적용) 셀 중심 색 = 같은 옵션 2.5D PNG 의 셀 중심 색(±2).
  *   ⑧ 캐시 키: 스타일·바탕·QR deco 가 텍스처를 가르고, 기본값(키 없음 · 'square')은 다시 올리지 않는다.
- *   ⑨ 해석기: 스텁 허용표는 전부 잠금, fixture 행만 열고, 2톤 · corners 는 행이 있어도 잠금, 상태 불변.
+ *   ⑨ 해석기: 빈 허용표(스텁 모양 주입 — 기본 모듈은 2026-09-27 부터 L6 생성본)는 전부 잠금, fixture 행만 열고,
+ *      2톤 · corners 는 행이 있어도 잠금, 상태 불변. 생성본의 H 행 성질은 cell-shape-allow-generated.test.js.
  *      hPreviewOptions 는 기본값에서 새 키를 만들지 않는다.
  *   ⑩ 코너 QR deco: 기능 모듈은 모듈 사각 그대로, 눈은 deco.eye, 조각마다 {qr, selfQuiet, noSeam}; deco 를 끈 뒤의
  *      출력은 처음 기본 출력과 같다(단일 칸 캐시 이력).
@@ -55,15 +56,17 @@ function detectionCells(version, finder) {
 }
 const cellShapes = (scene, face) => scene.shapes.filter(s => s.face === face && Number.isInteger(s.i));
 const isGround = s => s.hCellGround !== undefined;
+/** 명시적 빈 표 — «전부 잠금» 스텁 모양(행 0 · 영수증 없음). */
+const STUB = Object.freeze({ ROWS: Object.freeze([]), RECEIPT_SHA256: null, MEASURED_AT: null, FINGERPRINT: null });
 
 // ── ⑨ 해석기 · hPreviewOptions ─────────────────────────────────────────────────
-test('해석기: 스텁은 전부 잠그고 fixture 행만 열며, 2톤 · corners 는 행이 있어도 잠그고 상태를 고치지 않아요', () => {
+test('해석기: 빈 표(스텁 주입)는 전부 잠그고 fixture 행만 열며, 2톤 · corners 는 행이 있어도 잠그고 상태를 고치지 않아요', () => {
   const state = Object.freeze({ preset: 'slate', hCellStyle: 'dots', hCellGround: 'level5' });
   const ctx = hCellStyleCtx(encoded(2), state);
   assert.deepEqual(ctx, { version: 2, finder: 'frame', tones: 3, paletteGrade: 'slate' });
   assert.deepEqual(resolveHCellStyleSpec({ preset: 'slate' }, ctx), { spec: null }, 'square(키 없음)는 사유 없는 null');
   assert.deepEqual(resolveHCellStyleSpec({ ...state, hCellStyle: 'square' }, ctx), { spec: null });
-  assert.equal(resolveHCellStyleSpec(state, ctx).lockReason, H_CELL_STYLE_LOCK_REASONS.UNMEASURED, '스텁 허용표는 잠가요');
+  assert.equal(resolveHCellStyleSpec(state, ctx, STUB).lockReason, H_CELL_STYLE_LOCK_REASONS.UNMEASURED, '빈 허용표는 잠가요');
   const row = { table: 'h', version: 2, finder: 'frame', tones: 3, ground: 'level5', paletteGrade: 'slate', hCellStyle: 'dots' };
   const allow = { ROWS: [row] };
   assert.deepEqual(resolveHCellStyleSpec(state, ctx, allow).spec, { style: 'dots', ground: 'level5' });
@@ -90,7 +93,7 @@ test('hPreviewOptions: 기본값·잠금·문맥 없음은 키를 만들지 않�
   assert.deepEqual(hPreviewOptions({ ...base, hCellStyle: 'square', hCellGround: 'white' }, { encoded: e, allow }), plain, 'square 는 바이트 동일');
   assert.deepEqual(hPreviewOptions(base, { encoded: e, allow }), plain, '키 없음도 같아요');
   const on = { ...base, hCellStyle: 'rounded', hCellGround: 'white' };
-  assert.deepEqual(hPreviewOptions(on, { encoded: e }), plain, '스텁 허용표 = 잠금 → 키 없음');
+  assert.deepEqual(hPreviewOptions(on, { encoded: e, allow: STUB }), plain, '빈 허용표 = 잠금 → 키 없음');
   assert.deepEqual(hPreviewOptions(on, { allow }), plain, 'encoded 가 없으면 잴 문맥이 없어 잠가요');
   const opened = hPreviewOptions(on, { encoded: e, allow });
   assert.equal(opened.hCellStyle, 'rounded'); assert.equal(opened.hCellGround, 'white');

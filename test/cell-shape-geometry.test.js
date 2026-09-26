@@ -10,8 +10,9 @@
 //      꼭짓점 · gap/dot 만 noSeam · bevel 띠 클램프는 사다리의 «첫 합격 칸».
 //   ④ 등급: 술어표 · 모르는 role/타입 → T1 · T0 발자국 1셀 미만 → T1 · dot 셀 한정
 //      (O/A/K data·filler, Y data 만 — §3.2; 셀 정체 없으면 dot 안 그림).
-//   ⑤ 해석: 스텁 허용표(행 0)에서 square 가 아닌 모든 선택이 null + lockReason 이고,
-//      동결한 state 를 건드리지 않는다. fixture 표로 «행이 있어야만 열린다» 를 확인한다.
+//   ⑤ 해석: 빈 허용표(행 0 — 스텁 모양을 **주입**, 기본 모듈은 2026-09-27 부터 L6 생성본)에서 square 가 아닌
+//      모든 선택이 null + lockReason 이고, 동결한 state 를 건드리지 않는다. fixture 표로 «행이 있어야만 열린다» 를
+//      확인한다. 기본 모듈은 메타 일관성만 여기서 보고, 생성본의 성질은 cell-shape-allow-generated.test.js 가 잰다.
 //
 // 표본 기하는 한 모양만 쓰지 않는다 — O 면 3종(단위 · 픽셀 레이아웃) · Y 모듈 · 꼭짓점
 // 순서 뒤집기까지 격자로 돈다(교훈 «한 점은 계약이 아니다»).
@@ -44,7 +45,7 @@ import {
   resolveCellShapeSpec,
   faceGainColor,
 } from '../src/cell-shape.js';
-import * as STUB_ALLOW from '../src/cell-shape-allow.js';
+import * as DEFAULT_ALLOW from '../src/cell-shape-allow.js';
 import { applyFaceGain } from '../src/sceneY.js';
 import { facePolygon, FACES } from '../src/hexgrid.js';
 import { moduleQuad, YFACES } from '../src/ygrid.js';
@@ -679,6 +680,9 @@ function deepFreeze(o) {
   return o;
 }
 
+/** 명시적 빈 표 — «전부 잠금» 스텁 모양(행 0 · 영수증 없음). */
+const STUB = deepFreeze({ ROWS: [], RECEIPT_SHA256: null, MEASURED_AT: null, FINGERPRINT: null });
+
 const CTX_OAK = Object.freeze({
   type: 'O', version: 'V1', finderPatternId: 'pinwheel-c2-2-1100-cw', tones: 3, gapGrade: 'white',
   bgMode: 'white', paletteGrade: 'slate', qrPosition: 'none',
@@ -719,15 +723,19 @@ function allNonSquareChoices() {
 }
 
 describe('resolveCellShapeSpec', () => {
-  test('스텁 허용표는 «전부 잠금»: 빈 표 · 영수증 없음', () => {
-    assert.ok(Array.isArray(STUB_ALLOW.ROWS));
-    assert.equal(STUB_ALLOW.ROWS.length, 0);
-    assert.ok(Object.isFrozen(STUB_ALLOW.ROWS));
-    assert.equal(STUB_ALLOW.RECEIPT_SHA256, null);
-    assert.equal(STUB_ALLOW.MEASURED_AT, null);
+  test('기본 허용표 모듈: 동결된 행 배열 · 영수증 sha/측정 시각/지문은 셋이 함께 있거나 함께 없고, 행이 있으면 있다', () => {
+    assert.ok(Array.isArray(DEFAULT_ALLOW.ROWS));
+    assert.ok(Object.isFrozen(DEFAULT_ALLOW.ROWS));
+    const meta = [DEFAULT_ALLOW.RECEIPT_SHA256, DEFAULT_ALLOW.MEASURED_AT, DEFAULT_ALLOW.FINGERPRINT];
+    assert.ok(meta.every((v) => v === null) || meta.every((v) => v !== null && v !== undefined), '메타 셋이 섞였다');
+    if (DEFAULT_ALLOW.ROWS.length > 0) assert.notEqual(DEFAULT_ALLOW.RECEIPT_SHA256, null, '행이 있는데 영수증이 없다');
+    // 주입 스텁 = 빈 표 · 영수증 없음(아래 «전부 잠금» 자의 전제).
+    assert.equal(STUB.ROWS.length, 0);
+    assert.equal(STUB.RECEIPT_SHA256, null);
+    assert.equal(STUB.MEASURED_AT, null);
   });
 
-  test('스텁 표에서 모든 비 square 선택 × O·Y × 틈 등급 3 → null + lockReason, 동결 state 불변', () => {
+  test('빈 표(스텁 주입)에서 모든 비 square 선택 × O·Y × 틈 등급 3 → null + lockReason, 동결 state 불변', () => {
     const reasons = new Set(Object.values(CELL_SHAPE_LOCK_REASONS));
     let n = 0;
     let raised = 0;
@@ -737,7 +745,7 @@ describe('resolveCellShapeSpec', () => {
         for (const choice of allNonSquareChoices()) {
           const state = deepFreeze({ ...choice, cellRound: choice.cellRound ?? 0.7, other: { keep: [1, 2] } });
           const before = JSON.stringify(state);
-          const res = resolveCellShapeSpec(state, ctx); // 기본 = 스텁
+          const res = resolveCellShapeSpec(state, ctx, STUB); // 빈 표 주입(기본 모듈은 생성본)
           assert.equal(res.spec, null, `${choice.cellShape} 는 스텁에서 잠겨야 한다`);
           assert.ok(reasons.has(res.lockReason), `사유 ${res.lockReason}`);
           const exposed = EXPOSED_CELL_SHAPES.includes(choice.cellShape);

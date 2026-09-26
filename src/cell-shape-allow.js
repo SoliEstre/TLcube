@@ -1,32 +1,340 @@
-// 측정 영수증에서 생성되는 파일 — 손으로 고치지 않는다. 생성 명령은 L6 측정 레인이 이 줄에 적는다(DESIGN_001 §3.4).
+// 측정 영수증에서 생성되는 파일 — 손으로 고치지 않는다. 생성: node gen-allow.mjs --receipts tl-l6_l6-0d2e67b-202609262319.merged.summary.json,qr-O_l6-0d2e67b-202609262319.merged.summary.json,h-full_l6-0d2e67b-202609262319.merged.summary.json,qr-H_l6-0d2e67b-202609262319.merged.summary.json,tl-l6p_l6p-0d2e67b-202609270142.merged.summary.json --hardest corner (private 측정 도구 — DESIGN_001 §3.4)
 /**
- * cell-shape-allow.js — 셀 꾸미기 허용표 (DESIGN_001 §3.4)
+ * cell-shape-allow.js — 셀 꾸미기 허용표 (DESIGN_001 §3.4) — **생성본**.
  *
- * ⚠ **지금은 «전부 잠금» 스텁이다** (L2a, 2026-09-26). 행이 하나도 없으므로
- * `resolveCellShapeSpec` 은 square 가 아닌 모든 선택을 `spec:null + lockReason` 으로
- * 돌려준다. 측정 레인(L6)이 끝단 복호 영수증(§7.2)에서 통과 행만 모아 이 파일을
- * **다시 생성**한다 — 그때 `RECEIPT_SHA256`(영수증 sha256) · `MEASURED_AT`(ISO 시각) ·
- * `FINGERPRINT`(잰 대상 지문: HEAD · 생성기/스캐너 번들 sha · 디코더 소스 sha)가 함께 채워진다.
+ * 행 = 끝단 복호 영수증에서 «대조군이 통과한 격자점에서 처치도 통과 · 오독 0 · 최소 ppu 층까지 판별» 이고
+ * 음성 대조군이 검증한 계열에서만 잰 (표 키 조합 × 모양 × 파라미터). 행에 없는 조합은 잠긴다(미측정 = 잠금).
+ * 음성 (S) 판정 강도: dot0.3.
+ * 가장 어려운 점 규칙: corner(corner-rule-v2) — oak·y 행은 케이스의 (ppu 라벨 floor ∧ 5°) 점 중 대조군이 통과한 점 전부에서 처치가 통과했다(§7.5 · 비열등). 대조군이 그 모서리 점 전부에서 실패한 케이스는 모서리를 floor 에서 대조군이 통과하는 가장 큰 각도로 옮겨 잰다(아래 «모서리 이동»).
+ * 잰 모서리: (floor · 5°) — 마름모 행 238 · 모서리 증거 1110 · 모서리 점 1300 · ppuValue 7.5–12.
+ * 모서리 이동(corner-rule-v2 — 대조군이 (floor · 5°) 모서리 점 전부 실패 → floor 에서 대조군 pass 점이 있는 가장 큰 각도(5 → 1 → 0)로 옮겨 그 점 전부에서 처치 통과): 행 86 · 계열·문맥 58.
+ *   모서리 이동 o-3tone 5°→0°: o-3tone|gap=black
+ *   모서리 이동 o-bullseye 5°→1°: o-bullseye|gap=black, o-bullseye|gap=unknown@dark, o-bullseye|gap=unknown@light
+ *   모서리 이동 o-cellmask 5°→1°: o-cellmask|gap=unknown@light
+ *   모서리 이동 o-cube-bullseye 5°→1°: o-cube-bullseye|gap=black, o-cube-bullseye|gap=unknown@dark, o-cube-bullseye|gap=unknown@light
+ *   모서리 이동 o-daehan 5°→0°: o-daehan|gap=white
+ *   모서리 이동 o-pinwheel 5°→1°: o-pinwheel|gap=black, o-pinwheel|gap=unknown@dark, o-pinwheel|gap=unknown@light, o-pinwheel|gap=unknown|pal=custom0/sat0@dark, o-pinwheel|gap=unknown|pal=custom0/sat0@light, o-pinwheel|gap=unknown|pal=custom0/sat100@dark, o-pinwheel|gap=unknown|pal=custom0/sat100@light, o-pinwheel|gap=unknown|pal=custom0/sat200@dark, o-pinwheel|gap=unknown|pal=custom0/sat200@light, o-pinwheel|gap=unknown|pal=custom120/sat100@dark, o-pinwheel|gap=unknown|pal=custom120/sat100@light, o-pinwheel|gap=unknown|pal=custom120/sat200@dark, o-pinwheel|gap=unknown|pal=custom120/sat200@light, o-pinwheel|gap=unknown|pal=custom180/sat100@dark, o-pinwheel|gap=unknown|pal=custom180/sat100@light, o-pinwheel|gap=unknown|pal=custom180/sat200@dark, o-pinwheel|gap=unknown|pal=custom180/sat200@light, o-pinwheel|gap=unknown|pal=custom240/sat100@dark, o-pinwheel|gap=unknown|pal=custom240/sat100@light, o-pinwheel|gap=unknown|pal=custom240/sat200@dark, o-pinwheel|gap=unknown|pal=custom240/sat200@light, o-pinwheel|gap=unknown|pal=custom300/sat100@dark, o-pinwheel|gap=unknown|pal=custom300/sat100@light, o-pinwheel|gap=unknown|pal=custom300/sat200@dark, o-pinwheel|gap=unknown|pal=custom300/sat200@light, o-pinwheel|gap=unknown|pal=custom60/sat100@dark, o-pinwheel|gap=unknown|pal=custom60/sat100@light, o-pinwheel|gap=unknown|pal=custom60/sat200@dark, o-pinwheel|gap=unknown|pal=custom60/sat200@light, o-pinwheel|gap=unknown|pal=ember@dark, o-pinwheel|gap=unknown|pal=ember@light, o-pinwheel|gap=unknown|pal=mono@dark, o-pinwheel|gap=unknown|pal=mono@light, o-pinwheel|gap=white, o-pinwheel|gap=white|pal=custom0/sat0, o-pinwheel|gap=white|pal=custom0/sat100, o-pinwheel|gap=white|pal=custom0/sat200, o-pinwheel|gap=white|pal=custom120/sat100, o-pinwheel|gap=white|pal=custom120/sat200, o-pinwheel|gap=white|pal=custom180/sat100, o-pinwheel|gap=white|pal=custom180/sat200, o-pinwheel|gap=white|pal=custom240/sat100, o-pinwheel|gap=white|pal=custom240/sat200, o-pinwheel|gap=white|pal=custom300/sat100, o-pinwheel|gap=white|pal=custom300/sat200, o-pinwheel|gap=white|pal=custom60/sat100, o-pinwheel|gap=white|pal=custom60/sat200, o-pinwheel|gap=white|pal=ember, o-pinwheel|gap=white|pal=mono
+ * 음성 범위(r0-scope-v2): s-passed → 그 허용 문맥만 무효(context-invalid) · s-undiscriminating/s-not-applicable → 그 허용 문맥만 제외 · 계열에 s-ok 문맥 0 → 계열 전체 미검증 · 음성 항목 없는 문맥은 계열에 s-passed 문맥이 있으면 닫힘.
+ * 음성 통과 문맥(제외 — r0-scope-v2 · s-passed = 그 문맥만): 계열 6 · 문맥 51.
+ *   a-n7[context-partial] tl-l6_l6-0d2e67b-202609262319.merged.summary.json: a-n7|gap=black, a-n7|gap=unknown
+ *   k-n7[context-partial] tl-l6_l6-0d2e67b-202609262319.merged.summary.json: k-n7|gap=black, k-n7|gap=unknown
+ *   o-n7[context-partial] tl-l6_l6-0d2e67b-202609262319.merged.summary.json: o-n7|gap=black, o-n7|gap=unknown
+ *   a-n7[context-partial] tl-l6p_l6p-0d2e67b-202609270142.merged.summary.json: a-n7|gap=unknown|pal=custom0/sat0 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom0/sat100 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom0/sat200 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom120/sat100 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom120/sat200 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom180/sat100 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom180/sat200 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom240/sat100 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom240/sat200 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom300/sat100 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom300/sat200 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom60/sat100 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=custom60/sat200 ← a-n7|gap=unknown, a-n7|gap=unknown|pal=ember ← a-n7|gap=unknown, a-n7|gap=unknown|pal=mono ← a-n7|gap=unknown
+ *   k-n7[context-partial] tl-l6p_l6p-0d2e67b-202609270142.merged.summary.json: k-n7|gap=unknown|pal=custom0/sat0 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom0/sat100 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom0/sat200 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom120/sat100 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom120/sat200 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom180/sat100 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom180/sat200 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom240/sat100 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom240/sat200 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom300/sat100 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom300/sat200 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom60/sat100 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=custom60/sat200 ← k-n7|gap=unknown, k-n7|gap=unknown|pal=ember ← k-n7|gap=unknown, k-n7|gap=unknown|pal=mono ← k-n7|gap=unknown
+ *   o-n7[context-partial] tl-l6p_l6p-0d2e67b-202609270142.merged.summary.json: o-n7|gap=unknown|pal=custom0/sat0 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom0/sat100 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom0/sat200 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom120/sat100 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom120/sat200 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom180/sat100 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom180/sat200 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom240/sat100 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom240/sat200 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom300/sat100 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom300/sat200 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom60/sat100 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=custom60/sat200 ← o-n7|gap=unknown, o-n7|gap=unknown|pal=ember ← o-n7|gap=unknown, o-n7|gap=unknown|pal=mono ← o-n7|gap=unknown
+ * 음성 차용(L6b): tl-l6p_l6p-0d2e67b-202609270142.merged.summary.json 의 계열 · 문맥 150 은 음성을 공여자 tl-l6_l6-0d2e67b-202609262319.merged.summary.json(grid l6) 에서 받았다(같은 트리 지문 · s-passed → contextOf 로 대응하는 문맥 행 0 · 문맥 판별 불가 → 그 문맥 행 0 · 계열에 s-ok 문맥 0 → 계열 행 0).
+ * 사다리 상속(L6b): tl-l6p_l6p-0d2e67b-202609270142.merged.summary.json 는 점 {floor@0°, floor@1°, floor@5°} 만 잰다 — 그 증거의 행은 slate 형제 행이 공여자 tl-l6_l6-0d2e67b-202609262319.merged.summary.json 에서 통과했을 때만 열렸다(후보 125 중 125 · slate-sibling-unproven 0). 못 지키는 축: 팔레트만 사다리 중간(floor+2 · 16 ppu · 1°)에서 실패하고 slate 는 통과하는 경우 — 팔레트 행의 사다리는 안 잰다(상속).
+ * 틈 등급 unknown 행: 합성 표면 dark · light 둘 다에서 따로 통과했다(§7.2). y 행 seamAdjacent = keep(제품 문맥 값)만.
+ * qr 행: 설계 §7.4 — 후보(host × 스타일 × 색 모드 × 눈)의 조각(색 변형 × 회전·흐림·잡음·이진화)마다 «100% 판독 최소 px/모듈» 을 구해, 대조군이 판별되는 모든 조각에서 대조군 + 0.3 이내 · 오독 0(판별 불가 조각은 빼고 · 점별 비열등은 판정 밖).
+ * 문맥 유도 · 구조 잠금 출처: product.
+ * custom 색 표본(R5 · RQc — F2): wheel6 hue {0,60,120,180,240,300} × sat {0,100,200} → 제품 색 클래스 팔레트 13 · QR body 13 · 눈 13. custom 팔레트 · QR 색 행 = 클래스 전부 통과(표본 사이 hue 는 보간 — 못 잰 축).
+ * 색 표본 명세 출처: 기본 wheel6(트리 유도 — HUE_SET_DEFAULT).
+ * 하한 ppu 출처(RF · RHf — F2): h-decode:product · tl-decode:product — 'floor' 라벨 = 제품 export-options minRoundtripPpu. h 행은 제품 H 하한 점 판별 필수. 못 지키는 축: floorPpu 는 하네스 자기 신고 — gen-allow 는 제품 minRoundtripPpu 를 케이스 문맥(type · version · cellSurfaceLayout · n · ditherBits)에서 재계산하지 않는다(덮는 곳: 하네스 코드 검토 + J0.7 하네스 sha 동결).
+ * qr 판별 조각(호스트 H — 조각 = 색 변형 케이스 × sliceId, 고유 sliceId 48): 전체 2828/4848(판별 불가 1818 · 비단조 202) — rot 0:808/1212 1:606/1212 12:606/1212 45:808/1212 · blur 0:1414/1616 0.3:1414/1616 0.5:0/1616 · persp 0:2828/4848 20:0/0 35:0/0 · noise 0:1414/2424 3:1414/2424 · binarizer hybrid:1414/2424 global:1414/2424.
+ * qr 못 잰 축(호스트 H): blur 0.5(판별 0/1616) · persp 20(격자에 없음) · persp 35(격자에 없음).
+ * qr 판별 조각(호스트 O — 조각 = 색 변형 케이스 × sliceId, 고유 sliceId 48): 전체 2828/4848(판별 불가 1818 · 비단조 202) — rot 0:808/1212 1:606/1212 12:606/1212 45:808/1212 · blur 0:1414/1616 0.3:1414/1616 0.5:0/1616 · persp 0:2828/4848 20:0/0 35:0/0 · noise 0:1414/2424 3:1414/2424 · binarizer hybrid:1414/2424 global:1414/2424.
+ * qr 못 잰 축(호스트 O): blur 0.5(판별 0/1616) · persp 20(격자에 없음) · persp 35(격자에 없음).
+ * 행 272개 (oak 188 · y 50 · h 34 · qr 0). 정렬: 표 순서 → 표 키 순서대로 값(null < boolean < number < string).
  *
- * 행 모양(키 목록의 정본은 `src/cell-shape.js` 의 `CELL_SHAPE_ALLOW_KEYS`):
- *   O/A/K(+C/G/V): { table:'oak', type, version, finderPatternId, tones, gapGrade, bgMode,
- *                    paletteGrade, qrPosition, cellShape, param }
- *   Y:             { table:'y', cellSurfaceLayout, locatorProfile, nBand, tones, gapGrade,
- *                    bgMode, paletteGrade, seamAdjacent, cellShape, param }
+ * 행 모양(키 목록의 정본은 코드 — 생성기가 여기서 읽었다):
+ *   oak: { table, type, version, finderPatternId, tones, gapGrade, bgMode, paletteGrade, qrPosition, cellShape, param }
+ *   y: { table, cellSurfaceLayout, locatorProfile, nBand, tones, gapGrade, bgMode, paletteGrade, seamAdjacent, cellShape, param }
+ *   h: { table, version, finder, tones, ground, paletteGrade, hCellStyle }
+ *   qr: { table, host, qrCellStyle, qrColorMode, eyeMode }
  * 행에 키가 하나라도 빠지면 그 행은 아무것도 허가하지 않는다(와일드카드 없음 — fail-closed).
  *
- * 이 파일은 의존이 없다 — public 테스트는 표 내부 일관성과 지문 존재만 잴 수 있고,
- * 측정 사실 자체는 private 영수증에 있다(§7.6).
+ * 입력 영수증(요약 sha256 / 행 sha256):
+ *   tl-l6_l6-0d2e67b-202609262319.merged.summary.json — tl-decode configId 836c165c76 · 샤드 20 · 행 6824 · 0f020b330125837b0a80fc72ead16f2908d7c28ab86f99f217e54f7b8f10cda0 / cdc4606af38efe0fc2b49188f7f2a55e9a9c9e322efc0fdaf1ea98bee1505141
+ *   qr-O_l6-0d2e67b-202609262319.merged.summary.json — qr-zxing configId 19a3e3ec24 · 샤드 48 · 행 5236062 · 68c3afa88bfeefec8c076016627941e6d6debe2bf654c5dbcdaf26af59b7a1b4 / feea8f9500995d92c5595604bbd88a7d3058f125a459ddeec5e8709e7753d7cc
+ *   h-full_l6-0d2e67b-202609262319.merged.summary.json — h-decode configId 5891458218 · 샤드 20 · 행 39176 · 6c31cb3dc14a556e58d8b252303f4f7ea77668f699d61341e7ab58e1dcdbfa29 / 8077449562d1b4933b9770aa3576eef3ddd71abff1542cb2cb211ec1ca96ae82
+ *   qr-H_l6-0d2e67b-202609262319.merged.summary.json — qr-zxing configId 388f356b95 · 샤드 48 · 행 5236062 · 71af046d351b82254485adbe8c3d1b5c0f4070fc804e86cfead53285178a2988 / baf1ae94556fa2b8e085c7a086b5696c60679a7d5f2a7708aa7c109aa4b62c8e
+ *   tl-l6p_l6p-0d2e67b-202609270142.merged.summary.json — tl-decode configId e74b1599d4 · 샤드 20 · 행 6345 · bafc9983447edd3a7a8de5ea9b370ba8e7b48d728d9a70d7390721af89eb5515 / b6fad7d14ce37f4eda0fc40c6fb82efc6b7ccf2de0bdd6e87d7c118cba64f2f4
+ * 잰 대상 지문: HEAD 0d2e67b7269c574968e98e458cd74a668f2ea497 · src 8911aef833d8378e1c1c4962456e5cd2452017b027fca18acad5892151fd8f15 · decoder 3c5764b66f2666a12bd8b3e84212641521a165f6420ee1c3e5467f452518c875 · dist 4aefaf86868201c36782d03d08e930a9de07df0541ed4d37d022eeb9dec0aeef
+ *
+ * 측정 사실은 private 영수증에 있다 — public 테스트는 표 내부 일관성과 지문 존재만 잴 수 있다(§7.6).
  */
 
-/** 허용 행. 스텁은 빈 표 = 전부 잠금. */
-export const ROWS = Object.freeze([]);
+/** 허용 행. */
+export const ROWS = Object.freeze([
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"A","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"K","version":0,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-cube-3tone","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-cube-3tone","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-cube-3tone","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-cube-3tone","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-cube-3tone","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-cube-3tone","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-n7-payload","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-v0","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-v0","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-v0","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-v0","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"central-v0","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"cube-bullseye","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"gap-ring-01-2-1-solid","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"custom","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"ember","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"mono","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":2,"finderPatternId":"pinwheel-c2-2-1100-cw","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round","param":1}),
+  Object.freeze({"table":"oak","type":"O","version":3,"finderPatternId":"oak-daehan-k10","tones":3,"gapGrade":"white","bgMode":"transparent","paletteGrade":"slate","qrPosition":"TL","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"black","bgMode":"black","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"round","param":1}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"round","param":1}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"round","param":1}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"round","param":1}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"unknown","bgMode":"transparent","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"round","param":1}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"custom","seamAdjacent":"keep","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"round","param":1}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"ember","seamAdjacent":"keep","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"round","param":1}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"mono","seamAdjacent":"keep","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"bevel","param":0.6}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"dot","param":0.8}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"gap","param":0.08}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"round","param":0.7}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"round","param":1}),
+  Object.freeze({"table":"y","cellSurfaceLayout":"v0","locatorProfile":"cell-surface-v0","nBand":"13","tones":3,"gapGrade":"white","bgMode":"white","paletteGrade":"slate","seamAdjacent":"keep","cellShape":"round-bevel","param":null}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"classy"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"dots"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"extra-rounded"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"inset"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"liquid"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"rounded"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"classy"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"dots"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"liquid"}),
+  Object.freeze({"table":"h","version":0,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"rounded"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"classy"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"dots"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"extra-rounded"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"inset"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"liquid"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"rounded"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"classy"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"dots"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"liquid"}),
+  Object.freeze({"table":"h","version":2,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"rounded"}),
+  Object.freeze({"table":"h","version":5,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"classy"}),
+  Object.freeze({"table":"h","version":5,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"dots"}),
+  Object.freeze({"table":"h","version":5,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"liquid"}),
+  Object.freeze({"table":"h","version":5,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"rounded"}),
+  Object.freeze({"table":"h","version":5,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"liquid"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"classy"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"dots"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"inset"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"liquid"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"level5","paletteGrade":"slate","hCellStyle":"rounded"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"classy"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"dots"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"liquid"}),
+  Object.freeze({"table":"h","version":8,"finder":"frame","tones":3,"ground":"white","paletteGrade":"slate","hCellStyle":"rounded"}),
+]);
 
-/** 이 표를 만든 측정 영수증의 sha256. 스텁은 영수증이 없어 null. */
-export const RECEIPT_SHA256 = null;
+/** 이 표를 만든 측정 영수증의 sha256(영수증마다 «요약sha 행sha» 줄을 요약 sha 순으로 이은 것의 sha256). */
+export const RECEIPT_SHA256 = "d4bd39162483d1040244f15e2142a3c41048fc22353f5475eb1b95a69e332165";
 
-/** 측정 시각(ISO 8601). 스텁은 측정 전이라 null. */
-export const MEASURED_AT = null;
+/** 측정 시각(ISO 8601) — 영수증 지문 takenAt 의 최댓값. */
+export const MEASURED_AT = "2026-09-26T21:37:59.475Z";
 
-/** 잰 대상 지문 {head, generatorBundleSha256, scannerBundleSha256, decoderSourceSha256}. 스텁은 null. */
-export const FINGERPRINT = null;
+/** 잰 대상 지문 {head, generatorBundleSha256, scannerBundleSha256, decoderSourceSha256}. */
+export const FINGERPRINT = Object.freeze({"head":"0d2e67b7269c574968e98e458cd74a668f2ea497","generatorBundleSha256":"77c0eea4ddb185832331a91d5f4f5fd754eb5ea68879856ff1445a73fbc28fe2","scannerBundleSha256":"1f1ba72b5f8ae8783c32a9071396c7bab9404827a4c45c2d32492cbf545134c5","decoderSourceSha256":"3c5764b66f2666a12bd8b3e84212641521a165f6420ee1c3e5467f452518c875"});
