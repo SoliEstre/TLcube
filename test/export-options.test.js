@@ -21,7 +21,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
-import { createGeneratorState } from '../src/generator-state.js';
+import {
+  GENERATOR_STATE_SCHEMA, GENERATOR_TYPES, createGeneratorState, versionStateKey,
+} from '../src/generator-state.js';
 import {
   AUTO_SIZE_MULTIPLIERS,
   DEFAULT_EXPORT_MARGIN,
@@ -33,6 +35,7 @@ import {
   EXPORT_MIN_COMFORT_PRINT_MM,
   EXPORT_PPI_DETAIL_CHOICES,
   EXPORT_SIZE_CHOICES,
+  EXPORT_TRIM_CORNER_QR_MARGIN,
   EXPORT_TRIM_MARGINS,
   MIN_ROUNDTRIP_PPU,
   PRINT_PPI_TIERS,
@@ -58,6 +61,7 @@ import { rasterToPng } from '../src/png.js';
 import { sceneToSvg } from '../src/svg.js';
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
+import { encodeK } from '../src/encodeK.js';
 import { encodeY } from '../src/encodeY.js';
 import { buildScene } from '../src/scene.js';
 import { buildSceneY } from '../src/sceneY.js';
@@ -347,6 +351,11 @@ test('여백 없음 = 타입(·A 버전)별 최소 안전 margin — 0 이 아�
   assert.deepEqual({ O: EXPORT_TRIM_MARGINS.O, Y: EXPORT_TRIM_MARGINS.Y }, { O: 2, Y: 1 });
   // A 는 버전 의존 — 일률 10 은 A1/A2 를 렌더 불능으로 만들었다 (감사 F 수리, §9).
   assert.deepEqual({ ...EXPORT_TRIM_MARGINS.A }, { 0: 10, 1: 13, 2: 17 });
+  // K 도 버전 의존 — 빌드최소 {9, 12, 15}(A 와 같은 캔버스) + 1 (2026-09-26 실측).
+  assert.deepEqual({ ...EXPORT_TRIM_MARGINS.K }, { 0: 10, 1: 13, 2: 16 });
+  assert.equal(trimExportMargin('K', { version: 2 }), 16);
+  assert.equal(trimExportMargin('K', { version: 0, cornerQr: true }), 20);
+  assert.throws(() => trimExportMargin('K'), RangeError, 'K 는 버전 없이 못 푼다');
   assert.equal(trimExportMargin('Y'), 1);
   assert.equal(trimExportMargin('A', { version: 2 }), 17);
   // 코너 QR 구성은 QR 블록(기능 요소)이 여백에 살아 20 미만으로 못 깎는다 (§9 실측 —
@@ -355,6 +364,29 @@ test('여백 없음 = 타입(·A 버전)별 최소 안전 margin — 0 이 아�
   assert.equal(trimExportMargin('A', { version: 0, cornerQr: true }), 20);
   assert.throws(() => trimExportMargin('Q'), RangeError);
   assert.throws(() => trimExportMargin('A'), RangeError, 'A 는 버전 없이 못 푼다');
+});
+
+// 표가 타입 목록을 **따라가는가** — 값이 아니라 덮음을 잰다. 2026-09-26 까지 표는 O·A·Y 만
+// 알았고, K 를 GENERATOR_TYPES 에 붙인 뒤로 K «여백 없음» PNG/SVG 는 `알 수 없는 생성기
+// 타입: K` 로 죽었다(/lab/ 클릭 경로 재현). 위 테스트는 표에 **있는** 키만 쟀으므로 빠진
+// 키를 볼 수 없었다. 타입·버전 목록은 손으로 적지 않고 상태 스키마에서 유도한다 — 다음
+// 타입이 붙는 날 이 자가 먼저 빨개진다.
+test('여백 없음 표는 GENERATOR_TYPES 전 타입(H 제외) × 고를 수 있는 전 버전을 덮는다 (K 누락 회귀)', () => {
+  // H 는 «여백 없음» 이 없다 — exportPlanFor 가 H 를 건너뛰고 체크박스를 숨긴다.
+  const types = GENERATOR_TYPES.filter((type) => type !== 'H');
+  assert.ok(types.length > 0, '타입 유도가 비었다');
+  for (const type of types) {
+    assert.ok(Object.prototype.hasOwnProperty.call(EXPORT_TRIM_MARGINS, type),
+      type + ' 의 trim margin 이 없다 — «여백 없음» 내보내기가 RangeError 로 죽는다');
+    const versions = GENERATOR_STATE_SCHEMA[versionStateKey(type)].options.filter(Number.isInteger);
+    assert.ok(versions.length > 0, type + ' 의 버전 유도가 비었다');
+    for (const version of versions) {
+      const bare = trimExportMargin(type, { version });
+      assert.ok(Number.isInteger(bare) && bare >= 1, `${type}${version}: ${bare}`);
+      assert.equal(trimExportMargin(type, { version, cornerQr: true }),
+        Math.max(bare, EXPORT_TRIM_CORNER_QR_MARGIN), `${type}${version} 코너 QR 클램프`);
+    }
+  }
 });
 
 // ── 4. 픽셀 층 ────────────────────────────────────────────────────────────────
@@ -556,6 +588,30 @@ test('A2 여백없음은 어두운 배경 합성에서도 산다 — margin 17 �
   const result = decodeFrontend(compositeOn(exportRasterOf(trimmed.scene, 'A', encoded), 64));
   assert.equal(result.ok, true, 'A2 trim 이 어두운 배경 합성에서 죽었다: ' + JSON.stringify(result.reason));
   assert.equal(result.text, text);
+});
+
+test('K 전 버전 × 중앙/코너QR × 여백없음 — 빌드 성공 + 직접 복호 (K 누락 회귀, 2026-09-26)', {
+  timeout: 300_000,
+}, () => {
+  const text = 'https://tl.estre.so';
+  // K 의 scene 옵션은 index.html renderTypeK 가 손으로 조립한다 (sceneOptionsForOA 는 O/A
+  // 전용 계약이라 K 를 던진다) — 여기서도 그 모양 그대로다.
+  for (const version of GENERATOR_STATE_SCHEMA.versionK.options.filter(Number.isInteger)) {
+    for (const fallback of [{ mode: 'center' }, { mode: 'corner', corner: 'TL' }]) {
+      const encoded = encodeK(text, { version, eccLevel: 'M', centerQr: fallback.mode === 'center' });
+      const sceneOpts = { palette: oaPalette(WHITE_BG), finderPatternId: 'bullseye', qrText: TL_READER_URL };
+      if (fallback.mode === 'center') Object.assign(sceneOpts, { centerQr: true, cornerToo: false });
+      else sceneOpts.qrCorner = fallback.corner;
+      const cornerQr = sceneOpts.qrCorner !== undefined;
+      const where = `K${version} ${cornerQr ? '코너' : '중앙'}QR`;
+      const start = trimExportMargin('K', { version: encoded.version, cornerQr });
+      const trimmed = buildTrimmedScene(buildScene, encoded, sceneOpts, start);
+      assert.equal(trimmed.margin, start, where + ': 시작 margin 에서 빌드가 안 섰다 — 실측 표가 낡았다');
+      const result = decodeFrontend(exportRasterOf(trimmed.scene, 'K', encoded));
+      assert.equal(result.ok, true, where + ': ' + JSON.stringify(result.reason));
+      assert.equal(result.text, text, where);
+    }
+  }
 });
 
 test('Y 기본 구성(코너 QR) + 여백없음 — QR 이 기능 요소라 margin 20 에서 성립·복호된다', {

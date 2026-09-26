@@ -88,7 +88,7 @@ export const DEFAULT_EXPORT_MARGIN = EXPORT_MARGIN_INCLUDE;
  * «여백 없음» 의 정의 — **quiet zone 은 유지하고 장식 여백만 제거한다** (§2.4 실측 β안).
  * margin 0 은 실제로 복호를 죽인다: O V2 는 체커 배경·ppu10 에서 margin ≤ 1 이 3/3
  * 전멸(no-anchors)했고, Y 도 파일 단독 복호에서 2건 실패했다. 그래서 «없음» 은 0 이
- * 아니라 **타입(·A 는 버전)별 최소 안전 margin** 으로 클램프한다 (cellSize 단위):
+ * 아니라 **타입(·A·K 는 버전)별 최소 안전 margin** 으로 클램프한다 (cellSize 단위):
  *   · Y 1 — margin 1 은 어두운/체커 배경 포함 전 조건 36/36 통과
  *   · O 2 — 1 이하에서 no-anchors 산발 (기전은 quiet zone 폭이 아니라 앵커 검출 간섭).
  *           기본 margin 도 2 라 O 의 trim 은 사실상 무동작이다 — 장식 여백이 애초에 없다.
@@ -98,11 +98,22 @@ export const DEFAULT_EXPORT_MARGIN = EXPORT_MARGIN_INCLUDE;
  *     빌드최소+1(16)이 어두운 배경 합성에서 죽어(auto-fit 실측) **+2 = 17** 이
  *     안전선이다. 일률 10 은 A1/A2 «여백 없음» 을 렌더 불능으로 만들었다 (사용자
  *     도달 가능 결함이었다).
+ *   · K {V0: 10, V1: 13, V2: 16} — **버전 의존이다** (2026-09-26 실측 — 그전엔 표에 K 가
+ *     없어 K «여백 없음» PNG/SVG 가 `알 수 없는 생성기 타입: K` 로 죽었다). K = A ∪ 반전A
+ *     라 캔버스·빌드최소가 A 와 같다 ({9, 12, 15}). A 와 같은 규칙(빌드최소+1)을 쓰고,
+ *     K 는 +1 에서 직접·어두움·체커 합성과 투명+링이 전부 통과한다 — A2 의 +2 는 K2 에
+ *     필요 없었다. «중앙 QR + 코너 QR 병행» 은 이 값에서 빌드가 안 서 buildTrimmedScene
+ *     이 빌드최소(17)까지 올린다 (코너 QR 문맥이 qrCorner 로만 잡혀서다 — O·A 와 같은 경로).
+ *     ⚠ 이 표가 못 지키는 축: 병행(K0·K2)과 K2 CM + 중앙 QR 은 auto-fit 크기에서 **margin
+ *     과 무관하게** 복호가 죽는다 (기본 20 포함 전 margin 실패 · auto-high 는 통과) —
+ *     trim 결함이 아니라 K 의 자동 크기 하한(MIN_ROUNDTRIP_PPU 에 K 행 없음 → 폴백 12)
+ *     쪽 문제로 보인다(가설, 미확인). 실측: private `.agent/lanes/k-trim-margin-20260926/`.
  */
 export const EXPORT_TRIM_MARGINS = Object.freeze({
   O: 2,
   A: Object.freeze({ 0: 10, 1: 13, 2: 17 }),
   Y: 1,
+  K: Object.freeze({ 0: 10, 1: 13, 2: 16 }),
 });
 
 /**
@@ -114,8 +125,8 @@ export const EXPORT_TRIM_CORNER_QR_MARGIN = 20;
 
 /**
  * «여백 없음» 내보내기가 scene 재생성에 쓸 margin (cellSize 1 기준).
- * @param {'O'|'A'|'Y'} type
- * @param {{version?: number, cornerQr?: boolean}} [ctx] A 는 version 필수 (버전 의존 —
+ * @param {'O'|'A'|'Y'|'K'} type
+ * @param {{version?: number, cornerQr?: boolean}} [ctx] A·K 는 version 필수 (버전 의존 —
  *   위 표), cornerQr 이 true 면 코너 QR 하한(20)으로 클램프한다.
  */
 export function trimExportMargin(type, ctx = {}) {
@@ -123,11 +134,13 @@ export function trimExportMargin(type, ctx = {}) {
     throw new RangeError('알 수 없는 생성기 타입: ' + type);
   }
   let base = EXPORT_TRIM_MARGINS[type];
-  if (type === 'A') {
-    if (!Object.prototype.hasOwnProperty.call(EXPORT_TRIM_MARGINS.A, ctx.version)) {
-      throw new RangeError('A 의 trim margin 은 버전 의존이다 — 알 수 없는 버전: ' + ctx.version);
+  // 버전 의존 여부는 표의 모양(버전 → margin 객체)이 정한다 — 타입 이름을 여기 다시
+  // 적으면 표와 이 분기가 두 벌이 된다.
+  if (typeof base === 'object') {
+    if (!Object.prototype.hasOwnProperty.call(base, ctx.version)) {
+      throw new RangeError(type + ' 의 trim margin 은 버전 의존이다 — 알 수 없는 버전: ' + ctx.version);
     }
-    base = EXPORT_TRIM_MARGINS.A[ctx.version];
+    base = base[ctx.version];
   }
   return ctx.cornerQr === true ? Math.max(base, EXPORT_TRIM_CORNER_QR_MARGIN) : base;
 }
