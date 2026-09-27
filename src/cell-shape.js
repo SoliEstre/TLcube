@@ -21,8 +21,11 @@
  *      행이 있어도 잠긴다(`cellShapeStructuralLock` · `CELL_SHAPE_STRUCTURAL_LOCK_REASONS`).
  *      **측정 구성 불일치**(2026-09-27)도 구조 잠금이다 — 표 행은 표 키 밖 축(코너 마커 · 사괘 · ECC · 실효 검출 강조)의
  *      한 값(`CELL_SHAPE_MEASURED_CONFIG`)에서만 잰 사실이라, 렌더 구성이 그와 다르면 표 키가 같아도 잠근다.
- *      사유는 반사실로 고른다 — 측정 구성으로 바꾸면 표 행이 열릴 때만 «자리 · ECC · 강조 탓»(seat-config · ecc-level ·
- *      detector-emphasis), 아니면 설계 잠금 · 미확인 사유 그대로다(잠금 여부는 같고 사유만 참이게 — 2026-09-27 검토).
+ *      사유는 반사실로 고른다 — **같은 표 키(같은 버전 · 파인더 · 틈 …)에서** 측정 구성 키만 바꾸면 표 행이 열릴 때만
+ *      «자리 · ECC · 강조 탓»(seat-config · ecc-level · detector-emphasis), 아니면 설계 잠금 · 미확인 사유 그대로다(잠금 여부는
+ *      같고 사유만 참이게 — 2026-09-27 검토). ⚠ 제품의 자동 버전은 구성을 바꾸면 재인코딩으로 버전(표 키)이 바뀔 수 있다 —
+ *      그때 «되돌리면 열린다» 는 보장되지 않는다(사유 문구 g1209 · g1210 · g1211 «이 구성으로는 판독이 확인되지 않음» 은
+ *      그때도 참이다 — 2026-09-27 검토 minor, 짧은 페이로드의 G + 사괘 · G ECC M 에서 실측).
  *   ⑤ 문맥 — `cellShapeCtx(type, encoded, state, render)`: 제품이 resolver 에 넘길 문맥을
  *      **한 벌만** 유도한다(통합자 결정 1 — 하네스도 이 함수를 import 한다, H 의
  *      `generator-h.hCellStyleCtx` 가 선례). `cellShapeAllowCtx(ctx)` 는 그 문맥을 허용표 행
@@ -779,8 +782,9 @@ export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
   BULLSEYE_DOT: 'bullseye-dot', // §3.1 표 — 불스아이 계열(불스아이 · cube-bullseye)은 dot 전면 금지
   BEVEL_RAISED: 'bevel-raised', // §3.1 safety M13 — 돌출 bevel(게인 > 1, 1.4)은 바닥 띠를 흰 판 쪽으로 넓힌다
   // ── 측정 구성 불일치(2026-09-27 — 표 행은 `CELL_SHAPE_MEASURED_CONFIG` 에서만 잰 사실이다) ──
-  //   잠금 자체는 행 유무와 무관(측정 구성과 다르면 늘 잠근다). **사유**로는 반사실일 때만 낸다 — 측정 구성으로 바꾸면
-  //   표 행이 열리는 경우(그 축이 실제로 가른다). 행이 없거나 설계 잠금이면 그 사유(unmeasured · bevel-raised …)가 나간다.
+  //   잠금 자체는 행 유무와 무관(측정 구성과 다르면 늘 잠근다). **사유**로는 반사실일 때만 낸다 — 같은 표 키에서 측정
+  //   구성으로 바꾸면 표 행이 열리는 경우(그 축이 실제로 가른다). 행이 없거나 설계 잠금이면 그 사유(unmeasured ·
+  //   bevel-raised …)가 나간다. 아래 «측정 구성이면 열린다» 는 모두 표 키(버전 포함) 고정 반사실이다(머리말 ④).
   SEAT_CONFIG: 'seat-config', // 자리(코너 마커 · 사괘) 구성이 그 타입의 측정 구성과 다르고, 측정 구성이면 열린다
   ECC_LEVEL: 'ecc-level', // 인코딩 ECC 레벨이 측정 구성과 다르고, 측정 구성이면 열린다(같은 기하라도 정정 여유가 다르다)
   // 실효 검출 강조가 측정 구성과 다르고(측정 값이 «같은 그림 집합» 에 없다), 측정 구성이면 열린다(같은 기하라도 채움색이 다르다).
@@ -847,7 +851,9 @@ function allowTableOf(type) {
  * 측정 구성 불일치 — 문맥의 측정 구성 키가 그 타입의 측정 구성(`CELL_SHAPE_MEASURED_CONFIG`)과 다르면 사유 id.
  * 축 순서(`CELL_SHAPE_MEASURED_CONFIG_AXES`): 자리(코너 마커 · 사괘) → ECC → 실효 검출 강조. 강조는 «측정 값이 문맥의 같은
  * 그림 집합에 드는가» 로 비교한다(`measuredValueMatches` — 해당 없음이면 늘 같다). 선언이 없는 타입(V · C)은 판정하지
- * 않는다(행이 0 이라 unmeasured). 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로
+ * 않는다(행이 0 이라 unmeasured). ⚠ 이 갈래는 fail-open 이다 — 선언 없는 타입에 행이 생기면 자리 · ECC · 강조와 무관하게
+ * 열린다. 런타임 가드는 없고 테스트(cell-shape-measured-config ⓒ «행이 있는 타입마다 선언» · cell-shape-allow-generated)만
+ * 막는다(런타임 fail-closed 여부는 결정 대기 — 2026-09-27 검토). 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로
  * 잠근다(다른 구조 잠금 줄과 같은 결: 증거가 있을 때만 사유를 낸다).
  */
 function measuredConfigLock(table, ctx) {
@@ -909,9 +915,11 @@ export function cellShapeStructuralLock(table, kind, param, ctx) {
  * - square(키 없음 포함) → `{spec:null}` (잠금 사유 없음 — 기본값이다).
  * - 판정 순서: 모양 · 강도 도메인 → 표(타입) → 문맥 완전성(표 키 + 설계 잠금 키) → **설계 잠금**(표와 무관 · 영구) →
  *   문맥 완전성(측정 구성 키) → 허용표 행 × **측정 구성 불일치**(표와 무관하게 잠근다). 행은 문맥 · 모양 · 파라미터가
- *   **모두** 같아야 연다. round-bevel 의 param 은 null(고정 조합).
- * - 사유는 참이어야 한다(반사실): seat-config · ecc-level · detector-emphasis 는 «측정 구성으로 바꾸면 이 행이 열린다» 일 때만,
- *   exposed-gap 은 «틈만 흰색으로 바꾸면 열린다»(측정 구성 일치 ∧ 흰 틈 형제 행) 일 때만. 그 밖은 unmeasured.
+ *   **모두** 같아야 연다(type 키 포함 — 다른 타입 행은 같은 비-type 문맥이어도 이 문맥을 열지 않는다). round-bevel 의
+ *   param 은 null(고정 조합).
+ * - 사유는 참이어야 한다(반사실): seat-config · ecc-level · detector-emphasis 는 «같은 표 키에서 측정 구성 키만 바꾸면 이 행이
+ *   열린다» 일 때만, exposed-gap 은 «틈만 흰색으로 바꾸면 열린다»(측정 구성 일치 ∧ 흰 틈 형제 행) 일 때만. 그 밖은 unmeasured.
+ *   반사실은 표 키를 고정한다 — 제품 자동 버전에서 구성을 바꾸면 재인코딩으로 버전이 바뀌어 안 열릴 수 있다(모듈 머리말 ④).
  * - 그 밖은 `{spec:null, lockReason}`. **상태는 읽기만 한다**(동결 객체로도 동작).
  * 강도 키가 없으면 그 모양의 기본값으로 읽는다(«키 없음 ≡ 명시적 기본값», §7.1 (a)).
  *
@@ -956,7 +964,8 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
     && row.param === param
     && keys.every((k) => Object.prototype.hasOwnProperty.call(row, k) && row[k] === ctx[k]));
   // 측정 구성 불일치는 행이 있어도 잠근다(표 행은 측정 구성에서만 잰 사실). 행 매칭은 표 키만 보므로, 여기서 hit 는
-  // 곧 «측정 구성으로 바꾼 반사실 문맥에서 이 행이 연다» 이다 — 그때만 자리 · ECC · 강조 사유가 참이다.
+  // 곧 «같은 표 키에서 측정 구성 키만 바꾼 반사실 문맥에서 이 행이 연다» 이다 — 그때만 자리 · ECC · 강조 사유가 참이다
+  // (표 키 고정 반사실 — 자동 버전의 재인코딩은 표 키를 바꿀 수 있어 «되돌리면 열린다» 까지는 말하지 않는다).
   const config = measuredConfigLock(table, ctx);
   if (hit) return config === null ? { spec: { kind, param } } : { spec: null, lockReason: config };
 

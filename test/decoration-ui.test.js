@@ -15,6 +15,9 @@
  *      잠기고(detector-emphasis g1211), 강조를 소비하는 표면이 없으면 무엇을 골라도 강조로는 안 잠긴다. Y 는 고급 화면에서만 넘긴다.
  *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats) · 강조 'all'. O 는 안쪽 «없음»(실효 타입 O 의
  *      측정 구성). 제품 자동 O(안쪽 o-cm → 실효 타입 G · G 측정 구성)는 ② 제품 기본표 자가 제품 기본 URL 로도 잰다.
+ *      G(버전 V2 고정)도 자리 · ECC · 강조 쌍 자에 든다(사유 문구의 참/거짓 — 제품이 가장 먼저 보이는 표면).
+ *      타입 키는 카드를 가른다 — 같은 비-type 문맥의 형제 타입 행만 주입한 표는 빈 표와 같게 보이고, 같은 행을 자기 타입으로
+ *      적으면 열린다(O 자동 = G ↔ O · A ↔ K). ② 제품 기본표 자의 «열림 ⇔ 표 행» 은 type 키로 거른 뒤라 이것을 못 잰다.
  *   ③ 기본 상태에서는 어떤 타입(O · A · K · Y · H)도 생산자에 꾸미기 키를 넘기지 않는다 — sceneOpts.cellShape ·
  *      palette.qrDeco · hQr.deco · hCellStyle 부재(D1 이 넘긴 «이름 붙인 미측정 축»). 켬 → 끔 클릭 경로 뒤에도.
  *   ④ fixture 허용표를 주입하면(테스트 전용 경로 — decorationAllow 만 바꾼다) 카드가 열리고, 카드를 누르면
@@ -297,6 +300,11 @@ const TYPE_STATES = Object.freeze({
   Y: { type: 'Y', yRepresentation: '2.5d' },
   H: { type: 'Y', yRepresentation: '3d', hFaces: 3, versionH: 'auto' },
 });
+/**
+ * 제품 기본 O — 자동 자리 그대로(안쪽 o-cm → 실효 타입 G). TYPE_STATES 밖에 둔다(TYPE_STATES 를 도는 자는 생성기 타입마다
+ * 한 번 — G 는 생성기 타입이 아니라 O 의 실효 타입이다).
+ */
+const O_AUTO_STATE = Object.freeze({ type: 'O', ...productAutoSeats('O') });
 
 /**
  * 제품 기본 페이로드 — 상태 기본 콘텐츠 탭(url)의 index.html 입력 기본값을 제품 `normalizeUrl` 로 정규화한다(손으로 옮겨
@@ -448,7 +456,7 @@ test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문�
   // 제품 기본 «자동» 로케이터(autoLocatorY — 실물 정책 함수). 스키마 기본 'off' 그대로는 제품 화면이 아니다.
   // A · K 는 제품 자동 자리(TYPE_STATES) · O 는 안쪽 «없음»(실효 타입 O 의 측정 구성) · «O 자동» 은 제품 자동 안쪽 o-cm(→ 실효
   // 타입 G — G 측정 구성, L6g 행). «O 자동(기본 URL)» 은 같은 상태를 제품 기본 페이로드로 그린다(제품 첫 화면의 버전 · 셀 역할).
-  const O_AUTO = { type: 'O', ...productAutoSeats('O') };
+  const O_AUTO = O_AUTO_STATE;
   const CASES = [['O', TYPE_STATES.O, 'white', false], ['O(기본 URL)', TYPE_STATES.O, 'white', false, PRODUCT_DEFAULT_PAYLOAD],
     ['O 자동', O_AUTO, 'white', false], ['O 자동(기본 URL)', O_AUTO, 'white', false, PRODUCT_DEFAULT_PAYLOAD],
     ['A', TYPE_STATES.A, 'white', false], ['K', TYPE_STATES.K, 'white', false],
@@ -481,7 +489,8 @@ test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문�
       // 제품 기본 O = 자동 안쪽 o-cm → 실효 타입 G. G 행은 G 측정 구성(자동 안쪽 코너 마커 · 사괘 없음 · ECC H · 강조 'all')에서
       // 잰 사실이고 제품 기본이 그 구성이라, 위 동치(카드 열림 ⇔ 표 행)가 G 행으로 선다 — 행 수는 박제하지 않는다(아래 «행 > 0»).
       assert.equal(ctx.type, 'G', label + ': O 자동 자리가 타입 G 로 안 갈렸다');
-      assert.ok(rows.every((row) => row.type === 'G'), label + ': G 문맥이 다른 타입 행을 골랐다');
+      // 타입 판별(O 행이 G 카드를 여는가)은 이 동치로 못 잰다 — tableRowsFor 가 type 키로 이미 거른다(옛 «rows 가 전부 G»
+      // 단언은 구성상 참이라 공허했다, 2026-09-27 검토 major). 아래 «② 타입 키는 카드를 가른다» 자가 행을 주입해 잰다.
     }
     // 연 행마다: 그 상태로 UI 를 세우면 카드 · 강도 카드가 열리고, 인라인 사유가 없고, spec 이 생산자까지 간다.
     for (const row of rows) {
@@ -515,6 +524,40 @@ test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문�
   }
 });
 
+test('② 타입 키는 카드를 가른다(UI 경로 · 표 주입) — 같은 비-type 문맥의 형제 타입 행만 있는 표는 빈 표와 같게 보이고, 같은 행을 자기 타입으로 적으면 열린다(O 자동 = G ↔ O · A ↔ K)', () => {
+  // 왜(2026-09-27 검토 major): 위 ② 제품 기본표 자의 «카드 열림 ⇔ 표 행» 은 행을 type 키로 거른 뒤라 행 매칭이 type 을 빼먹어도
+  // 초록이다. 생성 표에서 A ↔ K 는 같은 문맥의 행이 똑같아(O ↔ G 도 제품 기본 문맥에선 같다) 표로는 판별력이 없다 — 행을
+  // 주입해 표 내용과 무관하게 잰다. resolver 수준(생성 표의 실제 비대칭 포함)은 cell-shape-measured-config ⓒ 타입 자.
+  const view = (h) => h.cards('cellShape').map((el) => `${el.dataset.decoValue}:${el.getAttribute('aria-disabled')}:${el.dataset.lockReason}`);
+  const openOf = (h) => h.cards('cellShape')
+    .filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT && el.getAttribute('aria-disabled') === 'false').map((el) => el.dataset.decoValue);
+  // [이름, 상태, 실효 타입, 형제 타입]
+  const cases = [
+    ['O 자동(G) ← O 행', O_AUTO_STATE, 'G', 'O'],
+    ['O 안쪽 없음 ← G 행', TYPE_STATES.O, 'O', 'G'],
+    ['A ← K 행', TYPE_STATES.A, 'A', 'K'],
+    ['K ← A 행', TYPE_STATES.K, 'K', 'A'],
+  ];
+  for (const [name, baseState, effType, siblingType] of cases) {
+    const state = { ...baseState, cellShape: 'round' };
+    const probe = harness({ state, allow: STUB });
+    probe.render();
+    const ctx = probe.c.current.deco.ctx;
+    assert.equal(ctx.type, effType, name + ': 실효 타입');
+    const sib = harness({ state, allow: { ROWS: openAllCellRows({ ...ctx, type: siblingType }) } });
+    sib.render();
+    assert.deepEqual(view(sib), view(probe), `${name}: 형제 타입(${siblingType}) 행만 있는 표가 빈 표와 다르게 보인다`);
+    assert.deepEqual(openOf(sib), [], `${name}: 형제 타입(${siblingType}) 행이 ${effType} 카드를 열었다`);
+    assert.equal('cellShape' in lastOf(sib.calls.buildScene), false, `${name}: 형제 타입 행으로 모양이 생산자에 갔다`);
+    // 대조군 — 같은 행을 자기 타입으로 적으면 열리고 고른 모양이 생산자까지 간다(위 잠금이 다른 이유로 난 것이 아니다).
+    const own = harness({ state, allow: { ROWS: openAllCellRows(ctx) } });
+    own.render();
+    assert.ok(openOf(own).length > 0, `${name}: 자기 타입 행인데 열린 카드가 없다 — 대조군이 비었다`);
+    const opts = lastOf(own.calls.buildScene);
+    assert.equal(opts.cellShape && opts.cellShape.kind, 'round', `${name}: 자기 타입 행인데 round 가 생산자에 안 갔다`);
+  }
+});
+
 test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전부 잠기고, 측정 구성에서 열리던 카드만 새 사유다 — 매퍼가 떨군 사괘는 자리 사유가 아니다', () => {
   // 대조군 쌍: 같은 타입 · 같은 표 키(allowCtx)에서 자리 · ECC 한 축만 바꾼다. 표 키가 같으니 옛 resolver 는 둘 다 열었다.
   // 사유는 반사실이다(2026-09-27 검토): 대조군(측정 구성)에서 열린 카드 → 그 축의 사유(«측정 구성이면 열린다» 가 참),
@@ -525,18 +568,25 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
   const O2 = { ...TYPE_STATES.O, versionO: 2 };
   // A v1 은 표 행이 없는 버전이다(행은 A v0 뿐) — 측정 구성이어도 잠기니 «자리 탓» 이 아니라 미확인 · 설계 잠금이어야 한다.
   const A1 = { ...TYPE_STATES.A, versionA: 1, cellBevel: 1.4 };
+  // 제품 기본 O(자동 안쪽 o-cm → 실효 타입 G)도 V2 로 고정한다 — 제품 첫 화면의 표면이라 사유 문구의 참/거짓을 UI 경로로 잰다
+  // (2026-09-27 검토 minor). 자동 버전에서는 사괘 · ECC 가 재인코딩으로 버전을 바꿔 표 키가 달라질 수 있다(대조군이 아니다).
+  const G2 = { ...O_AUTO_STATE, versionO: 2 };
   const pairs = [
     // [이름, 측정 구성 상태, 한 축만 바꾼 상태, 그 축의 사유, 사전 키]
     ['A 바깥 없음', TYPE_STATES.A, { ...TYPE_STATES.A, outerSeat: 'none' }, 'seat-config', 'g1209'],
     ['K 바깥 없음', TYPE_STATES.K, { ...TYPE_STATES.K, outerSeat: 'none' }, 'seat-config', 'g1209'],
     ['O2 사괘(수동)', O2, { ...O2, deepSeat: 'sagoae' }, 'seat-config', 'g1209'],
     ['O2 ECC M', O2, { ...O2, eccLevel: 'M' }, 'ecc-level', 'g1210'],
+    ['G2(O 자동) 사괘(수동)', G2, { ...G2, deepSeat: 'sagoae' }, 'seat-config', 'g1209'],
+    ['G2(O 자동) ECC M', G2, { ...G2, eccLevel: 'M' }, 'ecc-level', 'g1210'],
+    ['G2(O 자동) ECC L', G2, { ...G2, eccLevel: 'L' }, 'ecc-level', 'g1210'],
     ['A ECC L', TYPE_STATES.A, { ...TYPE_STATES.A, eccLevel: 'L' }, 'ecc-level', 'g1210'],
     ['K ECC M', TYPE_STATES.K, { ...TYPE_STATES.K, eccLevel: 'M' }, 'ecc-level', 'g1210'],
     ['A1 바깥 없음 · 돌출 bevel(행 없는 버전)', A1, { ...A1, outerSeat: 'none' }, 'seat-config', 'g1209'],
     ['K 바깥 없음 · 돌출 bevel', { ...TYPE_STATES.K, cellBevel: 1.4 }, { ...TYPE_STATES.K, cellBevel: 1.4, outerSeat: 'none' }, 'seat-config', 'g1209'],
   ];
   const seen = { axis: 0, kept: 0 };
+  const axisBy = {};
   for (const [name, baseState, state, reason, key] of pairs) {
     const base = harness({ state: { ...baseState, cellShape: 'bevel' } });
     base.render();
@@ -560,11 +610,16 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     assert.equal(h.$('cellShapeLockHint').textContent.includes(key), axis > 0, `${name}: 사유 줄의 ${key} 는 측정 구성에서 열린 카드가 있을 때만`);
     assert.equal('cellShape' in lastOf(h.calls.buildScene), false, name + ': 잠겼는데 모양이 생산자에 갔다');
     assert.equal(h.state.cellShape, 'bevel', name + ': 잠금이 상태를 고쳤다');
+    axisBy[name] = axis;
   }
   // 판별력: 두 갈래가 모두 났다 — «축 사유» 카드와 «대조군 사유 유지» 카드(돌출 bevel · 행 없는 버전).
   assert.ok(seen.axis > 0 && seen.kept > 0, JSON.stringify(seen));
-  // 측정 구성 쪽은 열린다(위 쌍의 대조군이 비지 않았다) — A · K · O 기본에서 bevel 이 생산자까지 간다.
-  for (const [name, state] of [['A', TYPE_STATES.A], ['K', TYPE_STATES.K], ['O2', O2]]) {
+  // G(제품 기본 O) 쌍은 축 사유 카드가 실제로 났다 — 대조군이 전부 잠긴 쌍이면 사유 문구를 재지 못한다.
+  for (const name of Object.keys(axisBy).filter((n) => n.startsWith('G2'))) {
+    assert.ok(axisBy[name] > 0, `${name}: 측정 구성(G2)에서 열린 카드가 없다 — 사유 문구를 재지 못한다 ${JSON.stringify(axisBy)}`);
+  }
+  // 측정 구성 쪽은 열린다(위 쌍의 대조군이 비지 않았다) — A · K · O · G 기본에서 bevel 이 생산자까지 간다.
+  for (const [name, state] of [['A', TYPE_STATES.A], ['K', TYPE_STATES.K], ['O2', O2], ['G2(O 자동)', G2]]) {
     const h = harness({ state: { ...state, cellShape: 'bevel' } });
     h.render();
     assert.equal(lastOf(h.calls.buildScene).cellShape && lastOf(h.calls.buildScene).cellShape.kind, 'bevel', name + ': 측정 구성인데 bevel 이 안 갔다');
@@ -611,11 +666,14 @@ function assertEmphasisAxisLocks(name, base, h) {
   return axis;
 }
 
-test('② 실효 검출 강조(O · A · K 제품 경로): 측정(\'all\')과 다른 그림이면 카드가 잠기고(g1211 — 측정 구성에서 열리던 카드만), 소비 표면이 없으면 무엇을 골라도 강조로는 안 잠긴다', () => {
+test('② 실효 검출 강조(O · G · A · K 제품 경로): 측정(\'all\')과 다른 그림이면 카드가 잠기고(g1211 — 측정 구성에서 열리던 카드만), 소비 표면이 없으면 무엇을 골라도 강조로는 안 잠긴다', () => {
   const O2 = { ...TYPE_STATES.O, versionO: 2 };
+  // 제품 기본 O(자동 안쪽 o-cm → 실효 타입 G) — 중앙 n7 두 팔이라 세 값이 다른 그림. V2 고정(표 키 대조군).
+  const G2 = { ...O_AUTO_STATE, versionO: 2 };
   let axis = 0;
+  let gAxis = 0;
   // (a) 중앙 TL(강조 대상) + A · K 는 코너 마커 검출 셀 — 'locator' · 'default' 는 측정 구성('all')과 다른 그림이다.
-  for (const [name, state] of [['O2', O2], ['A 자동', TYPE_STATES.A], ['K 자동', TYPE_STATES.K]]) {
+  for (const [name, state] of [['O2', O2], ['G2(O 자동)', G2], ['A 자동', TYPE_STATES.A], ['K 자동', TYPE_STATES.K]]) {
     const base = harness({ state: { ...state, centralN7Emphasis: 'all', cellShape: 'bevel' } });
     base.render();
     const baseOpts = lastOf(base.calls.buildScene);
@@ -628,13 +686,19 @@ test('② 실효 검출 강조(O · A · K 제품 경로): 측정(\'all\')과 �
       const opts = lastOf(h.calls.buildScene);
       assert.equal(opts.centralN7Emphasis, mode, `${name} ${mode}: 생산자에 넘어간 강조`);
       assert.equal(h.c.current.deco.ctx.detectorEmphasis, mode, `${name} ${mode}: 문맥의 실효 강조`);
-      axis += assertEmphasisAxisLocks(`${name} 강조 ${mode}`, base, h);
+      const a = assertEmphasisAxisLocks(`${name} 강조 ${mode}`, base, h);
+      axis += a;
+      if (state === G2) {
+        assert.equal(h.c.current.deco.ctx.type, 'G', `${name} ${mode}: 실효 타입`);
+        gAxis += a;
+      }
       assert.equal('cellShape' in opts, false, `${name} ${mode}: 잠겼는데 모양이 생산자에 갔다`);
       assert.equal(h.state.cellShape, 'bevel', `${name} ${mode}: 잠금이 상태를 고쳤다`);
       assert.equal(h.state.centralN7Emphasis, mode, `${name} ${mode}: 잠금이 강조 상태를 고쳤다`);
     }
   }
   assert.ok(axis > 0, '강조 사유 카드가 하나도 안 났다 — 자가 비었다');
+  assert.ok(gAxis > 0, 'G2(제품 기본 O)에서 강조 사유 카드가 안 났다 — G 의 g1211 문구를 재지 못한다');
   // (b) 소비 표면 없음(O v2 핀휠 · 불스아이 — 대상 아닌 중앙 · 코너 마커 없음): 강조를 무엇으로 골라도 생산자는 그 값을 받지만 그림이
   //     같아 «해당 없음» 이고, 카드 잠금 · 사유 · 생산자에 간 모양이 'all' 과 같다(거짓 잠금 없음).
   let opened = 0;

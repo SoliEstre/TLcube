@@ -17,7 +17,7 @@
 //      이력: 첫 대조(2026-09-26 17:1x)에서 Y 투명 · 판 없음의 gapGrade 가 하네스 'white' · 제품 'unknown' 으로 갈렸다
 //      (하네스 L6 «white» 등급이 투명 PNG 를 흰 표면에 합성). 하네스 레인(D2)이 17:2x 에 제품 뜻(설계 §3.2 B2)으로
 //      맞추고 Y «white» 등급을 bgMode white(흰 평탄화)로 조립하게 바꿨다 — 그 케이스('y-v0' · 'y-v0|gap=white')가 격자에 있다.
-//   ⑦ (TL_L0_DIR) 측정 구성 선언(CELL_SHAPE_MEASURED_CONFIG) ≡ 하네스 조립 — ⑥ 격자(+ 제품 기본 G 계열 g-n7)를 하네스 lib-assemble 로 조립하고 조립
+//   ⑦ (TL_L0_DIR) 측정 구성 선언(CELL_SHAPE_MEASURED_CONFIG) ≡ 하네스 조립 — ⑥ 격자(제품 기본 G 계열 g-n7 포함)를 하네스 lib-assemble 로 조립하고 조립
 //      sceneOpts 로 실효 검출 강조를 유도(detectorEmphasisEquivalents)해 제품 문맥을 만들면 (1) 문맥이 완전하고 (2) 선언이 있는
 //      타입은 측정 구성 값이 선언과 같고(강조는 «선언 값이 같은 그림 집합에 드는가») (3) 하네스 구조 잠금 판정(lib-ctx
 //      cellShapeProductLock)이 키 드리프트 없이 제품 cellShapeStructuralLock 과 같은 답을 낸다. 선언은 «그 하네스가 잰 구성» 의
@@ -233,11 +233,6 @@ const FAM = {
   'k-n7': { type: 'K' },
   'g-n7': { type: 'G' }, // L6g — 제품 기본 O(자동 안쪽 o-cm = 실효 타입 G) · 생성기 기본 파인더(중앙 n7)
 };
-/**
- * ⑦ 에만 더하는 측정 계열 — 하네스를 하위 프로세스로 돌리지 않고 조립(lib-assemble)만 한다. ⑥ 격자의 'G|pinwheel…' 는 고른
- * 조합이고, 제품 기본 G 는 중앙 n7(강조 구조가 다르다 — 중앙 두 팔 'all' vs 코너 마커 검출 셀 한 팔 'locator+all')이라 따로 잰다.
- */
-const MEASURED_CONFIG_EXTRA_CASES = ['g-n7'];
 const GRADE = { white: {}, black: { bgMode: 'black' }, unknown: { quietMode: 'none' } };
 /** 하네스 L6_GRADES.overY — Y 는 안전영역 판이 없어 «흰» 등급을 흰 평탄화로 조립한다. */
 const GRADE_Y = { white: { bgMode: 'white' } };
@@ -266,6 +261,10 @@ const CASES_BASE = [
   'o-pinwheel', 'o-pinwheel|gap=black', 'o-pinwheel|gap=unknown', 'o-pinwheel|bg=white',
   'o-pinwheel|qr=none', 'O|bullseye',
   'a-n7|gap=white', 'k-n7|gap=white', 'C|pinwheel-c2-2-1100-cw', 'G|pinwheel-c2-2-1100-cw', 'V|pinwheel-c2-2-1100-cw',
+  // 제품 기본 O(자동 안쪽 o-cm = 실효 타입 G) · 생성기 기본 파인더(중앙 n7) — L6g 계열. 'G|pinwheel…' 는 고른 조합이고 강조
+  // 구조가 다르다(중앙 두 팔 'all' vs 코너 마커 검출 셀 한 팔 'locator+all'). 하네스 tl-decode FAMILIES 가 'g-n7' 을 받는다
+  // (2026-09-27 검토에서 --cases g-n7 실행 확인 — 옛 «⑦ 에만» 은 그 확인 전의 보류였다).
+  'g-n7',
   'y-v0', 'y-v0|gap=white', 'y-v0|gap=black', 'y-v0|gap=unknown', 'y-v0|bg=white',
   'Y|hex-frame-v1|t3', 'Y|cell-surface-v0ty|t3', 'Y|off|t2',
 ];
@@ -386,7 +385,7 @@ test('⑦ 측정 구성 선언 ≡ L0 하네스 조립 — 조립 sceneOpts 로 
   const declaredSeen = new Set();
   const undeclaredSeen = new Set();
   const structural = {};
-  for (const id of [...await l0CaseIds(), ...MEASURED_CONFIG_EXTRA_CASES]) {
+  for (const id of await l0CaseIds()) {
     const c = caseSpec(id);
     const a = assemble(M, c);
     const base = OAK_BASE[c.type];
@@ -417,8 +416,11 @@ test('⑦ 측정 구성 선언 ≡ L0 하네스 조립 — 조립 sceneOpts 로 
 
 // ── ⑧ 하네스 실제 처치 주입 경로 (TL_L0_DIR) ──────────────────────────────
 
-/** 처치 경로 격자 — 강조 구조가 다른 계열 넷(O 해당 없음 · A 중앙+코너 마커 · K 중앙+코너 마커 · Y 셀 표면). */
-const TREATMENT_PATH_CASES = ['o-pinwheel', 'a-n7', 'k-n7', 'y-v0'];
+/**
+ * 처치 경로 격자 — 강조 구조가 다른 계열 다섯(O 해당 없음 · A 중앙+코너 마커 · K 중앙+코너 마커 · G 중앙+코너 마커 셀(제품 기본 O) ·
+ * Y 셀 표면). G(g-n7)는 L6g 로 행이 생긴 제품 기본 타입이라 그 하네스 주입 경로도 잰다(2026-09-27 검토 minor).
+ */
+const TREATMENT_PATH_CASES = ['o-pinwheel', 'a-n7', 'k-n7', 'g-n7', 'y-v0'];
 
 test('⑧ L0 하네스 처치 주입 경로 — 처치 행이 제품 resolver 에서 키 드리프트 없이 판정된다(render-error 0 · 행마다 allowShape 또는 allowWithheld)', { timeout: 115_000 }, async (t) => {
   if (!L0) { t.skip(SKIP_REASON); return; }

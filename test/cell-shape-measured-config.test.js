@@ -13,9 +13,9 @@
 //
 // 재는 것(실제 인코더 · 생성 허용표 · 제품 자동 자리표 · 실제 렌더):
 //   ⓐ 유닛 — 측정 구성 문맥은 생성 표 행으로 열리고, 표 키가 같은 «한 축만 다른» 문맥은 새 사유로 잠긴다:
-//      A · K 바깥 없음(seat-config) · O 사괘(seat-config) · 같은 버전 ECC M · L(ecc-level, Y 포함) · O 안쪽 o-cm = G(G 자기 행 —
-//      표 행 ⇔ 열림) ·
-//      강조(detector-emphasis): 중앙 TL 의 O · A · K 에서 'locator' · 'default', Y 고급 화면이 실은 'all' · 'locator'.
+//      A · K 바깥 없음(seat-config) · O 사괘(seat-config) · 같은 버전 ECC M · L(ecc-level, G · Y 포함) · O 안쪽 o-cm = G(G 자기
+//      행 — 표 행 ⇔ 열림) ·
+//      강조(detector-emphasis): 중앙 TL 의 O · G · A · K 에서 'locator' · 'default', Y 고급 화면이 실은 'all' · 'locator'.
 //      강조를 소비하는 표면이 없는 렌더(대상 아닌 중앙 · 검출 셀 없음 · Y hex-frame)는 무엇을 넘겨도 «해당 없음» 이라 안 잠긴다.
 //      K · Y 기본 인코딩이 ctx-incomplete 로 잠기지 않는다(K 사괘 «개념 없음» = false).
 //   ⓑ 유도 규칙의 반례 — K 는 사괘를 던지고 결과에 키가 없다(«개념 없음» 의 근거) · 인코더가 boolean 을 주면 늘 그 값 ·
@@ -23,6 +23,8 @@
 //      아니면 값 모름 · 유도 함수는 입력을 모르면 undefined.
 //   ⓒ 생성 표 성질 — 행이 있는 타입마다 선언이 있고, 모든 셀 행은 그 타입 측정 구성 문맥에서 열리며, 측정 구성 키를 하나
 //      바꾸면 그 축의 사유로 잠긴다(ECC 는 다른 레벨 전부 · 강조는 측정 값을 안 담은 집합 전부). 측정 값을 담은 집합은 열린다.
+//      타입 키는 행을 가른다 — 한 타입에만 있는 (비-type 문맥 · 모양 · 강도)는 다른 선언 타입의 측정 구성 문맥에서 잠기고(생성 표 —
+//      O 행 ↔ G 문맥이 실제 거짓 열림 축), 행 하나 표에서도 다른 타입 문맥은 안 열린다(모든 순서쌍 — 표가 같은 A ↔ K 포함).
 //   ⓓ 선언 ↔ 제품 기본(성질) — 제품 자동 자리 · 제품 기본 강조로 그린 와이어/그림이 선언과 같으면 그 문맥의 표 행이 열리고,
 //      다르면 잠긴다(A · K · 제품 기본 O = 자동 안쪽 o-cm 이라 실효 타입 G). 값의 같음은 강제하지 않는다(제품 기본이 바뀌면 그
 //      기본이 잠기는 것이 맞다 — 선언은 영수증에서만 바꾼다).
@@ -31,6 +33,8 @@
 //      행 없는 버전 × 모든 선택지)에서 seat-config · ecc-level · detector-emphasis ⇒ 측정 구성으로 바꾸면 열린다 · 사유는 첫 번째로
 //      다른 축(자리 → ECC → 강조) · exposed-gap ⇒ 틈만 흰색으로 바꾸면 열린다 · unmeasured ⇒ 그 어느 한 축만 바꿔서는 안 열린다 ·
 //      설계 잠금 ⇒ 측정 구성으로 바꿔도 같은 사유다. 측정 구성과 다르면 열림은 없다.
+//      반사실은 **표 키 고정**(같은 버전)이다 — 제품 자동 버전은 구성을 바꾸면 재인코딩으로 버전이 바뀔 수 있어(짧은 페이로드의
+//      G + 사괘 · G ECC M 실측) «되돌리면 열린다» 까지는 이 자가 말하지 않는다(사유 문구 «이 구성으로는 확인 안 됨» 은 그때도 참).
 //   ⓖ 실효 검출 강조 ≡ 실제 렌더 — 제품 조립 격자(O · A · K 파인더 × 코너 마커 × 중앙 QR × 팔레트, Y 스키마 레이아웃 전부)에서
 //      «q 가 넘긴 p 의 집합에 든다 ⟺ p 와 q 가 같은 장면(도형 JSON 전부 — 채움색만이 아니라 좌표 · 획 · 순서까지)» 을
 //      buildScene · buildSceneY 로 잰다 — 유도 함수의 렌더 구조(중앙 검출기 두 팔 · 검출 셀 한 팔 · Y 셀 표면 로케이터)를 믿지 않는다.
@@ -215,7 +219,9 @@ test('ⓐ O: 안쪽 없음(O)은 열리고, 안쪽 o-cm(G — 자동 코너 마�
   assert.ok(Object.prototype.hasOwnProperty.call(CELL_SHAPE_MEASURED_CONFIG, 'G'), 'G 행이 있는데 G 측정 구성 선언이 없다(ⓒ)');
   const gRows = rowsFor(g);
   assert.ok(gRows.length > 0, `G(제품 자동 안쪽 o-cm) 문맥에 표 행이 없다 — 자가 비었다 ${JSON.stringify(cellShapeAllowCtx(g))}`);
-  assert.ok(gRows.every((row) => row.type === 'G'), 'G 문맥이 다른 타입 행을 골랐다');
+  // 타입 판별(O 행이 G 문맥을 여는가)은 여기서 재지 못한다 — rowsFor 가 type 키로 이미 거르고, 이 문맥(중앙 n7 · 흰 틈)에서는
+  // O · G 행이 같다. 옛 «gRows 가 전부 G» 단언은 구성상 참이라 공허했다(2026-09-27 검토 major) — ⓒ 타입 자가 생성 표 · 행 하나
+  // 표로 잰다.
   let opened = 0;
   for (const c of cellChoices()) {
     const def = CELL_SHAPE_PARAMS[c.cellShape];
@@ -228,8 +234,11 @@ test('ⓐ O: 안쪽 없음(O)은 열리고, 안쪽 o-cm(G — 자동 코너 마�
   assert.ok(opened > 0, 'G 선택지 중 열린 것이 없다 — 자가 비었다');
 });
 
-test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 잠긴다 — O · A · K · Y', () => {
+test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 잠긴다 — O · G · A · K · Y', () => {
   const O = { ...FRESH, type: 'O' };
+  // 제품 기본 O(자동 안쪽 o-cm → 실효 타입 G) — 인코딩은 제품 매퍼 모양(코너 마커 + 마커 톤). 강조는 G 측정 구성 값.
+  const G = { ...FRESH, type: 'O', innerSeat: 'o-cm' };
+  const gEnc = (eccLevel) => encode(P12, { ...N7, cornerMarker: true, markerTones: true, eccLevel, version: 2 });
   const A = { ...FRESH, type: 'A', outerSeat: 'a-cm' };
   const K = { ...FRESH, type: 'K', outerSeat: 'k-cm' };
   let measured = 0;
@@ -237,6 +246,10 @@ test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 �
     measured += assertMeasuredOpensOtherLocks(`O v2 ECC ${ecc}`,
       ctxOf('O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), O),
       ctxOf('O', encode(P12, { ...N7, eccLevel: ecc, version: 2 }), O), R.ECC_LEVEL);
+    const gH = ctxOf('O', gEnc('H'), G, 'white', measuredEmphasis('G'));
+    assert.equal(gH.type, 'G', 'O 안쪽 o-cm 은 실효 타입 G');
+    measured += assertMeasuredOpensOtherLocks(`G v2 o-cm ECC ${ecc}`,
+      gH, ctxOf('O', gEnc(ecc), G, 'white', measuredEmphasis('G')), R.ECC_LEVEL);
     measured += assertMeasuredOpensOtherLocks(`A v0 ECC ${ecc}`,
       ctxOf('A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), A),
       ctxOf('A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: ecc, version: 0 }), A), R.ECC_LEVEL);
@@ -256,16 +269,21 @@ test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 �
   assert.ok(measured > 0);
 });
 
-test('ⓐ 강조: 중앙 TL(강조 대상)의 O · A · K 는 측정 구성 \'all\' 에서 열리고, \'locator\' · \'default\' 는 표 키가 같아도 detector-emphasis 로 잠긴다', () => {
+test('ⓐ 강조: 중앙 TL(강조 대상)의 O · G · A · K 는 측정 구성 \'all\' 에서 열리고, \'locator\' · \'default\' 는 표 키가 같아도 detector-emphasis 로 잠긴다', () => {
+  // [이름, 생성기 타입, 인코딩, 상태, 실효 타입(선언을 찾는 키)]
   const cases = [
-    ['O v2', 'O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), { ...FRESH, type: 'O' }],
-    ['A v0 a-cm', 'A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), { ...FRESH, type: 'A', outerSeat: 'a-cm' }],
-    ['K v0 k-cm', 'K', encodeK(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), { ...FRESH, type: 'K', outerSeat: 'k-cm' }],
+    ['O v2', 'O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), { ...FRESH, type: 'O' }, 'O'],
+    // 제품 기본 O = 자동 안쪽 o-cm → 실효 타입 G(중앙 n7 두 팔 + 코너 마커 셀).
+    ['G v2 o-cm', 'O', encode(P12, { ...N7, cornerMarker: true, markerTones: true, eccLevel: 'H', version: 2 }),
+      { ...FRESH, type: 'O', innerSeat: 'o-cm' }, 'G'],
+    ['A v0 a-cm', 'A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), { ...FRESH, type: 'A', outerSeat: 'a-cm' }, 'A'],
+    ['K v0 k-cm', 'K', encodeK(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), { ...FRESH, type: 'K', outerSeat: 'k-cm' }, 'K'],
   ];
   let n = 0;
-  for (const [name, type, enc, state] of cases) {
-    assert.equal(CELL_SHAPE_MEASURED_CONFIG[type].detectorEmphasis, 'all', name + ': 선언 전제');
+  for (const [name, type, enc, state, effType] of cases) {
+    assert.equal(CELL_SHAPE_MEASURED_CONFIG[effType].detectorEmphasis, 'all', name + ': 선언 전제');
     const measured = ctxOf(type, enc, state, 'white', 'all');
+    assert.equal(measured.type, effType, name + ': 실효 타입');
     // 중앙 TL 은 로케이터 · 데이터 두 팔을 가져 세 값이 서로 다른 그림이다(ⓖ 가 렌더로 잰다).
     assert.equal(measured.detectorEmphasis, 'all', name);
     for (const other of ['locator', 'default']) {
@@ -461,6 +479,57 @@ test('ⓒ 생성 표: 행이 있는 타입마다 측정 구성 선언이 있고,
   assert.ok(same >= cellRows.length * 2, `같은 그림 집합 ${same}`);
 });
 
+test('ⓒ 타입 키는 행을 가른다 — 한 타입에만 있는 (비-type 문맥 · 모양 · 강도)는 다른 선언 타입의 측정 구성 문맥에서 잠기고, 행 하나 표에서도 다른 타입 문맥은 안 열린다(모든 순서쌍)', (t) => {
+  // 왜 따로 재나(2026-09-27 검토 major): 행 매칭에서 type 키를 빼먹는 결함을 위 자들은 못 본다 — rowsFor · 문맥 격자가 모두
+  // 행 자기 타입 문맥에서 출발해 «다른 타입 행이 이 문맥을 여는가» 를 묻지 않는다(옛 «G 문맥 행이 전부 G» 단언은 구성상 참).
+  // 생성 표에서 O · G 는 비-type 문맥을 공유하고 한쪽에만 있는 (모양, 강도)가 있어 그것이 실제 거짓 열림 축이다(O 측정으로 G 가
+  // 열린다). A ↔ K 는 같은 문맥의 행이 똑같아 생성 표로는 판별력이 없다 — (a) 행 하나 표가 표 내용과 무관하게 잰다.
+  // 수치(행 · 쌍 · 개수)는 박제하지 않는다 — 표에서 유도하고 «비지 않았다» 만 단언한다.
+  const oakTypes = Object.keys(CELL_SHAPE_MEASURED_CONFIG).filter((ty) => ty !== 'Y');
+  const oakRows = ALLOW.ROWS.filter((r) => r.table === 'oak');
+  assert.ok(oakRows.length > 0 && oakTypes.length >= 2, '타입 자의 전제(선언 타입 둘 이상 · oak 행)');
+  const nonTypeKeys = CELL_SHAPE_ALLOW_KEYS.oak.filter((k) => k !== 'type');
+  const sig = (r) => JSON.stringify([...nonTypeKeys.map((k) => r[k]), r.cellShape, r.param]);
+  const has = new Set(oakRows.map((r) => `${r.type}#${sig(r)}`));
+  /** 행의 표 키 문맥을 `type` 으로 옮기고 그 타입의 측정 구성을 싣는다(측정 구성 축으로는 안 잠기는 문맥). */
+  const ctxFor = (row, type) => {
+    const ctx = { table: 'oak' };
+    for (const k of CELL_SHAPE_ALLOW_KEYS.oak) ctx[k] = row[k];
+    return Object.freeze({ ...ctx, type, ...CELL_SHAPE_MEASURED_CONFIG[type] });
+  };
+  const AXIS_REASONS = AXIS_ORDER.map(([r]) => r);
+  const counts = { single: 0 };
+  for (const row of oakRows) {
+    const st = Object.freeze(stateOf(row));
+    const at = JSON.stringify(row);
+    const open = { spec: { kind: row.cellShape, param: row.param } };
+    // 대조군 — 자기 타입 문맥에서는 생성 표로도 행 하나 표로도 열린다(아래 잠금이 다른 이유로 난 것이 아니다).
+    assert.deepEqual(resolveRow(row, ctxFor(row, row.type)), open, `자기 타입 문맥에서 안 열린다: ${at}`);
+    assert.deepEqual(resolveCellShapeSpec(st, ctxFor(row, row.type), { ROWS: [row] }), open, `행 하나 표 · 자기 타입: ${at}`);
+    for (const type of oakTypes) {
+      if (type === row.type) continue;
+      const ctx = ctxFor(row, type);
+      // (a) 행 하나 표 — 다른 타입 문맥은 이 행으로 안 열리고, 사유는 빈 표와 같다(측정 구성 · 틈 탓이 아니다).
+      const one = resolveCellShapeSpec(st, ctx, { ROWS: [row] });
+      assert.deepEqual(one, resolveCellShapeSpec(st, ctx, { ROWS: [] }), `${row.type} 행 하나가 ${type} 문맥에서 빈 표와 다르게 판정됐다: ${at}`);
+      assert.equal(one.spec, null, `${row.type} 행 하나가 ${type} 문맥을 열었다: ${at}`);
+      counts.single += 1;
+      // (b) 생성 표 — 그 타입 행이 같은 (비-type 문맥 · 모양 · 강도)에 없으면 잠긴다. 측정 구성 문맥이라 사유는 측정 구성 축이 아니다.
+      if (has.has(`${type}#${sig(row)}`)) continue;
+      const res = resolveRow(row, ctx);
+      assert.equal(res.spec, null, `${row.type} 에만 있는 행이 ${type} 문맥에서 열렸다(다른 타입 측정으로 연다): ${at}`);
+      assert.ok(!AXIS_REASONS.includes(res.lockReason), `${type} 측정 구성 문맥인데 측정 구성 사유 ${res.lockReason}: ${at}`);
+      const pair = `${row.type}->${type}`;
+      counts[pair] = (counts[pair] || 0) + 1;
+    }
+  }
+  t.diagnostic(`타입 판별 대조 ${JSON.stringify(counts)}`);
+  assert.ok(counts.single > 0, '행 하나 표 대조가 비었다');
+  // 판별력 — 제품 기본 짝(O 안쪽 없음 = O ↔ O 자동 = G)은 생성 표에서 반드시 잰다(한쪽에만 있는 조합이 없어지면 표가 두 타입을
+  // 가르지 않는다는 뜻이다 — 그러면 이 단언과 함께 ⓐ O 의 제품 문맥 판별 공백을 다시 볼 것).
+  assert.ok((counts['O->G'] || 0) + (counts['G->O'] || 0) > 0, `O ↔ G 에서 한 타입에만 있는 행이 없다 — ${JSON.stringify(counts)}`);
+});
+
 // ── ⓓ 선언 ↔ 제품 기본 ──────────────────────────────────────────────────────
 
 test('ⓓ 선언 ↔ 제품 기본(성질): 제품 자동 자리 · 제품 기본 강조의 와이어/그림이 선언과 같으면 열리고, 다르면 잠긴다 · O 는 하네스 규약(안쪽 없음) · 제품 기본 O 는 G', (t) => {
@@ -546,7 +615,8 @@ function cellChoices() {
   return out;
 }
 
-test('ⓕ 사유는 참이다 — 자리 · ECC · 강조 탓은 측정 구성이면 열릴 때만(첫 번째로 다른 축), 틈 탓은 틈만 바꾸면 열릴 때만, 설계 잠금이 먼저다', () => {
+test('ⓕ 사유는 참이다(표 키 고정 반사실) — 자리 · ECC · 강조 탓은 같은 표 키에서 측정 구성이면 열릴 때만(첫 번째로 다른 축), 틈 탓은 틈만 바꾸면 열릴 때만, 설계 잠금이 먼저다', () => {
+  // 반사실은 표 키(버전 포함)를 고정한다 — 제품 자동 버전의 재인코딩(구성을 바꾸면 버전이 바뀐다)은 이 격자 밖이다(머리말 ⓕ).
   const cellRows = ALLOW.ROWS.filter((r) => r.table === 'oak' || r.table === 'y');
   const yLock = { qrPosition: FRESH.qrPosition, qrWindow: false, qrSlot: false };
   const absent = {
