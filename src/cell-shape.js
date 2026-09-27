@@ -679,7 +679,7 @@ function measuredValueMatches(key, ctxValue, measured) {
 /**
  * 측정 구성 — 허용표 행을 **잰** 렌더 구성. 키 = 실효 타입(oak 행의 `type`) · Y(y 표). 한 번만 선언한다.
  *
- * 출처: L6 · L6g · L7len(길이 축) 측정 하네스 규약(동결 하네스 `lib-assemble.mjs` assembleOak · assembleY — 세 측정 모두 측정 트리
+ * 출처: L6 · L6g · L7len(길이 축) 측정 하네스 규약(동결 하네스의 O/A/K · Y 케이스 조립 — 세 측정 모두 측정 트리
  * 0d2e67b. L7len 판은 길이 본문 · 밴드 탐침 · 조립 가드(G × daehan/사괘 불허)를 더했고, 길이 케이스마다 조립 결과의 구성 4 키 —
  * 버전 밴드 · ECC · 자리 · 강조 — 를 이 선언의 하네스 사본과 단언했다) — 계열 상태의 자리는 그때의 제품 자동 자리표(`autoSeatsFor`,
  * 비-taegeuk · 막힌 칸 불허)로 채운 뒤
@@ -688,11 +688,14 @@ function measuredValueMatches(key, ctxValue, measured) {
  * 계열 없음(O · G 자동 심부도 «없음»), ECC 는 전 영수증 H(19 B 기본은 auto 가 H · 길이 축은 제품 auto 의 **H 밴드**만 잰다 —
  * auto 가 M · L 로 내려가는 길이는 잠금 유지). 검출 강조(detectorEmphasis — 생산자에 넘어간
  * 값)는 O · A · K · G 가 'all' — 조립이 `createGeneratorState` 기본(GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS, 0d2e67b 에서도 'all')을
- * sceneOptionsForOA(O · A · G) · 손 조립(K)으로 늘 실었다 — 이고, Y 는 'default' — assembleY 가 강조 옵션을 안 실어 라이브러리
- * 기본(DEFAULT_CENTRAL_N7_EMPHASIS)으로 그렸다. 잰 트리(0d2e67b) ↔ 착지 base(0c70b43)의 동등은 착지 동등 자(land-equiv)가 쟀다 —
- * 영수증 sha256 41594b54dac363fbecc02a4840677ce2ff61f767f2d9d9ca1954d13666330493: PASS — 복호 폐포 103 파일(src/decoder 밖 75)
- * 동일 · 렌더 목록 3 파일 · 영수증 격자 장면 6524/6524 동일 · 하한 ≥ · 영수증 결속 7/7(qr 2 제외). 그 위의 이 착지는 잠금 사유(와이어 축
- * 실현 조건) · 측정 밴드 · 면 게인 잠금 · 하한 문맥 유도만 더했다(생산자 옵션 · 와이어 불변 — 잠그는 쪽으로만).
+ * sceneOptionsForOA(O · A · G) · 손 조립(K)으로 늘 실었다 — 이고, Y 는 'default' — Y 케이스 조립이 강조 옵션을 안 실어 라이브러리
+ * 기본(DEFAULT_CENTRAL_N7_EMPHASIS)으로 그렸다. 잰 트리(0d2e67b) ↔ 착지 트리의 동등은 착지 동등 자(land-equiv)가 쟀다 —
+ * 영수증 sha256 31db1e579905e93544c9f49bf0e8ed2b5eaccf67baea206e3520901c2fe12505: PASS — 복호 폐포 103 파일(src/decoder 밖 75)
+ * 동일 · 렌더 목록 3 파일 · 영수증 격자 장면 6524/6524 동일 · 하한 ≥ · 영수증 결속 7/7(qr 2 제외). 이 영수증은 **이 주석을 적은 커밋의
+ * 직전 트리**(레인 커밋 6804825 — 코드의 최종 상태)의 것이다: 주석만 바꾸는 커밋은 자기 트리의 영수증을 자기 안에 적을 수 없어(적는
+ * 순간 트리가 바뀐다) 직전 트리의 영수증을 적는다 — 그 커밋은 주석(과 이 주석을 싣는 번들)만 바꿨다. 잰 트리 위의 착지들은 잠금
+ * 사유(와이어 축 실현 조건 · 사유 축 개수) · 측정 밴드 · 면 게인 · 내보내기 축(디더 · 고정/커스텀 크기) 잠금 · 하한 문맥 유도만
+ * 더했다(생산자 옵션 · 와이어 불변 — 잠그는 쪽으로만).
  * G 의 'all' 은 렌더에서 계열마다 다른 «같은 그림 집합» 에 든다 — 중앙 n7 은 'all' 하나(중앙 두 팔), 핀휠은 'locator+all'(안쪽
  * 코너 마커 검출 셀 한 팔). 2026-09-27 동결 하네스 조립(0d2e67b · 이 트리 둘 다 와이어 · 생산자 옵션 동일)으로 재유도했고,
  * 2026-09-28 길이 격자로 넓힌 대조(`test/cell-shape-ctx-locks.test.js` ⑦ — 하네스가 유도한 길이 케이스 · 표의 (타입 · 버전/n) 전부)로
@@ -716,7 +719,7 @@ function measuredValueMatches(key, ctxValue, measured) {
  *   treatmentErrors 에도 안 잡힌다) 처치 행을 treatment-invalid 로 세어 판정 PASS · exit 0 으로 끝난다(영수증에 allowShape 를
  *   받은 처치 행이 0 개다). ⑧ 이 그 경로의 자다(느슨하게 하지 말 것). ⑥ 은 --treatments none 이라 이 경로를 안 지나고, ⑦ 은
  *   호출 모양이 완전한 문맥 · 선언과 같은 값을 내는지 잰다.
- *   ② (남음 — 측정 구성 잠금 이후 트리에서 재생성하기 **전에**) 생성기(gen-allow) probe 의 resolver 문맥({type, allowCtxLock, 행 키})에
+ *   ② (남음 — 측정 구성 잠금 이후 트리에서 재생성하기 **전에**) 허용표 생성기 probe 의 resolver 문맥({type, allowCtxLock, 행 키})에
  *   측정 구성 키가 없다 — 측정 구성 잠금이 들어온 0b94f0b 이후 트리로 재생성하면 셀 행이 전부 ctx-incomplete 라 E_RESOLVER_REJECTS 로
  *   멈춘다(크게 실패한다. L6g · L7len 재생성은 측정 트리 0d2e67b — 잠금 전 — 에서 돌아 해당 없었다). 행 타입의 이 선언으로 채우거나,
  *   생성기가 이 구성을 허용표 머리로 내보내도록 옮기고 이 상수는 표에서 읽게 바꿀 것(DESIGN_002 Phase B 의 키 승격이 구조로 푼다).
@@ -734,6 +737,8 @@ export const CELL_SHAPE_MEASURED_CONFIG = Object.freeze({
  * 2026-09-27 L6g — 영수증 7 개(L6 5 + L6g 2)의 묶음. O · A · K · Y 는 L6 과 같은 하네스 규약이라 그대로, G 를 더했다.
  * 2026-09-28 L7len(길이 축) — 영수증 9 개(L6 5 + L6g 2 + 길이 slate · 팔레트 2)의 묶음. 같은 하네스 규약(하네스가 케이스마다 구성
  * 4 키를 단언)이라 선언 값은 그대로다 — 길이 격자로 넓힌 ⑦ 로 재유도해 확인했다(위 선언 주석).
+ * 허용표 생성본(`cell-shape-allow.js`) 머리의 측정 도구 이름 · 영수증 파일명 · 하한 출처 문구는 손으로 고치지 않는다 — 생성본이라
+ * 다음 재생성 때 생성기가 공개 서술로 고칠 몫이다(여기 적는 주석은 이 모듈의 것만 고친다).
  */
 export const CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 = 'eb9ae46341182c168ce87b01f7f2192b84128eacaca18c8ab57f82594135694d';
 
@@ -741,8 +746,8 @@ export const CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 = 'eb9ae46341182c168ce87b
  * 측정 면 게인 — 허용표 행을 잰 **렌더 면 게인**(큐브 입체감 · 면 밝기 비). 키 = 표를 가르는 타입(Y 만 — O/A/K 생산자(scene.js)는
  * 면 게인을 읽지 않는다: `test/cell-shape-measured-config.test.js` 가 장면으로 잰다). 2026-09-28 착지 검토 major 로 붙였다 — 이 축이
  * 선언에도 문맥에도 없어 y 행이 잰 적 없는 «약» · «출력물용» 게인(일반 화면 인쇄용 갈래 · 디더 2 · 입체감 카드 · 고급 슬라이더)에서도
- * 열렸다(장면이 달라도 문맥이 같았다).
- * 출처: 측정 하네스 조립(동결 하네스 `lib-assemble.mjs` defaultFaceGains — 측정 트리 0d2e67b 의
+ * 열렸다(장면이 달라도 문맥이 같았다). 디더가 바꾼 게인(디더 2 · 4 의 자동 입체감)은 지금은 디더 축으로 센다(`CELL_SHAPE_LOCK_AXES`).
+ * 출처: 측정 하네스 조립 규약(기본 면 게인 — 측정 트리 0d2e67b 의
  * `faceGainsForRenderProfile(resolveRenderProfile(자동, {인쇄용 아님, 디더 없음}))` = 화면용). 하네스에 면 게인 축은 없다(그 값 하나).
  * 측정 구성(`CELL_SHAPE_MEASURED_CONFIG`)의 키로 두지 **않는** 이유: 그 키는 resolver 필수 문맥 키라 값 모름이면 잠그는데, 측정
  * 하네스의 제품 문맥 호출(렌더 값 {판 색 · 강조})에는 게인이 없다 — 넣으면 하네스가 처치 행을 «키 드리프트» 로 멈춘다(⑧). 그래서
