@@ -686,10 +686,17 @@ function measuredValueMatches(key, ctxValue, measured) {
  * 표에 행이 없는 타입(G · V · C)은 항목이 없다 — 그 타입은 행이 0 이라 `unmeasured`(C 는 구조 잠금 `type-c-ultra`)로
  * 잠긴다. 그 타입의 행이 생기면 선언도 같이 생겨야 한다(위 (3)). V 를 잴 때는 cornerMarker 와 co2AnchorTones 를 함께
  * 키로 올릴 것 — 제품 기본 V 는 v-cm 이다.
- * TODO(다음 재측정): 생성기(gen-allow)가 이 구성을 허용표 머리로 내보내도록 옮기고, 이 상수는 표에서 읽게 바꿀 것.
- *   그때 측정 하네스(L0 tl-decode · lib-ctx)의 `cellShapeCtx` 호출도 `render.detectorEmphasis`(조립 sceneOpts 로
- *   generator-render-config `detectorEmphasisEquivalents`)를 실어야 한다 — 지금 하네스는 quietColor 만 넘겨, 처치 행을 제품
- *   resolver 에 주입하면 측정 구성 키 값 모름(ctx-incomplete → «키 드리프트»)이 난다(표 키 대조 ⑥ 은 표 키만 봐서 무관하다).
+ * TODO(다음 재측정 **전에** — 하네스 쪽 수정이 필수다, 2026-09-27 실측):
+ *   ① 측정 하네스(L0 tl-decode allowCtxBaseOf)의 `cellShapeCtx` 호출이 `render.detectorEmphasis`(조립 sceneOpts 로
+ *   generator-render-config `detectorEmphasisEquivalents`)를 실어야 한다. 지금 하네스는 quietColor 만 넘겨, 처치 행을 제품
+ *   resolver 에 주입하면 측정 구성 키 값 모름(ctx-incomplete → lib-ctx «키 드리프트» throw)이 난다. 이 실패는 **조용하다** —
+ *   tl-decode trial 이 그 throw 를 render-error 로 삼키고(처치 표지보다 먼저 던져 treatmentErrors 에도 안 잡힌다) 처치 행을
+ *   treatment-invalid 로 세어 판정 PASS · exit 0 으로 끝난다(영수증에 allowShape 를 받은 처치 행이 0 개다). `test/cell-shape-ctx-locks.test.js`
+ *   ⑧ 이 TL_L0_DIR 에서 이 경로를 잰다 — 하네스를 고치기 전엔 빨강이 맞다(자를 느슨하게 하지 말 것). ⑥ 은 --treatments none 이라
+ *   이 경로를 안 지나고, ⑦ 은 고친 호출 모양이 완전한 문맥 · 선언과 같은 값을 내는지 잰다.
+ *   ② 생성기(gen-allow) probe 의 resolver 문맥({type, allowCtxLock, 행 키})에도 측정 구성 키가 없다 — 측정 구성 잠금이 들어온
+ *   0b94f0b 부터 이 트리의 셀 행 238 개가 전부 ctx-incomplete 라 재생성이 E_RESOLVER_REJECTS 로 멈춘다(크게 실패한다).
+ *   행 타입의 이 선언으로 채우거나, 생성기가 이 구성을 허용표 머리로 내보내도록 옮기고 이 상수는 표에서 읽게 바꿀 것.
  */
 export const CELL_SHAPE_MEASURED_CONFIG = Object.freeze({
   O: Object.freeze({ cornerMarker: false, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),

@@ -29,10 +29,10 @@ import { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } from '../src/luminance.js';
 import { makeCustomPalette } from '../src/palette-hue.js';
 import { TL_READER_URL } from '../src/qr.js';
 import {
-  centralBeaconEncoderOptions, encodeOptionsForY, sceneOptionsForOA,
+  centralBeaconEncoderOptions, detectorEmphasisEquivalents, encodeOptionsForY, sceneOptionsForOA,
 } from '../src/generator-render-config.js';
 import {
-  CELL_SHAPE_DEFAULT, CELL_SHAPE_PARAMS, cellShapeCtx, resolveCellShapeSpec,
+  CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_REASONS, CELL_SHAPE_PARAMS, cellShapeCtx, resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 import { QR_HOSTS, resolveQrDeco, QR_ALLOW_KEYS } from '../src/qr-colors.js';
 import { SQUARE_CELL_STYLES } from '../src/square-cell-style.js';
@@ -281,10 +281,14 @@ test('(d) 상태 이력: 꾸미기 키를 전부 켰다가 기본값으로 되�
     on[k] = alt;
   }
   Object.assign(s, on);
-  const ctx = cellShapeCtx('O', ENC.O, s, { quietColor: 'white' });
-  // 켠 상태에서 resolver 를 한 바퀴 — 스텁이라 전부 잠금이어야 하고 상태는 그대로.
+  // 문맥은 제품 렌더와 같은 결로 — 측정 구성 키 detectorEmphasis 는 생산자 옵션(oaOpts)에서 유도한다(제품 cellShapeDecoFor 와 같이).
+  // quietColor 만 주면 resolver 가 표 대조 전에 ctx-incomplete 로 끝나 이 바퀴가 공허해진다(2026-09-27 검토).
+  const ctx = cellShapeCtx('O', ENC.O, s, { quietColor: 'white', detectorEmphasis: detectorEmphasisEquivalents('O', ENC.O, oaOpts('O')) });
+  // 켠 상태에서 resolver 를 한 바퀴 — 표 대조까지 가서 잠기고(이 조합은 ECC M 이라 측정 구성 밖 — 행이 있어도 안 열린다) 상태는 그대로.
   const before = JSON.stringify(s);
-  assert.equal(resolveCellShapeSpec(s, ctx).spec, null);
+  const onResolved = resolveCellShapeSpec(s, ctx);
+  assert.equal(onResolved.spec, null);
+  assert.notEqual(onResolved.lockReason, CELL_SHAPE_LOCK_REASONS.CTX_INCOMPLETE, '문맥이 완전해 표 대조까지 갔다(공허한 바퀴 금지)');
   for (const host of QR_HOSTS) assert.equal(resolveQrDeco(s, SLATE, host).deco, null);
   hPreviewOptions({ ...H_STATE, ...on }, { palette: PALETTE, encoded: ENC.H });
   assert.equal(JSON.stringify(s), before, 'resolver 가 상태를 바꿨다');

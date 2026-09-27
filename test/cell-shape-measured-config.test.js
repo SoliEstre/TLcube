@@ -29,9 +29,11 @@
 //      다른 축(자리 → ECC → 강조) · exposed-gap ⇒ 틈만 흰색으로 바꾸면 열린다 · unmeasured ⇒ 그 어느 한 축만 바꿔서는 안 열린다 ·
 //      설계 잠금 ⇒ 측정 구성으로 바꿔도 같은 사유다. 측정 구성과 다르면 열림은 없다.
 //   ⓖ 실효 검출 강조 ≡ 실제 렌더 — 제품 조립 격자(O · A · K 파인더 × 코너 마커 × 중앙 QR × 팔레트, Y 스키마 레이아웃 전부)에서
-//      «q 가 넘긴 p 의 집합에 든다 ⟺ p 와 q 가 같은 장면(채움색)» 을 buildScene · buildSceneY 로 잰다 — 유도 함수의 렌더 구조
-//      (중앙 검출기 두 팔 · 검출 셀 한 팔 · Y 셀 표면 로케이터)를 믿지 않는다.
-// 못 재는 것: 측정 구성 자체가 참인가(private 측정 하네스 · 영수증의 몫). ECC 는 기하가 아니라 판독 여유 축이다 — 같은
+//      «q 가 넘긴 p 의 집합에 든다 ⟺ p 와 q 가 같은 장면(도형 JSON 전부 — 채움색만이 아니라 좌표 · 획 · 순서까지)» 을
+//      buildScene · buildSceneY 로 잰다 — 유도 함수의 렌더 구조(중앙 검출기 두 팔 · 검출 셀 한 팔 · Y 셀 표면 로케이터)를 믿지 않는다.
+//      장면 전체를 비교하므로 강조가 앞으로 색 밖의 속성을 바꿔도(유도는 팔레트만 본다) 거짓 열림으로 빨개진다.
+// 못 재는 것: 측정 구성 자체가 참인가(private 측정 하네스 · 영수증의 몫 — 지금 하네스 조립이 선언과 같은지는
+//   test/cell-shape-ctx-locks.test.js ⑦ 이 TL_L0_DIR 에서 잰다). ECC 는 기하가 아니라 판독 여유 축이다 — 같은
 //   버전의 M · L 이 실제로 안 읽힌다는 증거가 아니라 «측정 밖» 이라서 잠근다(강조도 같다 — 다른 그림이 안 읽힌다는 증거가 아니다).
 //   중앙 M7(central-marker-n7)은 제품 파인더 선택지에 없어 ⓖ 격자 밖이다(유도 함수는 그 화법에서 'locator' · 'all' 을 보수로 가른다).
 
@@ -659,7 +661,8 @@ test('ⓖ 실효 검출 강조 ≡ 실제 렌더 — «q 가 넘긴 p 의 집합
       build: (o) => buildSceneY(enc, o),
     });
   }
-  const fills = (scene) => JSON.stringify(scene.shapes.map((s) => s.color ?? s.fill ?? null));
+  // 장면 도형 전부(색만이 아니다) — 강조가 색 밖의 속성을 바꾸면 «다른 장면» 이 돼 유도(팔레트만 본다)와 어긋나 빨개진다.
+  const sceneJson = (scene) => JSON.stringify(scene.shapes);
   const kinds = { na: 0, detectorOnly: 0, all3: 0 };
   for (const c of cases) {
     const sets = {};
@@ -668,7 +671,7 @@ test('ⓖ 실효 검출 강조 ≡ 실제 렌더 — «q 가 넘긴 p 의 집합
       const o = c.opts(m);
       sets[m] = detectorEmphasisEquivalents(c.type, c.enc, o);
       assert.equal(typeof sets[m], 'string', `${c.name} ${m}: 유도 값이 없다`);
-      scenes[m] = fills(c.build(o));
+      scenes[m] = sceneJson(c.build(o));
     }
     for (const p of CENTRAL_N7_EMPHASIS_MODES) {
       assert.ok(sets[p].split('+').includes(p), `${c.name}: 넘긴 ${p} 가 자기 집합(${sets[p]})에 없다`);

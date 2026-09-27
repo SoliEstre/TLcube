@@ -17,7 +17,18 @@
 //      이력: 첫 대조(2026-09-26 17:1x)에서 Y 투명 · 판 없음의 gapGrade 가 하네스 'white' · 제품 'unknown' 으로 갈렸다
 //      (하네스 L6 «white» 등급이 투명 PNG 를 흰 표면에 합성). 하네스 레인(D2)이 17:2x 에 제품 뜻(설계 §3.2 B2)으로
 //      맞추고 Y «white» 등급을 bgMode white(흰 평탄화)로 조립하게 바꿨다 — 그 케이스('y-v0' · 'y-v0|gap=white')가 격자에 있다.
-// TL_L0_DIR 이 없으면(⑥ 만) 명시 사유로 skip — public 트리에는 private 하네스가 없다. 나머지는 항상 돈다.
+//   ⑦ (TL_L0_DIR) 측정 구성 선언(CELL_SHAPE_MEASURED_CONFIG) ≡ 하네스 조립 — ⑥ 격자를 하네스 lib-assemble 로 조립하고 조립
+//      sceneOpts 로 실효 검출 강조를 유도(detectorEmphasisEquivalents)해 제품 문맥을 만들면 (1) 문맥이 완전하고 (2) 선언이 있는
+//      타입은 측정 구성 값이 선언과 같고(강조는 «선언 값이 같은 그림 집합에 드는가») (3) 하네스 구조 잠금 판정(lib-ctx
+//      cellShapeProductLock)이 키 드리프트 없이 제품 cellShapeStructuralLock 과 같은 답을 낸다. 선언은 «그 하네스가 잰 구성» 의
+//      주장이라 주석 · git diff 가 아니라 하네스 조립으로 잰다(선언 · 하네스 한쪽만 바뀌면 빨강).
+//   ⑧ (TL_L0_DIR) 하네스의 **실제** 처치 주입 경로 — tl-decode 를 처치 팔 하나로 하위 프로세스 실행해, 처치 행이 render-error 없이
+//      allowShape 또는 allowWithheld 를 받는지 본다. ⑥ 은 --treatments none 이라 이 경로를 안 지난다. 왜 따로 재나(2026-09-27
+//      실측): 하네스가 제품 문맥에 측정 구성 키(detectorEmphasis)를 안 실으면 lib-ctx 가 «키 드리프트» 로 던지는데, tl-decode
+//      trial 이 그것을 render-error 로 삼키고(처치 표지보다 먼저 던져 producerPath.treatmentErrors 에도 안 잡힌다) 처치 행을
+//      treatment-invalid 로 세어 **판정 PASS · exit 0** 으로 끝난다 — 영수증에 allowShape 를 받은 처치 행이 조용히 0 개가 된다.
+//      이 자가 그 경로의 유일한 자다.
+// TL_L0_DIR 이 없으면(⑥ · ⑦ · ⑧) 명시 사유로 skip — public 트리에는 private 하네스가 없다. 나머지는 항상 돈다.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,10 +49,11 @@ import { hasCenterQrSlot } from '../src/cellSurfaceFinal.js';
 import { buildSceneY, Y_SEAM_ADJACENT_MODES } from '../src/sceneY.js';
 import { detectorEmphasisEquivalents, encodeOptionsForY } from '../src/generator-render-config.js';
 import { makeCustomPalette } from '../src/palette-hue.js';
+import * as CELL_SHAPE_MODULE from '../src/cell-shape.js';
 import {
-  CELL_GAP_GRADES, CELL_GAP_QUIET_COLORS, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_MEASURED_CONFIG_KEYS,
-  CELL_SHAPE_REQUIRED_CTX_KEYS, Y_SEAM_ADJACENT_PRODUCT,
-  cellGapGrade, cellShapeAllowCtx, cellShapeCtx, cellShapeTypeOf, paletteGradeOf,
+  CELL_GAP_GRADES, CELL_GAP_QUIET_COLORS, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_MEASURED_CONFIG,
+  CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_SHAPE_REQUIRED_CTX_KEYS, Y_SEAM_ADJACENT_PRODUCT,
+  cellGapGrade, cellShapeAllowCtx, cellShapeCtx, cellShapeStructuralLock, cellShapeTypeOf, paletteGradeOf,
 } from '../src/cell-shape.js';
 import { QR_ALLOW_KEYS, QR_HOSTS, qrDecoCtx, resolveQrDeco } from '../src/qr-colors.js';
 import { hPaletteGrade } from '../src/generator-h.js';
@@ -252,6 +264,22 @@ const CASES_BASE = [
   'Y|hex-frame-v1|t3', 'Y|cell-surface-v0ty|t3', 'Y|off|t2',
 ];
 const OAK_BASE = { O: 'O', G: 'O', C: 'O', A: 'A', V: 'A', K: 'K', Y: 'Y' };
+/** ⑥ · ⑦ 의 케이스 격자 — CASES_BASE + 하네스 기본 hue 표본 중 210° 에 가장 가까운 custom(sat 200) 한 케이스. */
+async function l0CaseIds() {
+  const { HUE_SAMPLE_SETS, HUE_SET_DEFAULT } = await import(pathToFileURL(join(L0, 'lib-color-samples.mjs')).href);
+  const customHue = HUE_SAMPLE_SETS[HUE_SET_DEFAULT].reduce((a, h) => (Math.abs(h - 210) < Math.abs(a - 210) ? h : a));
+  return [...CASES_BASE, `o-pinwheel|palette=custom${customHue}/sat200`];
+}
+/** 제품 문맥 함수에 넘길 상태 — 하네스 조립 상태 + 케이스가 바꾼 값(하네스 productStateOf 와 같은 결). */
+function productStateFor(c, a) {
+  const pal = c.palette ?? 'slate';
+  const cm = /^custom(\d+)(?:\/sat(\d+))?$/.exec(pal);
+  return {
+    ...a.state, bgMode: c.bgMode ?? a.state.bgMode, quietMode: c.quietMode ?? a.state.quietMode,
+    preset: cm ? 'custom' : pal, ...(cm ? { customHue: Number(cm[1]), customSat: Number(cm[2] ?? 100) } : {}),
+    ...(a.kind === 'y' ? { locatorProfileY: a.locatorProfileY, qrPosition: c.qrPosition ?? a.state.qrPosition } : {}),
+  };
+}
 function runHarness(args) {
   return new Promise((resolveP) => {
     const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -268,9 +296,7 @@ test('⑥ L0 하네스 allowCtx 유도 ≡ 제품 cellShapeCtx (대표 케이스
   for (const f of [script, join(L0, 'lib-assemble.mjs'), join(L0, 'lib-tree.mjs')]) {
     assert.ok(existsSync(f), `TL_L0_DIR 이 설정됐는데 하네스 파일이 없다(skip 아님 — 경로 오류): ${f}`);
   }
-  const { HUE_SAMPLE_SETS, HUE_SET_DEFAULT } = await import(pathToFileURL(join(L0, 'lib-color-samples.mjs')).href);
-  const customHue = HUE_SAMPLE_SETS[HUE_SET_DEFAULT].reduce((a, h) => (Math.abs(h - 210) < Math.abs(a - 210) ? h : a));
-  const CASES = [...CASES_BASE, `o-pinwheel|palette=custom${customHue}/sat200`];
+  const CASES = await l0CaseIds();
   const out = mkdtempSync(join(tmpdir(), 'tl-ctx-locks-'));
   try {
     const SHARDS = 4;
@@ -312,14 +338,7 @@ test('⑥ L0 하네스 allowCtx 유도 ≡ 제품 cellShapeCtx (대표 케이스
       const c = caseSpec(row.case);
       const a = assemble(M, c);
       assert.equal(a.label, row.code, `${where}: 케이스 명세 사본이 하네스와 다르다(조립 label)`);
-      const pal = c.palette ?? 'slate';
-      const cm = /^custom(\d+)(?:\/sat(\d+))?$/.exec(pal);
-      const state = {
-        ...a.state, bgMode: c.bgMode ?? a.state.bgMode, quietMode: c.quietMode ?? a.state.quietMode,
-        preset: cm ? 'custom' : pal, ...(cm ? { customHue: Number(cm[1]), customSat: Number(cm[2] ?? 100) } : {}),
-        ...(a.kind === 'y' ? { locatorProfileY: a.locatorProfileY, qrPosition: c.qrPosition ?? a.state.qrPosition } : {}),
-      };
-      const product = cellShapeCtx(OAK_BASE[c.type], a.encoded, state, { quietColor: a.quietChoice.color });
+      const product = cellShapeCtx(OAK_BASE[c.type], a.encoded, productStateFor(c, a), { quietColor: a.quietChoice.color });
       assert.ok(product, `${where}: 제품 문맥 null`);
       assert.equal(product.table, local.table, `${where}: 표`);
       for (const k of CELL_SHAPE_ALLOW_KEYS[product.table]) {
@@ -337,6 +356,86 @@ test('⑥ L0 하네스 allowCtx 유도 ≡ 제품 cellShapeCtx (대표 케이스
     const grades = new Set(controls.map((r) => r.allowCtx.gapGrade));
     assert.deepEqual([...grades].sort(), [...CELL_GAP_GRADES].sort(), '격자가 틈 등급 셋을 다 덮는다');
     t.diagnostic(`비교 ${report.compared} 키 · 케이스 ${controls.length} · 하네스 ctxSource ${[...report.sources].join(',')}`);
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+// ── ⑦ 측정 구성 선언 ≡ 하네스 조립 (TL_L0_DIR) ─────────────────────────────
+
+/** 측정 구성 값 비교 — 강조는 문맥이 «같은 그림 집합» 이라 선언 값이 그 집합에 드는가, 나머지는 같은 값인가(resolver 와 같은 뜻). */
+const measuredSame = (k, ctxValue, declared) => (k === 'detectorEmphasis'
+  ? typeof ctxValue === 'string' && ctxValue.split('+').includes(declared)
+  : ctxValue === declared);
+
+test('⑦ 측정 구성 선언 ≡ L0 하네스 조립 — 조립 sceneOpts 로 유도한 문맥이 완전하고 선언과 같으며, 하네스 구조 잠금 판정이 키 드리프트 없이 답한다', async (t) => {
+  if (!L0) { t.skip(SKIP_REASON); return; }
+  for (const f of ['lib-assemble.mjs', 'lib-tree.mjs', 'lib-ctx.mjs', 'lib-color-samples.mjs']) {
+    assert.ok(existsSync(join(L0, f)), `TL_L0_DIR 이 설정됐는데 하네스 파일이 없다(skip 아님 — 경로 오류): ${f}`);
+  }
+  const { loadModules, assemble } = await import(pathToFileURL(join(L0, 'lib-assemble.mjs')).href);
+  const { openTree } = await import(pathToFileURL(join(L0, 'lib-tree.mjs')).href);
+  const { cellShapeProductLock } = await import(pathToFileURL(join(L0, 'lib-ctx.mjs')).href);
+  const M = await loadModules(openTree(ROOT));
+  const declaredSeen = new Set();
+  const undeclaredSeen = new Set();
+  const structural = {};
+  for (const id of await l0CaseIds()) {
+    const c = caseSpec(id);
+    const a = assemble(M, c);
+    const base = OAK_BASE[c.type];
+    // 하네스가 제품 문맥에 실어야 하는 렌더 값 — 안전영역 판 색 + 조립 sceneOpts(생산자에 실제로 넘긴 옵션)의 실효 검출 강조.
+    const render = { quietColor: a.quietChoice.color, detectorEmphasis: detectorEmphasisEquivalents(base, a.encoded, a.sceneOpts) };
+    const ctx = cellShapeCtx(base, a.encoded, productStateFor(c, a), render);
+    assert.ok(ctx, `${id}: 제품 문맥 null`);
+    const missing = CELL_SHAPE_REQUIRED_CTX_KEYS[ctx.table].filter((k) => ctx[k] === undefined);
+    assert.deepEqual(missing, [], `${id}: 조립 sceneOpts 로 유도한 문맥에 빠진 키`);
+    const declared = CELL_SHAPE_MEASURED_CONFIG[ctx.table === 'y' ? 'Y' : ctx.type];
+    if (declared) {
+      declaredSeen.add(ctx.table === 'y' ? 'Y' : ctx.type);
+      for (const k of CELL_SHAPE_MEASURED_CONFIG_KEYS[ctx.table]) {
+        assert.ok(measuredSame(k, ctx[k], declared[k]),
+          `${id}: 측정 구성 ${k} — 하네스 조립 ${JSON.stringify(ctx[k])} 가 선언 ${JSON.stringify(declared[k])} 와 다르다 `
+          + '(선언은 하네스가 잰 구성이다 — 영수증에서 다시 유도하거나 하네스 조립을 되돌릴 것)');
+      }
+    } else undeclaredSeen.add(ctx.type);
+    // 하네스 구조 잠금 판정에 이 문맥의 행을 주입 — 키 드리프트면 lib-ctx 가 던진다(빨강). 답은 제품 구조 잠금과 같아야 한다.
+    const lock = cellShapeProductLock(CELL_SHAPE_MODULE, { table: ctx.table, ctx: cellShapeAllowCtx(ctx), resolverCtx: ctx, kind: 'round', param: 0.7 });
+    assert.equal(lock, cellShapeStructuralLock(ctx.table, 'round', 0.7, ctx), `${id}: 하네스 구조 잠금 판정 ≠ 제품 구조 잠금`);
+    if (lock) structural[lock] = (structural[lock] ?? 0) + 1;
+  }
+  // 판별력 — 선언이 있는 타입 전부가 격자에 있다(선언을 더하면 그 타입 케이스도 격자에 더할 것).
+  assert.deepEqual([...declaredSeen].sort(), Object.keys(CELL_SHAPE_MEASURED_CONFIG).sort(), '격자가 측정 구성 선언 타입을 다 덮는다');
+  t.diagnostic(`선언 대조 ${[...declaredSeen].join(',')} · 선언 없음 ${[...undeclaredSeen].join(',') || '-'} · 구조 잠금 ${JSON.stringify(structural)}`);
+});
+
+// ── ⑧ 하네스 실제 처치 주입 경로 (TL_L0_DIR) ──────────────────────────────
+
+/** 처치 경로 격자 — 강조 구조가 다른 계열 넷(O 해당 없음 · A 중앙+코너 마커 · K 중앙+코너 마커 · Y 셀 표면). */
+const TREATMENT_PATH_CASES = ['o-pinwheel', 'a-n7', 'k-n7', 'y-v0'];
+
+test('⑧ L0 하네스 처치 주입 경로 — 처치 행이 제품 resolver 에서 키 드리프트 없이 판정된다(render-error 0 · 행마다 allowShape 또는 allowWithheld)', { timeout: 115_000 }, async (t) => {
+  if (!L0) { t.skip(SKIP_REASON); return; }
+  const script = join(L0, 'tl-decode.mjs');
+  assert.ok(existsSync(script), `TL_L0_DIR 이 설정됐는데 하네스 파일이 없다(skip 아님 — 경로 오류): ${script}`);
+  const out = mkdtempSync(join(tmpdir(), 'tl-ctx-treat-'));
+  try {
+    const jsonl = join(out, 'treat.jsonl');
+    const r = await runHarness([
+      script, '--tree', ROOT, '--grid', 'small', '--cases', TREATMENT_PATH_CASES.join(','), '--treatments', 'round70', '--no-neg',
+      '--qr-arms', 'none', '--out', jsonl, '--summary', join(out, 'treat.summary.json'),
+    ]);
+    assert.ok(existsSync(jsonl), `하네스가 영수증을 안 썼다(exit ${r.code}): ${r.err.slice(-400)}`);
+    const rows = readFileSync(jsonl, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+    const treated = rows.filter((x) => x.arm !== 'control');
+    assert.deepEqual([...new Set(treated.map((x) => x.case))].sort(), [...TREATMENT_PATH_CASES].sort(), '케이스마다 처치 행이 있다');
+    const errors = treated.filter((x) => x.outcome === 'render-error' || (!x.allowShape && !x.allowWithheld));
+    assert.deepEqual(errors.map((x) => `${x.case}:${x.arm}:${x.outcome}:${String(x.reason ?? '').slice(0, 90)}`), [],
+      '처치 행이 제품 resolver 주입에서 쓰러졌다. «키 드리프트(ctx-incomplete)» 면 하네스(tl-decode.mjs allowCtxBaseOf)의 cellShapeCtx 호출이 '
+      + '측정 구성 키 detectorEmphasis 를 안 싣는 것이다 — render 에 generator-render-config detectorEmphasisEquivalents(타입, a.encoded, a.sceneOpts) '
+      + '를 실어 하네스를 고친다(src/cell-shape.js CELL_SHAPE_MEASURED_CONFIG TODO). 하네스는 이 행들을 treatment-invalid 로 세고 판정 PASS 로 끝나므로 '
+      + '이 자를 느슨하게 하면 영수증의 처치 행이 조용히 0 개가 된다');
+    t.diagnostic(`처치 행 ${treated.length} · allowShape ${treated.filter((x) => x.allowShape).length} · allowWithheld ${treated.filter((x) => x.allowWithheld).length}`);
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
