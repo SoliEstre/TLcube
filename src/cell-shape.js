@@ -21,6 +21,8 @@
  *      행이 있어도 잠긴다(`cellShapeStructuralLock` · `CELL_SHAPE_STRUCTURAL_LOCK_REASONS`).
  *      **측정 구성 불일치**(2026-09-27)도 구조 잠금이다 — 표 행은 표 키 밖 축(코너 마커 · 사괘 · ECC)의 한 값
  *      (`CELL_SHAPE_MEASURED_CONFIG`)에서만 잰 사실이라, 렌더 구성이 그와 다르면 표 키가 같아도 잠근다.
+ *      사유는 반사실로 고른다 — 측정 구성으로 바꾸면 표 행이 열릴 때만 «자리 · ECC 탓»(seat-config · ecc-level),
+ *      아니면 설계 잠금 · 미확인 사유 그대로다(잠금 여부는 같고 사유만 참이게 — 2026-09-27 검토).
  *   ⑤ 문맥 — `cellShapeCtx(type, encoded, state, render)`: 제품이 resolver 에 넘길 문맥을
  *      **한 벌만** 유도한다(통합자 결정 1 — 하네스도 이 함수를 import 한다, H 의
  *      `generator-h.hCellStyleCtx` 가 선례). `cellShapeAllowCtx(ctx)` 는 그 문맥을 허용표 행
@@ -606,7 +608,9 @@ export const CELL_SHAPE_ALLOW_KEYS = Object.freeze({
 
 /**
  * 측정 구성 키 — 표 키 밖에서 셀 역할 · 판독 여유를 바꾸는 축(2026-09-27 자리 레인). 허용표 행은 이 축의 **한 값**
- * (측정 구성)에서만 잰 사실이라, 렌더 구성이 그 값과 다르면 행이 있어도 잠근다(`cellShapeStructuralLock`).
+ * (측정 구성)에서만 잰 사실이라, 렌더 구성이 그 값과 다르면 행이 있어도 잠근다(`resolveCellShapeSpec`).
+ * ⚠ 설계 잠금 문맥 키(`CELL_SHAPE_LOCK_CTX_KEYS`)와 **따로 둔다** — 그쪽은 측정 하네스가 케이스마다 유도해 영수증
+ * `allowCtxLock` 에 싣는 계약이다(그 주석 참조). resolver 는 두 목록을 모두 요구한다(`CELL_SHAPE_REQUIRED_CTX_KEYS`).
  *   cornerMarker — 코너 마커 자리(O 안쪽 o-cm → 타입 G 로 갈린다 · A 바깥 a-cm · K 바깥 k-cm). 같은 버전 · 같은 표 키에서
  *     셀 역할이 달라진다(기본 URL 19 B 실측: A 25셀 · K 37셀) — A · K 바깥 «없음» 이 a-cm/k-cm 에서 잰 행으로 열리던 거짓 열림.
  *   sagoae — 심부 자리 사괘(합성 고리). 같은 버전에서 data 셀이 예약으로 빠진다(12 B 실측: O v2 40셀 · A v0 20셀).
@@ -626,13 +630,16 @@ export const CELL_SHAPE_SEAT_CONFIG_KEYS = Object.freeze(['cornerMarker', 'sagoa
 /**
  * 측정 구성 — 허용표 행을 **잰** 렌더 구성. 키 = 실효 타입(oak 행의 `type`) · Y(y 표). 한 번만 선언한다.
  *
- * 출처: L6 측정 하네스 규약(자동 자리, O 는 안쪽 없음) — 계열 상태의 자리는 제품 자동 자리표(`autoSeatsFor`, 비-taegeuk ·
- * 막힌 칸 불허)로 채웠고 O 만 안쪽을 «없음» 으로 내렸다(안쪽 코너 마커 O 는 타입 G 로 따로 갈린다). 사괘는 전 계열 없음,
+ * 출처: L6 측정 하네스 규약(동결 하네스 `lib-assemble.mjs` assembleOak) — 계열 상태의 자리는 그때의 제품 자동 자리표
+ * (`autoSeatsFor`, 비-taegeuk · 막힌 칸 불허)로 채운 뒤 **O · C 는 안쪽을 «없음»** 으로, **V 는 turnA + 바깥 «없음»** 으로
+ * 내렸다(안쪽 코너 마커 O 는 타입 G 로 따로 갈린다 · C · V 는 지금 행이 0 이라 선언이 없다). 사괘는 전 계열 없음,
  * ECC 는 전 영수증 H(짧은 페이로드 · auto). 허용표 행 키에는 이 값이 없다 — 영수증 code «A k=6 v=0» 로는 A 와 A-CM 을
  * 못 가른다. 그래서 여기 적고, `test/cell-shape-measured-config.test.js` 가 (1) 선언이 묶인 영수증 sha
  * (`CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256`)와 허용표 RECEIPT_SHA256 이 같은지(표를 다시 생성하면 빨개진다 — 재유도할 것)
- * (2) A · K 의 코너 마커 · 사괘 값이 제품 자동 자리표와 같은지 (3) 표에 행이 있는 타입마다 선언이 있는지 잰다.
- * 제품 자동 자리표에서 **유도하지 않는다** — 제품 기본이 바뀌면 측정 사실이 아닌데도 조용히 따라간다.
+ * (2) 제품 자동 자리가 이 선언과 다르면 제품 기본이 잠기는지(성질 — 값의 같음을 강제하지 않는다)
+ * (3) 표에 행이 있는 타입마다 선언이 있는지 잰다.
+ * 제품 자동 자리표에서 **유도하지 않는다** — 제품 기본이 바뀌면 측정 사실이 아닌데도 조용히 따라간다. 선언은 영수증에서만
+ * 바꾼다(제품 기본이 이 선언과 달라지면 그 기본이 잠기는 것이 맞다 — 재측정하거나 제품 기본을 재검토할 일이다).
  *
  * 표에 행이 없는 타입(G · V · C)은 항목이 없다 — 그 타입은 행이 0 이라 `unmeasured`(C 는 구조 잠금 `type-c-ultra`)로
  * 잠긴다. 그 타입의 행이 생기면 선언도 같이 생겨야 한다(위 (3)). V 를 잴 때는 cornerMarker 와 co2AnchorTones 를 함께
@@ -650,16 +657,35 @@ export const CELL_SHAPE_MEASURED_CONFIG = Object.freeze({
 export const CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 = 'd4bd39162483d1040244f15e2142a3c41048fc22353f5475eb1b95a69e332165';
 
 /**
- * 구조 잠금이 읽는 **표 밖** 문맥 키(허용표 행에는 없다 — 표로 가를 수 없어서 따로 둔다).
+ * 설계 잠금이 읽는 **표 밖** 문맥 키(허용표 행에는 없다 — 표로 가를 수 없어서 따로 둔다).
  *   Y: qrPosition(상태 — 'inner' = 윈도 β · 안쪽 QR) · qrWindow(인코딩 `window` — 윈도 β 코드) ·
- *      qrSlot(인코딩에 `role:'slot'` 셀이 있는가 — 슬롯 레이아웃) + 측정 구성 키(eccLevel).
- *   O/A/K: 측정 구성 키(cornerMarker · sagoae · eccLevel). 타입 C 는 `cellShapeCtx` 가 코드에서 type 'C' 로 판정.
+ *      qrSlot(인코딩에 `role:'slot'` 셀이 있는가 — 슬롯 레이아웃).
+ *   O/A/K: 없음. 타입 C 는 `cellShapeCtx` 가 코드에서 type 'C' 로 판정.
  * 빠지면 잴 수 없으므로 잠근다(`ctx-incomplete`) — fail-closed.
+ *
+ * ⚠ **측정 하네스 계약이다** — L0 하네스(private `tl-decode.mjs` LOCK_DERIVE)는 이 목록의 키마다 값 유도가 있어야 하고
+ * (없으면 «키 드리프트» 로 멈춘다), 영수증 행 `allowCtxLock` 에 정확히 이 키를 싣는다(gen-allow E_ROW_CTX_KEYS).
+ * 측정 구성 키(`CELL_SHAPE_MEASURED_CONFIG_KEYS`)를 여기 넣지 않는 이유: 하네스는 측정 구성 **한 값**만 재므로 케이스마다
+ * 유도할 값이 아니고, 넣으면 지금 하네스가 대조군부터 render-error 로 멈춘다(2026-09-27 검토 blocking — 표준 원격 전수
+ * TL_L0_DIR 에서 `test/cell-shape-ctx-locks.test.js` ⑥ 이 빨개졌다). 다음 측정에서 하네스가 측정 구성을 영수증에 싣게 되면
+ * (`CELL_SHAPE_MEASURED_CONFIG` TODO) 하네스와 **같은 커밋 쌍**으로 옮긴다.
  */
 export const CELL_SHAPE_LOCK_CTX_KEYS = Object.freeze({
-  oak: Object.freeze([...CELL_SHAPE_MEASURED_CONFIG_KEYS.oak]),
-  y: Object.freeze(['qrPosition', 'qrWindow', 'qrSlot', ...CELL_SHAPE_MEASURED_CONFIG_KEYS.y]),
+  oak: Object.freeze([]),
+  y: Object.freeze(['qrPosition', 'qrWindow', 'qrSlot']),
 });
+
+/**
+ * resolver 가 문맥에 요구하는 키 전부 — 표 키(`CELL_SHAPE_ALLOW_KEYS`) + 설계 잠금 문맥 키(`CELL_SHAPE_LOCK_CTX_KEYS`) +
+ * 측정 구성 키(`CELL_SHAPE_MEASURED_CONFIG_KEYS`). 제품 문맥(`cellShapeCtx`)은 렌더 값을 주면 이 키가 전부 정의된다.
+ */
+export const CELL_SHAPE_REQUIRED_CTX_KEYS = Object.freeze(Object.fromEntries(['oak', 'y'].map((t) => [t, Object.freeze([
+  ...CELL_SHAPE_ALLOW_KEYS[t], ...CELL_SHAPE_LOCK_CTX_KEYS[t], ...CELL_SHAPE_MEASURED_CONFIG_KEYS[t],
+])])));
+// 로드 시 자기검증 — 세 목록은 서로 겹치지 않는다(겹치면 한 키가 두 계약에 묶여 옮길 때 한쪽이 조용히 남는다).
+for (const [t, keys] of Object.entries(CELL_SHAPE_REQUIRED_CTX_KEYS)) {
+  if (new Set(keys).size !== keys.length) throw new Error(`cell-shape: ${t} 문맥 키 목록이 겹친다 — ${keys.join(',')}`);
+}
 
 // 로드 시 자기검증 — 선언의 키가 그 표의 측정 구성 키와 정확히 같다(빠진 키는 잠금 판정에서 조용히 빠진다).
 for (const [configType, config] of Object.entries(CELL_SHAPE_MEASURED_CONFIG)) {
@@ -679,7 +705,7 @@ export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
   UNKNOWN_SHAPE: 'unknown-shape',
   PARAM_OUT_OF_DOMAIN: 'param-out-of-domain',
   TYPE_NOT_RHOMBUS: 'type-not-rhombus', // H 등 마름모 셀이 아닌 타입
-  CTX_INCOMPLETE: 'ctx-incomplete', // 문맥에 허용표 키 · 구조 잠금 키가 빠졌다 — 잴 수 없으면 잠근다
+  CTX_INCOMPLETE: 'ctx-incomplete', // 문맥에 허용표 키 · 설계 잠금 키 · 측정 구성 키가 빠졌다 — 잴 수 없으면 잠근다
   // ── 구조 잠금(설계 1차 잠금 — 허용표에 행이 있어도 잠긴다) ──
   TYPE_C_ULTRA: 'type-c-ultra', // §3.1 — C(ultra, k ≥ 14)는 모든 모양 미측정
   Y_TWO_TONE: 'y-two-tone', // §3.2 — Y 2톤(Y*-2T) × 모든 모양
@@ -689,11 +715,16 @@ export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
   BULLSEYE_DOT: 'bullseye-dot', // §3.1 표 — 불스아이 계열(불스아이 · cube-bullseye)은 dot 전면 금지
   BEVEL_RAISED: 'bevel-raised', // §3.1 safety M13 — 돌출 bevel(게인 > 1, 1.4)은 바닥 띠를 흰 판 쪽으로 넓힌다
   // ── 측정 구성 불일치(2026-09-27 — 표 행은 `CELL_SHAPE_MEASURED_CONFIG` 에서만 잰 사실이다) ──
-  SEAT_CONFIG: 'seat-config', // 자리(코너 마커 · 사괘) 구성이 그 타입의 측정 구성과 다르다
-  ECC_LEVEL: 'ecc-level', // 인코딩 ECC 레벨이 측정 구성과 다르다(같은 기하라도 정정 여유가 다르다)
+  //   잠금 자체는 행 유무와 무관(측정 구성과 다르면 늘 잠근다). **사유**로는 반사실일 때만 낸다 — 측정 구성으로 바꾸면
+  //   표 행이 열리는 경우(그 축이 실제로 가른다). 행이 없거나 설계 잠금이면 그 사유(unmeasured · bevel-raised …)가 나간다.
+  SEAT_CONFIG: 'seat-config', // 자리(코너 마커 · 사괘) 구성이 그 타입의 측정 구성과 다르고, 측정 구성이면 열린다
+  ECC_LEVEL: 'ecc-level', // 인코딩 ECC 레벨이 측정 구성과 다르고, 측정 구성이면 열린다(같은 기하라도 정정 여유가 다르다)
 });
 
-/** 구조 잠금 사유 id 전부 — `cellShapeStructuralLock` 이 낼 수 있는 값의 목록(테스트 · i18n 대조용). */
+/**
+ * 구조 잠금 사유 id 전부 — `cellShapeStructuralLock` 이 낼 수 있는 값의 목록(테스트 · i18n 대조용).
+ * seat-config · ecc-level 은 resolver 가 반사실로 거른 뒤에만 카드 사유로 나간다(`resolveCellShapeSpec`).
+ */
 export const CELL_SHAPE_STRUCTURAL_LOCK_REASONS = Object.freeze([
   CELL_SHAPE_LOCK_REASONS.TYPE_C_ULTRA,
   CELL_SHAPE_LOCK_REASONS.Y_TWO_TONE,
@@ -742,21 +773,11 @@ function measuredConfigLock(table, ctx) {
 }
 
 /**
- * 구조 잠금 판정 — 허용표와 **무관하게** 잠그는 조합이면 사유 id, 아니면 null. 순수 함수.
- * resolver 가 허용표보다 먼저 부른다(측정 영수증에 그 조합의 행이 생겨도 열리지 않는다).
- * 여는 쪽(측정 레인)이 풀려면 이 함수의 해당 줄을 **먼저 지우고 이유를 적어야** 한다.
- *
- * 순서: 문맥 전체를 막는 설계 잠금(C · Y 2톤 · 안쪽 QR · 슬롯) → 측정 구성 불일치(자리 · ECC — 모든 모양) →
- * 모양별 잠금(불스아이 dot · hex-frame gap/dot · 돌출 bevel). 모든 모양을 막는 사유가 모양별 사유보다 먼저라,
- * 카드 사유 줄이 «그 문맥을 막는 원인» 하나로 모인다.
- *
- * @param {'oak'|'y'} table
- * @param {string} kind 셀 모양(square 제외)
- * @param {number|null} param 강도(round-bevel 은 null)
- * @param {object} ctx `cellShapeCtx` 문맥(표 키 + `CELL_SHAPE_LOCK_CTX_KEYS[table]`)
- * @returns {string|null}
+ * 설계 잠금 — 문맥 전체를 막는 것(C · Y 2톤 · 안쪽 QR · 슬롯) → 모양별(불스아이 dot · hex-frame gap/dot · 돌출 bevel).
+ * 측정 구성을 무엇으로 바꿔도 열리지 않는 **영구** 잠금이라, 측정 구성 불일치보다 사유가 앞선다(그 반대면 «자리를 되돌리면
+ * 열릴 것» 처럼 읽혀 틀린 안내가 된다 — 2026-09-27 검토). 표 키 · 설계 잠금 문맥 키만 읽는다(측정 구성 키 없이도 판정).
  */
-export function cellShapeStructuralLock(table, kind, param, ctx) {
+function designLock(table, kind, param, ctx) {
   const R = CELL_SHAPE_LOCK_REASONS;
   if (table === 'oak') {
     if (ctx.type === 'C') return R.TYPE_C_ULTRA;
@@ -765,8 +786,6 @@ export function cellShapeStructuralLock(table, kind, param, ctx) {
     if (ctx.qrWindow === true || ctx.qrPosition === 'inner') return R.Y_INNER_QR;
     if (ctx.qrSlot === true) return R.Y_QR_SLOT;
   }
-  const config = measuredConfigLock(table, ctx);
-  if (config !== null) return config;
   if (table === 'oak' && kind === 'dot' && BULLSEYE_FAMILY_FINDER_PATTERN_IDS.includes(ctx.finderPatternId)) {
     return R.BULLSEYE_DOT;
   }
@@ -779,17 +798,38 @@ export function cellShapeStructuralLock(table, kind, param, ctx) {
 }
 
 /**
+ * 구조 잠금 판정 — 허용표와 **무관하게** 잠그는 조합이면 사유 id, 아니면 null. 순수 함수.
+ * resolver 가 허용표보다 먼저 판정한다(측정 영수증에 그 조합의 행이 생겨도 열리지 않는다).
+ * 여는 쪽(측정 레인)이 풀려면 이 함수의 해당 줄을 **먼저 지우고 이유를 적어야** 한다.
+ *
+ * 순서: 설계 잠금(`designLock` — 문맥 전체 → 모양별) → 측정 구성 불일치(자리 · ECC — 모든 모양).
+ * 여기서 낸 측정 구성 사유는 **표 없는** 답이다 — resolver 는 잠금은 그대로 두고, 카드 사유로는 측정 구성으로 바꾸면
+ * 표 행이 열릴 때만 그 사유를 내고 아니면 unmeasured 로 떨어뜨린다(반사실 — `resolveCellShapeSpec`).
+ *
+ * @param {'oak'|'y'} table
+ * @param {string} kind 셀 모양(square 제외)
+ * @param {number|null} param 강도(round-bevel 은 null)
+ * @param {object} ctx `cellShapeCtx` 문맥(`CELL_SHAPE_REQUIRED_CTX_KEYS[table]`)
+ * @returns {string|null}
+ */
+export function cellShapeStructuralLock(table, kind, param, ctx) {
+  return designLock(table, kind, param, ctx) ?? measuredConfigLock(table, ctx);
+}
+
+/**
  * 상태 + 렌더 문맥 + 허용표 → 셀 모양 spec.
  *
  * - square(키 없음 포함) → `{spec:null}` (잠금 사유 없음 — 기본값이다).
- * - 판정 순서: 모양 · 강도 도메인 → 표(타입) → 문맥 완전성(표 키 + 구조 잠금 키) →
- *   **구조 잠금**(표와 무관) → 허용표 행. 행은 문맥 · 모양 · 파라미터가 **모두** 같아야 연다.
- *   round-bevel 의 param 은 null(고정 조합).
+ * - 판정 순서: 모양 · 강도 도메인 → 표(타입) → 문맥 완전성(표 키 + 설계 잠금 키) → **설계 잠금**(표와 무관 · 영구) →
+ *   문맥 완전성(측정 구성 키) → 허용표 행 × **측정 구성 불일치**(표와 무관하게 잠근다). 행은 문맥 · 모양 · 파라미터가
+ *   **모두** 같아야 연다. round-bevel 의 param 은 null(고정 조합).
+ * - 사유는 참이어야 한다(반사실): seat-config · ecc-level 은 «측정 구성으로 바꾸면 이 행이 열린다» 일 때만,
+ *   exposed-gap 은 «틈만 흰색으로 바꾸면 열린다»(측정 구성 일치 ∧ 흰 틈 형제 행) 일 때만. 그 밖은 unmeasured.
  * - 그 밖은 `{spec:null, lockReason}`. **상태는 읽기만 한다**(동결 객체로도 동작).
  * 강도 키가 없으면 그 모양의 기본값으로 읽는다(«키 없음 ≡ 명시적 기본값», §7.1 (a)).
  *
  * @param {object} state 생성기 상태(cellShape · cellRound · cellBevel · cellGap · cellDot)
- * @param {object} ctx 렌더 시점 문맥 — `cellShapeCtx` 결과(표 키 + 구조 잠금 키)
+ * @param {object} ctx 렌더 시점 문맥 — `cellShapeCtx` 결과(`CELL_SHAPE_REQUIRED_CTX_KEYS[table]`)
  * @param {{ROWS?: object[]}} [allow] 허용표(기본 `src/cell-shape-allow.js`)
  * @returns {{spec: null | {kind:string, param:number|null}, lockReason?: string}}
  */
@@ -814,8 +854,13 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
     return { spec: null, lockReason: R.CTX_INCOMPLETE };
   }
 
-  const structural = cellShapeStructuralLock(table, kind, param, ctx);
-  if (structural !== null) return { spec: null, lockReason: structural };
+  // 설계 잠금은 측정 구성 키 없이도 판정한다 — 영구 잠금 사유가 «값 모름» · «자리 탓» 보다 참이다. 측정 하네스의
+  // 구조 잠금 탐침(표 키 + 설계 잠금 키만 채운 합성 문맥)도 여기서 답을 받는다.
+  const design = designLock(table, kind, param, ctx);
+  if (design !== null) return { spec: null, lockReason: design };
+  if (CELL_SHAPE_MEASURED_CONFIG_KEYS[table].some((k) => ctx[k] === undefined)) {
+    return { spec: null, lockReason: R.CTX_INCOMPLETE };
+  }
 
   const rows = (allow && Array.isArray(allow.ROWS)) ? allow.ROWS : [];
   const hit = rows.some((row) => row
@@ -823,14 +868,18 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
     && row.cellShape === kind
     && row.param === param
     && keys.every((k) => Object.prototype.hasOwnProperty.call(row, k) && row[k] === ctx[k]));
-  if (hit) return { spec: { kind, param } };
+  // 측정 구성 불일치는 행이 있어도 잠근다(표 행은 측정 구성에서만 잰 사실). 행 매칭은 표 키만 보므로, 여기서 hit 는
+  // 곧 «측정 구성으로 바꾼 반사실 문맥에서 이 행이 연다» 이다 — 그때만 자리 · ECC 사유가 참이다.
+  const config = measuredConfigLock(table, ctx);
+  if (hit) return config === null ? { spec: { kind, param } } : { spec: null, lockReason: config };
 
   // 사유도 표에서 유도한다. exposed-gap = 노출형 × 비흰 틈 × **흰 틈 형제 행이 있다**(틈 · 바탕만 다르고
   // 나머지 표 키 · 모양 · 강도가 같은 행 — 측정 격자에서 틈 등급과 bgMode 는 짝지어 움직인다). 틈이 실제로
   // 가르는 축일 때만 «틈 탓» 이다. 스텁 표 시절의 «노출형 × 비흰 틈 ⇒ 틈 탓» 은 실측 표에서 거짓이 됐다 —
   // Y 투명(unknown) n13 은 둥글게를 여는데 행이 없는 n21 에서도 «틈 탓» 이라 말했다(2026-09-27 화면 확인).
+  // 측정 구성까지 다르면 틈만 바꿔서는 안 열린다(자리 · ECC 도 같이 바꿔야 한다) — 한 축이 가르지 않으니 unmeasured.
   // 그 밖은 unmeasured — 미측정 · 측정 실패 · 판정 무효를 표는 가르지 않으므로 «판독이 확인되지 않음» 이다.
-  const whiteSibling = EXPOSED_CELL_SHAPES.includes(kind) && ctx.gapGrade !== 'white'
+  const whiteSibling = config === null && EXPOSED_CELL_SHAPES.includes(kind) && ctx.gapGrade !== 'white'
     && rows.some((row) => row
       && row.table === table
       && row.cellShape === kind
@@ -948,11 +997,11 @@ function hasSlotCells(encoded) {
  *       paletteGrade = `paletteGradeOf(state)`.
  * O/A/K(+C/G/V) `table:'oak'`: type(실효 — `cellShapeTypeOf`) · version = 인코딩 · finderPatternId = 상태
  *       **선택값**(중앙 QR 로 렌더가 양보해도 선택값) · qrPosition = 상태 ·
- *       구조 잠금 키 cornerMarker · sagoae · eccLevel(인코딩 — `measuredConfigCtx`).
+ *       측정 구성 키 cornerMarker · sagoae · eccLevel(인코딩 — `measuredConfigCtx`).
  * Y `table:'y'`: cellSurfaceLayout = 인코딩 ?? 'none' · locatorProfile = 인코딩 ?? 상태 locatorProfileY(해석 뒤) ·
  *       nBand = String(인코딩 n)(구간 = n 하나) · seamAdjacent = `Y_SEAM_ADJACENT_PRODUCT` ·
- *       구조 잠금 키 qrPosition(상태) · qrWindow(인코딩 window) · qrSlot(인코딩 role 'slot' 셀 유무) ·
- *       eccLevel(인코딩).
+ *       설계 잠금 키 qrPosition(상태) · qrWindow(인코딩 window) · qrSlot(인코딩 role 'slot' 셀 유무) ·
+ *       측정 구성 키 eccLevel(인코딩).
  * 값을 모르면 그 키는 undefined 로 남는다 — resolver 가 `ctx-incomplete` 로 잠근다(추측으로 채우지 않는다).
  *
  * @param {'O'|'A'|'K'|'Y'} type 생성기 타입(`generatorState.type`)
@@ -997,7 +1046,7 @@ export function cellShapeCtx(type, encoded, state, render) {
 
 /**
  * 문맥 → 허용표 행 문맥(`table` + `CELL_SHAPE_ALLOW_KEYS[table]`, 정확히 그 키만). 영수증 행 allowCtx 의 모양.
- * 구조 잠금 키 · type(Y) 같은 표 밖 키는 깎는다. 모르는 표면 null.
+ * 설계 잠금 키 · 측정 구성 키 · type(Y) 같은 표 밖 키는 깎는다. 모르는 표면 null.
  */
 export function cellShapeAllowCtx(ctx) {
   const keys = ctx && CELL_SHAPE_ALLOW_KEYS[ctx.table];

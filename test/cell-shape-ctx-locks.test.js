@@ -6,7 +6,7 @@
 //      Y 기본(투명 · auto)은 «미지 표면» 이다(설계 §3.2 safety B2 — Y 기본에서 노출형 모양은 흰 틈 행으로 못 연다).
 //   ② 슬롯 판정은 코드(role 'slot' 셀)에서 — cellSurfaceFinal.hasCenterQrSlot 과 모든 Y 레이아웃에서 같은 답.
 //   ③ 실효 타입 — C 는 인코딩(notchC)이 판정(상태 표지가 아니라) · G · V · H(null).
-//   ④ 제품 경로 문맥은 완전하다(렌더 값을 주면 표 키 · 구조 잠금 키가 전부 정의) · Y 심 변형은 생산자 기본과 같다.
+//   ④ 제품 경로 문맥은 완전하다(렌더 값을 주면 표 키 · 설계 잠금 키 · 측정 구성 키가 전부 정의) · Y 심 변형은 생산자 기본과 같다.
 //   ⑤ qrDecoCtx 는 허용표 QR 키 정확히 + 눈 접기가 resolver 와 같은 뜻.
 //   ⑥ (TL_L0_DIR) L0 하네스 tl-decode.mjs 의 allowCtx 유도(하네스 사본 CTX_DERIVE)와 제품 cellShapeCtx 가 대표 케이스
 //      격자에서 표 키마다 같다. 하네스는 CLI 스크립트라(유도 함수가 모듈 밖으로 안 나온다) **하위 프로세스로 돌려**
@@ -37,7 +37,8 @@ import { hasCenterQrSlot } from '../src/cellSurfaceFinal.js';
 import { buildSceneY, Y_SEAM_ADJACENT_MODES } from '../src/sceneY.js';
 import { encodeOptionsForY } from '../src/generator-render-config.js';
 import {
-  CELL_GAP_GRADES, CELL_GAP_QUIET_COLORS, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_LOCK_CTX_KEYS, Y_SEAM_ADJACENT_PRODUCT,
+  CELL_GAP_GRADES, CELL_GAP_QUIET_COLORS, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_MEASURED_CONFIG_KEYS,
+  CELL_SHAPE_REQUIRED_CTX_KEYS, Y_SEAM_ADJACENT_PRODUCT,
   cellGapGrade, cellShapeAllowCtx, cellShapeCtx, cellShapeTypeOf, paletteGradeOf,
 } from '../src/cell-shape.js';
 import { QR_ALLOW_KEYS, QR_HOSTS, qrDecoCtx, resolveQrDeco } from '../src/qr-colors.js';
@@ -136,7 +137,12 @@ test('③ 실효 타입: C 는 코드(notchC)가 판정 · G = O+o-cm · V = A+t
 
 // ── ④ 완전성 · 심 변형 ────────────────────────────────────────────────────
 
-test('④ 제품 경로 문맥은 완전하다 — 렌더 값을 주면 표 키 · 구조 잠금 키 전부 정의 · 표 투영은 정확히 표 키', () => {
+test('④ 제품 경로 문맥은 완전하다 — 렌더 값을 주면 표 키 · 설계 잠금 키 · 측정 구성 키 전부 정의 · 표 투영은 정확히 표 키', () => {
+  // resolver 요구 키 = 표 키 ∪ 설계 잠금 키(하네스 계약) ∪ 측정 구성 키 — 셋 중 하나라도 빠지면 이 자가 그 키를 안 잰다.
+  for (const t of ['oak', 'y']) {
+    assert.deepEqual([...CELL_SHAPE_REQUIRED_CTX_KEYS[t]].sort(),
+      [...CELL_SHAPE_ALLOW_KEYS[t], ...CELL_SHAPE_LOCK_CTX_KEYS[t], ...CELL_SHAPE_MEASURED_CONFIG_KEYS[t]].sort(), t);
+  }
   const cases = [
     ['O', encode(PAYLOAD), FRESH],
     ['A', encodeA(PAYLOAD), { ...FRESH, type: 'A' }],
@@ -148,7 +154,7 @@ test('④ 제품 경로 문맥은 완전하다 — 렌더 값을 주면 표 키 
   for (const preset of [...Object.keys(PRESETS), 'custom']) {
     for (const [type, enc, st] of cases) {
       const ctx = cellShapeCtx(type, enc, { ...st, preset }, { quietColor: 'none' });
-      const keys = [...CELL_SHAPE_ALLOW_KEYS[ctx.table], ...CELL_SHAPE_LOCK_CTX_KEYS[ctx.table]];
+      const keys = CELL_SHAPE_REQUIRED_CTX_KEYS[ctx.table];
       for (const k of keys) assert.notEqual(ctx[k], undefined, `${type} ${preset} ${k}`);
       const row = cellShapeAllowCtx(ctx);
       assert.deepEqual(Object.keys(row).sort(), ['table', ...CELL_SHAPE_ALLOW_KEYS[ctx.table]].sort());

@@ -36,6 +36,8 @@ import {
   CELL_SHAPE_LOCK_REASONS,
   CELL_SHAPE_LOCK_CTX_KEYS,
   CELL_SHAPE_MEASURED_CONFIG,
+  CELL_SHAPE_MEASURED_CONFIG_KEYS,
+  CELL_SHAPE_REQUIRED_CTX_KEYS,
   CELL_SHAPE_STRUCTURAL_LOCK_REASONS,
   BEVEL_BAND_SEPARATION_MIN,
   cellShapeTier,
@@ -685,26 +687,26 @@ function deepFreeze(o) {
 const STUB = deepFreeze({ ROWS: [], RECEIPT_SHA256: null, MEASURED_AT: null, FINGERPRINT: null });
 
 /**
- * oak 구조 잠금 문맥 키(표 밖 — `CELL_SHAPE_LOCK_CTX_KEYS.oak` = 측정 구성 키)는 그 타입(O)의 **측정 구성** 값으로
+ * oak 측정 구성 키(표 밖 — `CELL_SHAPE_MEASURED_CONFIG_KEYS.oak`)는 그 타입(O)의 **측정 구성** 값으로
  * 채운다(선언 `CELL_SHAPE_MEASURED_CONFIG` 에서 읽는다 — 손으로 옮기지 않는다). 측정 구성과 다르면 모든 모양이
- * 구조 잠금이라 아래 «표 행이 연다» 자가 엉뚱한 사유로 빨개진다.
+ * 잠겨 아래 «표 행이 연다» 자가 엉뚱한 사유로 빨개진다.
  */
 const CTX_OAK = Object.freeze({
   type: 'O', version: 'V1', finderPatternId: 'pinwheel-c2-2-1100-cw', tones: 3, gapGrade: 'white',
   bgMode: 'white', paletteGrade: 'slate', qrPosition: 'none', ...CELL_SHAPE_MEASURED_CONFIG.O,
 });
 /**
- * Y 구조 잠금 문맥 키(표 밖 — `CELL_SHAPE_LOCK_CTX_KEYS.y`)의 «잠그지 않는» 값: 코너/없음 QR ·
- * 윈도 β 아님 · 슬롯 셀 없음 · 측정 구성(ECC). 키 목록은 cell-shape.js 에서 읽는다 — 키가 늘면 여기서 던진다
+ * Y 표 밖 문맥 키의 «잠그지 않는» 값: 설계 잠금 키(`CELL_SHAPE_LOCK_CTX_KEYS.y` — 코너/없음 QR · 윈도 β 아님 · 슬롯 셀
+ * 없음) + 측정 구성 키(ECC). 키 목록은 cell-shape.js 에서 읽는다 — 키가 늘면 여기서 던진다
  * (빠진 키는 resolver 가 `ctx-incomplete` 로 잠가 아래 «표 행이 연다» 단언이 엉뚱한 사유로 빨개진다).
  */
 const Y_LOCK_CTX_OPEN = Object.freeze({ qrPosition: 'none', qrWindow: false, qrSlot: false, ...CELL_SHAPE_MEASURED_CONFIG.Y });
 {
-  const want = [...CELL_SHAPE_LOCK_CTX_KEYS.y].sort().join(',');
+  const want = [...CELL_SHAPE_LOCK_CTX_KEYS.y, ...CELL_SHAPE_MEASURED_CONFIG_KEYS.y].sort().join(',');
   const have = Object.keys(Y_LOCK_CTX_OPEN).sort().join(',');
-  if (want !== have) throw new Error(`CTX_Y 구조 잠금 키 어긋남: 모듈 ${want} · 픽스처 ${have}`);
-  const missingOak = CELL_SHAPE_LOCK_CTX_KEYS.oak.filter((k) => CTX_OAK[k] === undefined);
-  if (missingOak.length) throw new Error(`oak 구조 잠금 문맥 키 ${missingOak} 가 CTX_OAK 에 없다 — 측정 구성 선언에서 채워라`);
+  if (want !== have) throw new Error(`CTX_Y 표 밖 문맥 키 어긋남: 모듈 ${want} · 픽스처 ${have}`);
+  const missingOak = CELL_SHAPE_REQUIRED_CTX_KEYS.oak.filter((k) => CTX_OAK[k] === undefined);
+  if (missingOak.length) throw new Error(`oak 문맥 키 ${missingOak} 가 CTX_OAK 에 없다 — 측정 구성 선언에서 채워라`);
 }
 const CTX_Y = Object.freeze({
   type: 'Y', cellSurfaceLayout: 'v0', locatorProfile: 'cell-surface-v0', nBand: '13', tones: 3,
@@ -801,8 +803,8 @@ describe('resolveCellShapeSpec', () => {
     assert.equal(resolveCellShapeSpec({ cellShape: 'round-bevel' }, { ...CTX_Y, nBand: '25' }, allow).spec, null);
     // O 행이 Y 를, Y 행이 O 를 허가하지 않는다.
     assert.equal(resolveCellShapeSpec({ cellShape: 'round-bevel' }, { ...CTX_OAK }, allow).spec, null);
-    // Y 구조 잠금 키가 하나라도 빠지면 행이 있어도 잠긴다(잴 수 없으면 잠근다 — fail-closed).
-    for (const k of CELL_SHAPE_LOCK_CTX_KEYS.y) {
+    // Y 표 밖 키(설계 잠금 · 측정 구성)가 하나라도 빠지면 행이 있어도 잠긴다(잴 수 없으면 잠근다 — fail-closed).
+    for (const k of [...CELL_SHAPE_LOCK_CTX_KEYS.y, ...CELL_SHAPE_MEASURED_CONFIG_KEYS.y]) {
       const { [k]: _drop, ...missing } = CTX_Y;
       const res = resolveCellShapeSpec({ cellShape: 'round-bevel' }, missing, allow);
       assert.deepEqual(res, { spec: null, lockReason: CELL_SHAPE_LOCK_REASONS.CTX_INCOMPLETE }, `키 ${k}`);

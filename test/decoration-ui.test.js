@@ -9,7 +9,8 @@
  *      제품 기본표(생성본)에서는 셀 모양 카드 열림 ⇔ «렌더 문맥에 맞는 표 행이 있다» 이고(행은 표에서 유도 — 박제 없음),
  *      제품 기본 Y(투명 배경 · 판 없음)에서 하나 이상 열려 그 카드는 사유 없이 생산자까지 간다.
  *      자리 · ECC 가 측정 구성(cell-shape CELL_SHAPE_MEASURED_CONFIG — A · K 자동 코너 마커 · 사괘 없음 · ECC H)과 다르면
- *      표 키가 같아도 전부 잠기고(seat-config g1209 · ecc-level g1210), 매퍼가 사괘를 떨군 조합은 열린 채다(2026-09-27).
+ *      표 키가 같아도 전부 잠기고, 매퍼가 사괘를 떨군 조합은 열린 채다(2026-09-27). 사유는 반사실이다 — 측정 구성에서
+ *      열리던 카드만 «자리 · ECC 탓»(seat-config g1209 · ecc-level g1210), 측정 구성에서도 잠기던 카드는 그 사유 그대로.
  *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats). O 는 안쪽 «없음»(측정 구성).
  *   ③ 기본 상태에서는 어떤 타입(O · A · K · Y · H)도 생산자에 꾸미기 키를 넘기지 않는다 — sceneOpts.cellShape ·
  *      palette.qrDeco · hQr.deco · hCellStyle 부재(D1 이 넘긴 «이름 붙인 미측정 축»). 켬 → 끔 클릭 경로 뒤에도.
@@ -476,26 +477,35 @@ test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문�
   // 제품 기본 A · K(자동 코너 마커)는 측정 구성이다 — 생성 표 행으로 열린다(측정한 기본을 잠그지 않는다).
   // (O 안쪽 없음은 이 하네스 페이로드에서 자동 버전이 v1 이라 행이 없다 — 버전을 고정한 O 는 아래 자가 잰다.)
   for (const label of ['A', 'K']) {
-    assert.ok(openedByType[label].rows > 0, `${label}(제품 자동 자리 · 측정 구성)에서 여는 행이 없다 — ` + JSON.stringify(openedByType));
+    assert.ok(openedByType[label].rows > 0, `${label}(제품 자동 자리 · 측정 구성)에서 여는 행이 없다 — 제품 자동 자리가 바뀌어 `
+      + '측정 구성(CELL_SHAPE_MEASURED_CONFIG)에서 벗어났다면 재측정하거나 제품 기본을 재검토할 것(선언은 영수증에서만 바꾼다 — '
+      + '제품 기본에 맞추면 거짓 열림이 돌아온다) ' + JSON.stringify(openedByType));
   }
   assert.equal(openedByType['O 자동'].rows, 0);
 });
 
-test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전부 새 사유로 잠긴다 — 매퍼가 떨군 사괘는 열린 채다', () => {
+test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전부 잠기고, 측정 구성에서 열리던 카드만 새 사유다 — 매퍼가 떨군 사괘는 자리 사유가 아니다', () => {
   // 대조군 쌍: 같은 타입 · 같은 표 키(allowCtx)에서 자리 · ECC 한 축만 바꾼다. 표 키가 같으니 옛 resolver 는 둘 다 열었다.
+  // 사유는 반사실이다(2026-09-27 검토): 대조군(측정 구성)에서 열린 카드 → 그 축의 사유(«측정 구성이면 열린다» 가 참),
+  // 대조군에서도 잠긴 카드 → 대조군과 같은 사유(돌출 bevel · 행 없음은 자리 · ECC 를 되돌려도 안 열린다 — «자리 탓» 은 틀린 안내).
   const nonDefault = (h) => h.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT);
   const reasons = (h) => nonDefault(h).map((el) => el.dataset.lockReason);
   // O 는 버전을 V2 로 고정한다 — 표 행이 있는 버전이고, 사괘 · ECC 를 바꿔도 같은 버전에 머물러 표 키가 같다(대조군).
   const O2 = { ...TYPE_STATES.O, versionO: 2 };
+  // A v1 은 표 행이 없는 버전이다(행은 A v0 뿐) — 측정 구성이어도 잠기니 «자리 탓» 이 아니라 미확인 · 설계 잠금이어야 한다.
+  const A1 = { ...TYPE_STATES.A, versionA: 1, cellBevel: 1.4 };
   const pairs = [
-    // [이름, 측정 구성 상태, 한 축만 바꾼 상태, 기대 사유, 사전 키]
+    // [이름, 측정 구성 상태, 한 축만 바꾼 상태, 그 축의 사유, 사전 키]
     ['A 바깥 없음', TYPE_STATES.A, { ...TYPE_STATES.A, outerSeat: 'none' }, 'seat-config', 'g1209'],
     ['K 바깥 없음', TYPE_STATES.K, { ...TYPE_STATES.K, outerSeat: 'none' }, 'seat-config', 'g1209'],
     ['O2 사괘(수동)', O2, { ...O2, deepSeat: 'sagoae' }, 'seat-config', 'g1209'],
     ['O2 ECC M', O2, { ...O2, eccLevel: 'M' }, 'ecc-level', 'g1210'],
     ['A ECC L', TYPE_STATES.A, { ...TYPE_STATES.A, eccLevel: 'L' }, 'ecc-level', 'g1210'],
     ['K ECC M', TYPE_STATES.K, { ...TYPE_STATES.K, eccLevel: 'M' }, 'ecc-level', 'g1210'],
+    ['A1 바깥 없음 · 돌출 bevel(행 없는 버전)', A1, { ...A1, outerSeat: 'none' }, 'seat-config', 'g1209'],
+    ['K 바깥 없음 · 돌출 bevel', { ...TYPE_STATES.K, cellBevel: 1.4 }, { ...TYPE_STATES.K, cellBevel: 1.4, outerSeat: 'none' }, 'seat-config', 'g1209'],
   ];
+  const seen = { axis: 0, kept: 0 };
   for (const [name, baseState, state, reason, key] of pairs) {
     const base = harness({ state: { ...baseState, cellShape: 'bevel' } });
     base.render();
@@ -503,11 +513,25 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     h.render();
     // 같은 표 키 — 측정 구성 문맥의 행이 그대로 이 문맥을 «허가» 하던 자리다(거짓 열림의 전제).
     assert.deepEqual(cellShapeAllowCtx(h.c.current.deco.ctx), cellShapeAllowCtx(base.c.current.deco.ctx), name + ': 표 키가 달라졌다 — 대조군이 아니다');
-    assert.ok(reasons(h).every((r) => r === reason), `${name}: 사유 ${reasons(h)}`);
-    assert.ok(h.$('cellShapeLockHint').textContent.includes(key), `${name}: 사유 줄에 ${key} 가 없다`);
+    const baseCards = nonDefault(base);
+    const cards = nonDefault(h);
+    let axis = 0;
+    cards.forEach((el, i) => {
+      const b = baseCards[i];
+      assert.equal(el.dataset.decoValue, b.dataset.decoValue, name + ': 카드 순서');
+      assert.equal(el.getAttribute('aria-disabled'), 'true', `${name} ${el.dataset.decoValue}: 측정 밖 구성인데 열렸다`);
+      const baseOpen = b.getAttribute('aria-disabled') === 'false';
+      // 흰 판(하네스 기본)이라 대조군의 exposed-gap 은 없다 — 있으면 측정 구성까지 달라진 쪽은 미확인이어야 한다.
+      const want = baseOpen ? reason : (b.dataset.lockReason === 'exposed-gap' ? 'unmeasured' : b.dataset.lockReason);
+      assert.equal(el.dataset.lockReason, want, `${name} ${el.dataset.decoValue}: 대조군 ${baseOpen ? '열림' : b.dataset.lockReason}`);
+      if (baseOpen) { axis += 1; seen.axis += 1; } else seen.kept += 1;
+    });
+    assert.equal(h.$('cellShapeLockHint').textContent.includes(key), axis > 0, `${name}: 사유 줄의 ${key} 는 측정 구성에서 열린 카드가 있을 때만`);
     assert.equal('cellShape' in lastOf(h.calls.buildScene), false, name + ': 잠겼는데 모양이 생산자에 갔다');
     assert.equal(h.state.cellShape, 'bevel', name + ': 잠금이 상태를 고쳤다');
   }
+  // 판별력: 두 갈래가 모두 났다 — «축 사유» 카드와 «대조군 사유 유지» 카드(돌출 bevel · 행 없는 버전).
+  assert.ok(seen.axis > 0 && seen.kept > 0, JSON.stringify(seen));
   // 측정 구성 쪽은 열린다(위 쌍의 대조군이 비지 않았다) — A · K · O 기본에서 bevel 이 생산자까지 간다.
   for (const [name, state] of [['A', TYPE_STATES.A], ['K', TYPE_STATES.K], ['O2', O2]]) {
     const h = harness({ state: { ...state, cellShape: 'bevel' } });
@@ -515,9 +539,11 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     assert.equal(lastOf(h.calls.buildScene).cellShape && lastOf(h.calls.buildScene).cellShape.kind, 'bevel', name + ': 측정 구성인데 bevel 이 안 갔다');
   }
   // 매퍼가 사괘를 떨구는 조합은 와이어가 측정 구성과 같다 — 상태 표지(deepSeat)로 잠그면 거짓 잠금이다.
+  // 두 쌍 다 표 행이 있는 버전에서 잰다(O daehan 은 V3 — daehan 행은 V3 에만 있다). 행이 없는 버전이면 두 팔이 모두
+  // 미확인으로 잠겨 «열린 채» 를 못 잰다(2026-09-27 검토 — 옛 쌍은 하네스 페이로드의 자동 V2 에서 둘 다 잠겨 있었다).
   for (const [name, state] of [
-    ['A 자동 a-cm + 사괘 선택', { ...TYPE_STATES.A, deepSeat: 'sagoae' }],
-    ['O daehan + 사괘 선택', { ...TYPE_STATES.O, finderPatternId: 'oak-daehan-k10', deepSeat: 'sagoae' }],
+    ['A 자동 a-cm + 사괘 선택', { ...TYPE_STATES.A, deepSeat: 'sagoae', cellShape: 'bevel' }],
+    ['O3 daehan + 사괘 선택', { ...TYPE_STATES.O, versionO: 3, finderPatternId: 'oak-daehan-k10', deepSeat: 'sagoae', cellShape: 'bevel' }],
   ]) {
     const without = harness({ state: { ...state, deepSeat: 'none' } });
     without.render();
@@ -526,6 +552,9 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     assert.equal(h.c.current.encoded.sagoae, false, name + ': 매퍼가 사괘를 떨구지 않았다 — 대조의 전제가 깨졌다');
     assert.deepEqual(reasons(h), reasons(without), name + ': 사괘 선택만 더했는데 카드 잠금이 달라졌다');
     assert.ok(!reasons(h).includes('seat-config'), name + ': 와이어가 측정 구성인데 자리 사유로 잠겼다');
+    const open = nonDefault(h).filter((el) => el.getAttribute('aria-disabled') === 'false').map((el) => el.dataset.decoValue);
+    assert.ok(open.length > 0, name + ': 열린 카드가 없다 — «열린 채» 를 재지 못한다(표 행이 있는 문맥이 아니다)');
+    assert.equal(lastOf(h.calls.buildScene).cellShape && lastOf(h.calls.buildScene).cellShape.kind, 'bevel', name + ': 열린 bevel 이 생산자까지 안 갔다');
   }
 });
 

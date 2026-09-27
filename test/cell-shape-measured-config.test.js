@@ -1,9 +1,11 @@
 // cell-shape-measured-config.test.js — 셀 꾸미기 «측정 구성» 잠금 (2026-09-27 자리 레인)
 //
 // 허용표 행은 표 키(타입 · 버전 · 파인더 · 톤 · 틈 · 바탕 · 팔레트 · QR 위치)만 갖지만, 그 행이 참인 것은 **측정 구성**
-// (L6 측정 하네스 규약 — 자동 자리 · O 는 안쪽 없음 · 사괘 없음 · ECC H)에서다. 표 키 밖의 축이 다르면 같은 표 키에서도
+// (L6 측정 하네스 규약 — 자동 자리 · O · C 는 안쪽 없음 · 사괘 없음 · ECC H)에서다. 표 키 밖의 축이 다르면 같은 표 키에서도
 // 셀 역할 · 정정 여유가 달라진다(A · K 바깥 «없음» 이 a-cm/k-cm 에서 잰 행으로 열리던 거짓 열림). 그래서 resolver 는
-// 렌더 구성이 그 타입의 측정 구성(cell-shape `CELL_SHAPE_MEASURED_CONFIG`)과 다르면 구조 잠금으로 모든 모양을 잠근다.
+// 렌더 구성이 그 타입의 측정 구성(cell-shape `CELL_SHAPE_MEASURED_CONFIG`)과 다르면 모든 모양을 잠근다.
+// 사유는 참이어야 한다(2026-09-27 검토) — «자리 · ECC 탓» 은 측정 구성으로 바꾸면 그 행이 열릴 때만, 행이 없거나 영구 설계
+// 잠금이면 그 사유(unmeasured · bevel-raised · bullseye-dot …)다. 측정 구성 키는 설계 잠금 문맥 키(하네스 계약)와 따로 둔다.
 //
 // 재는 것(실제 인코더 · 생성 허용표 · 제품 자동 자리표):
 //   ⓐ 유닛 — 측정 구성 문맥은 생성 표 행으로 열리고, 표 키가 같은 «한 축만 다른» 문맥은 새 사유로 잠긴다:
@@ -13,9 +15,13 @@
 //      O/A 에서 키가 빠지면 값 모름(ctx-incomplete) · ECC 이름 밖 값은 값 모름.
 //   ⓒ 생성 표 성질 — 행이 있는 타입마다 선언이 있고, 모든 셀 행은 그 타입 측정 구성 문맥에서 열리며, 측정 구성 키를 하나
 //      바꾸면 그 축의 사유로 잠긴다(ECC 는 다른 레벨 전부).
-//   ⓓ 선언 ↔ 제품 자동 자리표 — A · K 의 코너 마커 = 자동 바깥 자리가 켜는 마커(finder-zone-ui 술어) · 사괘 = 자동 심부 자리
-//      (비-taegeuk) · O 는 측정 하네스 규약(안쪽 없음)이라 false 이고 제품 자동 O(안쪽 o-cm)는 타입 G 로 갈린다.
+//   ⓓ 선언 ↔ 제품 자동 자리표(성질) — 제품 자동 자리의 와이어가 선언과 같으면 그 문맥의 표 행이 열리고, 다르면 잠긴다.
+//      값의 같음은 강제하지 않는다(제품 기본이 바뀌면 그 기본이 잠기는 것이 맞다 — 선언은 영수증에서만 바꾼다). O 는 측정
+//      하네스 규약(안쪽 없음)이라 false 이고 제품 자동 O(안쪽 o-cm)는 타입 G 로 갈린다.
 //   ⓔ 선언이 묶인 영수증 = 허용표 RECEIPT_SHA256 — 표를 다시 생성하면 빨개진다(선언을 재유도하고 sha 를 갱신할 것).
+//   ⓕ 사유는 참이다(반사실 불변식) — 생성 표의 문맥 격자(측정 구성 · 자리/ECC 뒤집기 · 틈 · 행 없는 버전 × 모든 선택지)에서
+//      seat-config · ecc-level ⇒ 측정 구성으로 바꾸면 열린다 · exposed-gap ⇒ 틈만 흰색으로 바꾸면 열린다 · unmeasured ⇒ 그 어느
+//      한 축만 바꿔서는 안 열린다 · 설계 잠금 ⇒ 측정 구성으로 바꿔도 같은 사유다. 측정 구성과 다르면 열림은 없다.
 // 못 재는 것: 측정 구성 자체가 참인가(private 측정 하네스 · 영수증의 몫). ECC 는 기하가 아니라 판독 여유 축이다 — 같은
 //   버전의 M · L 이 실제로 안 읽힌다는 증거가 아니라 «측정 밖» 이라서 잠근다.
 
@@ -24,10 +30,10 @@ import assert from 'node:assert/strict';
 
 import * as ALLOW from '../src/cell-shape-allow.js';
 import {
-  CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_LOCK_REASONS, CELL_SHAPE_MEASURED_CONFIG,
-  CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256, CELL_SHAPE_PARAMS,
-  CELL_SHAPE_SEAT_CONFIG_KEYS, CELL_SHAPE_STRUCTURAL_LOCK_REASONS, cellShapeAllowCtx, cellShapeCtx, cellShapeTypeOf,
-  resolveCellShapeSpec,
+  CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_LOCK_REASONS, CELL_SHAPE_MEASURED_CONFIG,
+  CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256, CELL_SHAPE_PARAMS, CELL_SHAPE_REQUIRED_CTX_KEYS,
+  CELL_SHAPE_SEAT_CONFIG_KEYS, CELL_SHAPE_STRUCTURAL_LOCK_REASONS, EXPOSED_CELL_SHAPES, cellShapeAllowCtx, cellShapeCtx,
+  cellShapeTypeOf, resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 import { ECC_NAME_BY_VALUE } from '../src/formatinfo.js';
 import { encode } from '../src/encode.js';
@@ -37,7 +43,7 @@ import { encodeY } from '../src/encodeY.js';
 import { centralBeaconEncoderOptions, encodeOptionsForY } from '../src/generator-render-config.js';
 import { AUTO_SEAT_TYPES, SEAT_NONE, SEAT_SAGOAE, autoSeatsFor } from '../src/generator-seat-auto.js';
 import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
-import { createGeneratorState } from '../src/generator-state.js';
+import { DECORATION_STATE_DOMAINS, createGeneratorState } from '../src/generator-state.js';
 
 const R = CELL_SHAPE_LOCK_REASONS;
 const PAYLOAD = 'https://tl.estre.so'; // 19 B — 제품 기본 URL
@@ -78,9 +84,15 @@ function assertMeasuredOpensOtherLocks(name, measured, other, reason) {
 
 // ── 선언의 모양 ─────────────────────────────────────────────────────────────
 
-test('선언: 측정 구성 키 = oak 구조 잠금 문맥 키 · y 는 ECC 를 더 갖는다 · 새 사유 둘은 구조 잠금 사유다', () => {
-  assert.deepEqual([...CELL_SHAPE_LOCK_CTX_KEYS.oak], [...CELL_SHAPE_MEASURED_CONFIG_KEYS.oak]);
-  for (const k of CELL_SHAPE_MEASURED_CONFIG_KEYS.y) assert.ok(CELL_SHAPE_LOCK_CTX_KEYS.y.includes(k), k);
+test('선언: 측정 구성 키는 설계 잠금 문맥 키(하네스 계약)와 겹치지 않고 resolver 요구 키에 든다 · 새 사유 둘은 구조 잠금 사유다', () => {
+  // 설계 잠금 문맥 키는 L0 하네스가 케이스마다 유도하는 계약이다(tl-decode LOCK_DERIVE — 모르는 키면 «키 드리프트» 로 멈춘다).
+  // 측정 구성 키를 거기 섞으면 표준 원격 전수(TL_L0_DIR)의 cell-shape-ctx-locks ⑥ 이 빨개진다(2026-09-27 검토 blocking).
+  for (const t of ['oak', 'y']) {
+    for (const k of CELL_SHAPE_MEASURED_CONFIG_KEYS[t]) {
+      assert.ok(!CELL_SHAPE_LOCK_CTX_KEYS[t].includes(k), `${t}.${k} 가 설계 잠금 문맥 키(하네스 계약)에 섞였다`);
+      assert.ok(CELL_SHAPE_REQUIRED_CTX_KEYS[t].includes(k), `${t}.${k} 를 resolver 가 요구하지 않는다`);
+    }
+  }
   assert.ok(CELL_SHAPE_SEAT_CONFIG_KEYS.every((k) => CELL_SHAPE_MEASURED_CONFIG_KEYS.oak.includes(k)));
   for (const [type, config] of Object.entries(CELL_SHAPE_MEASURED_CONFIG)) {
     const want = CELL_SHAPE_MEASURED_CONFIG_KEYS[type === 'Y' ? 'y' : 'oak'];
@@ -144,7 +156,7 @@ test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 �
     if (JSON.stringify(cellShapeAllowCtx(yOther)) === JSON.stringify(cellShapeAllowCtx(yH))) {
       measured += assertMeasuredOpensOtherLocks(`Y v0 ECC ${ecc}`, yH, yOther, R.ECC_LEVEL);
     } else {
-      // 다른 n 으로 갔다면 표 키부터 다르다 — 그래도 ECC 가 측정 밖이면 구조 잠금이 먼저다(행 유무와 무관).
+      // 다른 n 으로 갔다면 표 키부터 다르다 — 측정 문맥의 표 키에 ECC 만 바꾼 문맥으로 잰다(그 표 키의 행이 있으니 반사실이 참).
       for (const row of rowsFor(yH)) assert.equal(resolveRow(row, { ...yH, eccLevel: ecc }).lockReason, R.ECC_LEVEL);
     }
   }
@@ -154,11 +166,11 @@ test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 �
 test('ⓐ K · Y 기본 인코딩은 ctx-incomplete 로 잠기지 않는다 — K 사괘는 «개념 없음» 이라 false, Y 는 ECC 가 정의된다', () => {
   const k = cellShapeCtx('K', encodeK(PAYLOAD), { ...FRESH, type: 'K' }, WHITE);
   assert.equal(k.sagoae, false);
-  for (const key of [...CELL_SHAPE_ALLOW_KEYS.oak, ...CELL_SHAPE_LOCK_CTX_KEYS.oak]) assert.notEqual(k[key], undefined, 'K ' + key);
+  for (const key of CELL_SHAPE_REQUIRED_CTX_KEYS.oak) assert.notEqual(k[key], undefined, 'K ' + key);
   assert.notEqual(resolveCellShapeSpec({ cellShape: 'bevel' }, k).lockReason, R.CTX_INCOMPLETE);
   const y = cellShapeCtx('Y', encodeY(PAYLOAD, encodeOptionsForY({ tone: 3, fallback: Y_TL, locatorProfileY: 'cell-surface-v0' })), FRESH, { quietColor: 'none' });
   assert.ok(ECC_NAMES.includes(y.eccLevel), `Y eccLevel ${y.eccLevel}`);
-  for (const key of [...CELL_SHAPE_ALLOW_KEYS.y, ...CELL_SHAPE_LOCK_CTX_KEYS.y]) assert.notEqual(y[key], undefined, 'Y ' + key);
+  for (const key of CELL_SHAPE_REQUIRED_CTX_KEYS.y) assert.notEqual(y[key], undefined, 'Y ' + key);
   assert.notEqual(resolveCellShapeSpec({ cellShape: 'bevel' }, y).lockReason, R.CTX_INCOMPLETE);
 });
 
@@ -171,6 +183,7 @@ test('ⓑ K 사괘 «개념 없음» 의 근거: encodeK 는 sagoae:true 를 던
   // 인코더가 boolean 을 주면 그 값이 늘 우선이다(K 가 사괘를 지원하게 되면 자동으로 읽힌다).
   const kWith = cellShapeCtx('K', { ...k, sagoae: true }, { ...FRESH, type: 'K' }, WHITE);
   assert.equal(kWith.sagoae, true);
+  assert.ok(rowsFor(kWith).some((row) => row.cellShape === 'bevel'), 'K 측정 문맥의 bevel 행 — 반사실(측정 구성이면 열린다)의 전제');
   assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, kWith).lockReason, R.SEAT_CONFIG);
 });
 
@@ -236,15 +249,32 @@ test('ⓒ 생성 표: 행이 있는 타입마다 측정 구성 선언이 있고,
 
 // ── ⓓ 선언 ↔ 제품 자동 자리표 ───────────────────────────────────────────────
 
-test('ⓓ 선언 ↔ 자동 자리표: A · K 코너 마커 = 자동 바깥 자리 · 사괘 = 자동 심부(비-taegeuk) · O 는 하네스 규약(안쪽 없음)', () => {
+test('ⓓ 선언 ↔ 자동 자리표(성질): 제품 자동 자리의 와이어가 선언과 같으면 열리고, 다르면 잠긴다 · O 는 하네스 규약(안쪽 없음)', (t) => {
+  // 값의 같음을 단언하지 않는다 — 선언은 측정 사실(영수증 — ⓔ 가 묶는다)이고 제품 기본은 바뀔 수 있다. 제품 기본이 선언과
+  // 달라지면 그 기본이 잠기는 것이 맞다(재측정하거나 제품 기본을 재검토할 일 — 선언을 제품 기본에 맞추면 거짓 열림이 돌아온다).
   const auto = (type) => autoSeatsFor({ type, centralFinderIsTaegeuk: false, allowBlocked: false });
   for (const type of ['A', 'K']) {
     const a = auto(type);
     const config = CELL_SHAPE_MEASURED_CONFIG[type];
-    // 자리 id → 와이어 코너 마커는 제품 술어(finder-zone-ui)로 옮긴다(buildConfig 의 cornerMarker 와 같은 함수).
-    assert.equal(config.cornerMarker, a.outer !== SEAT_NONE, `${type}: 자동 바깥 자리 ${a.outer}`);
-    assert.equal(config.cornerMarker, cornerMarkerSeatActive({ type, outerSeat: a.outer, turnA: false }), type);
-    assert.equal(config.sagoae, a.deep !== SEAT_NONE, `${type}: 자동 심부 ${a.deep}`);
+    // 자리 id → 와이어: 코너 마커는 제품 술어(finder-zone-ui — buildConfig 의 cornerMarker 와 같은 함수). A 매퍼는 코너 마커가
+    // 켜지면 사괘를 떨군다(daehan > 코너 마커 > 사괘) · K 는 사괘 개념이 없다(인코더가 던진다).
+    const cm = cornerMarkerSeatActive({ type, outerSeat: a.outer, turnA: false });
+    const sagoae = type === 'A' && !cm && a.deep === SEAT_SAGOAE;
+    const enc = (type === 'A' ? encodeA : encodeK)(PAYLOAD, { ...N7, ...(cm ? { cornerMarker: true } : {}), ...(sagoae ? { sagoae: true } : {}), eccLevel: 'H' });
+    const ctx = cellShapeCtx(type, enc, { ...FRESH, type, outerSeat: a.outer, deepSeat: a.deep }, WHITE);
+    const same = CELL_SHAPE_SEAT_CONFIG_KEYS.every((k) => ctx[k] === config[k]);
+    const rows = rowsFor(ctx);
+    if (same) {
+      assert.ok(rows.length > 0, `${type}: 제품 자동 자리 = 측정 구성인데 그 문맥의 표 행이 없다 — 자가 비었다`);
+    } else {
+      t.diagnostic(`${type}: 제품 자동 자리(바깥 ${a.outer} · 심부 ${a.deep})의 와이어가 측정 구성과 다르다 — 제품 기본이 잠긴다. `
+        + '재측정하거나 제품 기본을 재검토할 것(선언은 영수증에서만 바꾼다)');
+    }
+    for (const row of rows) {
+      const res = resolveRow(row, ctx);
+      if (same) assert.deepEqual(res, { spec: { kind: row.cellShape, param: row.param } }, `${type} 자동 ${row.cellShape}(${row.param})`);
+      else assert.equal(res.spec, null, `${type} 자동(측정 밖) ${row.cellShape}(${row.param}) 이 열렸다`);
+    }
   }
   // O — 측정 하네스는 안쪽을 «없음» 으로 내렸다(안쪽 o-cm 은 타입 G 로 따로 갈린다). 사괘는 자동 심부와 같다.
   const o = auto('O');
@@ -266,4 +296,97 @@ test('ⓔ 측정 구성 선언이 묶인 영수증 = 허용표 RECEIPT_SHA256 (�
   assert.equal(ALLOW.RECEIPT_SHA256, CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256,
     '허용표가 다시 생성됐다 — 새 영수증의 측정 구성(자리 · 사괘 · ECC)을 확인해 CELL_SHAPE_MEASURED_CONFIG 를 재유도하고 '
     + 'CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 을 갱신하라');
+});
+
+// ── ⓕ 사유는 참이다(반사실 불변식) ──────────────────────────────────────────
+
+/** 셀 모양 선택지 전부(끔 제외) — 스키마 도메인에서 유도. */
+function cellChoices() {
+  const D = DECORATION_STATE_DOMAINS;
+  const optionsOf = (key) => (D[key].kind === 'enum' ? D[key].values : D[key].samples);
+  const out = [];
+  for (const kind of optionsOf('cellShape')) {
+    if (kind === CELL_SHAPE_DEFAULT) continue;
+    const def = CELL_SHAPE_PARAMS[kind];
+    if (!def) { out.push({ cellShape: kind }); continue; }
+    for (const v of optionsOf(def.key)) out.push({ cellShape: kind, [def.key]: v });
+  }
+  assert.ok(out.some((c) => c.cellShape === 'bevel' && c.cellBevel > 1), '선택지에 돌출 bevel 이 없다 — 설계 잠금 갈래가 빈다');
+  return out;
+}
+
+test('ⓕ 사유는 참이다 — 자리 · ECC 탓은 측정 구성이면 열릴 때만, 틈 탓은 틈만 바꾸면 열릴 때만, 설계 잠금이 먼저다', () => {
+  const cellRows = ALLOW.ROWS.filter((r) => r.table === 'oak' || r.table === 'y');
+  const yLock = { qrPosition: FRESH.qrPosition, qrWindow: false, qrSlot: false };
+  const absent = {
+    oak: { version: Math.max(...cellRows.filter((r) => r.table === 'oak').map((r) => r.version)) + 1 },
+    y: { nBand: String(Math.max(...cellRows.filter((r) => r.table === 'y').map((r) => Number(r.nBand))) + 8) },
+  };
+  // 표 키 문맥(중복 제거) — 행의 모양 · 강도는 떼고 문맥만.
+  const bases = new Map();
+  for (const row of cellRows) {
+    const t = row.table === 'y' ? 'Y' : row.type;
+    const ctx = { table: row.table, type: t };
+    for (const k of CELL_SHAPE_ALLOW_KEYS[row.table]) ctx[k] = row[k];
+    if (row.table === 'y') Object.assign(ctx, yLock);
+    bases.set(JSON.stringify(ctx), ctx);
+  }
+  const choices = cellChoices();
+  const counts = {};
+  const bump = (k) => { counts[k] = (counts[k] || 0) + 1; };
+  const opens = (st, ctx) => resolveCellShapeSpec(st, ctx).spec !== null;
+  for (const base of bases.values()) {
+    const config = CELL_SHAPE_MEASURED_CONFIG[base.type];
+    // 측정 구성 변형: 그대로 · 자리 키 하나씩 뒤집기 · ECC 다른 레벨 · 자리 + ECC 동시.
+    const variants = [{}];
+    for (const k of Object.keys(config)) {
+      if (k === 'eccLevel') for (const e of ECC_NAMES.filter((x) => x !== config.eccLevel)) variants.push({ eccLevel: e });
+      else variants.push({ [k]: !config[k] });
+    }
+    const firstSeat = Object.keys(config).find((k) => k !== 'eccLevel');
+    if (firstSeat) variants.push({ [firstSeat]: !config[firstSeat], eccLevel: ECC_NAMES.find((x) => x !== config.eccLevel) });
+    for (const v of variants) for (const gap of [null, { gapGrade: 'unknown', bgMode: 'transparent' }]) for (const move of [null, absent[base.table]]) {
+      const ctx = Object.freeze({ ...base, ...config, ...v, ...(gap || {}), ...(move || {}) });
+      const measured = Object.freeze({ ...ctx, ...config });
+      const mismatch = Object.keys(v).length > 0;
+      for (const c of choices) {
+        const st = Object.freeze(c);
+        const res = resolveCellShapeSpec(st, ctx);
+        const where = `${JSON.stringify(ctx)} ${JSON.stringify(c)} → ${res.lockReason ?? 'open'}`;
+        if (res.spec) {
+          assert.equal(mismatch, false, '측정 구성과 다른데 열렸다: ' + where);
+          bump('open');
+          continue;
+        }
+        const reason = res.lockReason;
+        bump((mismatch ? 'mismatch:' : 'measured:') + reason);
+        if (reason === R.SEAT_CONFIG || reason === R.ECC_LEVEL) {
+          assert.ok(opens(st, measured), '자리 · ECC 탓인데 측정 구성으로 바꿔도 안 열린다: ' + where);
+          const seatDiffers = CELL_SHAPE_SEAT_CONFIG_KEYS.some((k) => k in config && ctx[k] !== config[k]);
+          assert.equal(reason === R.SEAT_CONFIG, seatDiffers, '사유가 가리키는 축이 실제로 다르지 않다: ' + where);
+        } else if (reason === R.EXPOSED_GAP) {
+          assert.equal(mismatch, false, '측정 구성까지 다른데 틈 탓: ' + where);
+          assert.ok(EXPOSED_CELL_SHAPES.includes(c.cellShape));
+          const whiteOpens = ['white', 'transparent', 'black'].some((bg) => opens(st, { ...ctx, gapGrade: 'white', bgMode: bg }));
+          assert.ok(whiteOpens, '틈 탓인데 틈만 흰색으로 바꿔도 안 열린다: ' + where);
+        } else if (reason === R.UNMEASURED) {
+          assert.ok(!opens(st, measured), '측정 구성으로 바꾸면 열리는데 미확인이라 한다(자리 · ECC 탓이어야): ' + where);
+          // 틈 탓(exposed-gap)은 노출형(gap · dot)만의 말이다 — 비노출형은 틈이 «드러나지» 않으니 틈 등급 행 차이도 미확인이다(1300dc8 규칙).
+          if (EXPOSED_CELL_SHAPES.includes(c.cellShape)) {
+            const whiteOpens = ['white', 'transparent', 'black'].some((bg) => opens(st, { ...ctx, gapGrade: 'white', bgMode: bg }));
+            assert.ok(!whiteOpens, '틈만 바꾸면 열리는데 미확인이라 한다(틈 탓이어야): ' + where);
+          }
+        } else {
+          // 설계 잠금(영구) — 측정 구성으로 바꿔도 같은 사유로 잠긴다.
+          assert.ok(CELL_SHAPE_STRUCTURAL_LOCK_REASONS.includes(reason), '모르는 사유: ' + where);
+          assert.deepEqual(resolveCellShapeSpec(st, measured), { spec: null, lockReason: reason }, '설계 잠금이 측정 구성에서 풀린다: ' + where);
+        }
+      }
+    }
+  }
+  // 판별력 — 각 갈래가 격자에서 실제로 난다(측정 밖 문맥에서 unmeasured · 설계 잠금이 자리 · ECC 사유에 가려지지 않았다).
+  for (const k of ['open', 'mismatch:seat-config', 'mismatch:ecc-level', 'mismatch:unmeasured', 'mismatch:bevel-raised',
+    'mismatch:bullseye-dot', 'measured:exposed-gap', 'measured:unmeasured']) {
+    assert.ok(counts[k] > 0, `갈래 ${k} 가 격자에서 안 났다 — ${JSON.stringify(counts)}`);
+  }
 });
