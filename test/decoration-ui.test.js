@@ -21,7 +21,10 @@
  *      하한(MEASURED_FLOORS) 아래면 열리던 카드가 export-dither(g1213) · export-size(g1214)로 잠기고 미리보기도 사각이다(자동 크기는
  *      안 잠근다 · 24비트는 항등). 사유 축이 둘 이상 다르면 미확인(g1162 — 어느 한 축만 되돌려서는 안 열린다), 하나면 그 축. Y 디더가
  *      바꾼 면 게인은 디더 한 축이다. 내보내기 장면 = 미리보기 장면(잠긴 렌더 = 꾸미기 끈 렌더 · 셀 모양은 장면 치수를 안 바꾼다) ·
- *      잰 하한 키 = index.html 내보내기 계획이 minRoundtripPpu 에 넘긴 호출 모양의 키.
+ *      잰 하한 키 = index.html 내보내기 계획이 minRoundtripPpu 에 넘긴 호출 모양의 키. H 셀 스타일 카드도 같은 두 축으로 잠긴다(2026-09-28
+ *      후속 검토 — 셀 모양만 잠그고 H 카드는 열려 있었다): 카드 · 미리보기(renderTypeH) · 3D(hSceneOptions) · 내보내기 장면이 같은 판정 ·
+ *      H 장면 치수(→ 계획 ppu)는 스타일 · 자세와 무관 · 잰 하한 키 = 호출 모양. 코너 QR 꾸미기는 기본표에 qr 행이 0 이라 전부 잠겨 있다
+ *      (qr 행이 생기면 그 자가 빨개진다 — 그때 QR 카드에 내보내기 축을 배선할 것).
  *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats) · 강조 'all'. O 는 안쪽 «없음»(실효 타입 O 의
  *      측정 구성). 제품 자동 O(안쪽 o-cm → 실효 타입 G · G 측정 구성)는 ② 제품 기본표 자가 제품 기본 URL 로도 잰다.
  *      G(버전 V2 고정)도 자리 · ECC · 강조 쌍 자에 든다(사유 문구의 참/거짓 — 제품이 가장 먼저 보이는 표면).
@@ -33,7 +36,9 @@
  *      실제 렌더 함수가 spec · deco 를 생산자까지 나르고 미리보기 scene 이 바뀐다 — **K 수동 조립 · Y · H** 포함.
  *      K 수동 경로에서 spec 대입 줄을 지우면 이 자가 빨개지는지 같은 파일에서 확인한다(심은 결함).
  *      파생값 트리거 — 내보내기 크기 · 커스텀 폭 · 여백 없음 · 디더가 바뀌면 문서 이벤트 한 곳(index.html)이 렌더를 예약하고 카드 · 미리보기가
- *      다시 판정된다(안 바뀌면 예약 없음). 트리거 배선 · 두 번째 렌더를 지운 심은 결함이 각각 잡힌다.
+ *      다시 판정된다(안 바뀌면 예약 없음 · 렌더 뒤 계획은 안정). 크기 · 폭/높이 · 여백 없음은 index.html **실물 컨트롤 핸들러**를 태운다
+ *      (핸들러 → 문서 순서 — 핸들러가 상태를 동기로 안 쓰면 빨개진다). 셀 모양 · H 둘 다. 트리거 배선 · 두 번째 렌더 · H 갈래를 지운
+ *      심은 결함이 각각 잡힌다.
  *   ⑤ 잠금 사유 id(세 resolver 합집합)가 전부 사전 키로 매핑되고, 쓰는 키가 8언어에 모두 있다.
  *   ⑥ data-state-keys 배치 — 꾸미기 14키는 #sharedControls, customSat 은 customHue 와 같은 두 패널(D1 이양 자).
  *   ⑦ Canvas drawScene 이 noSeam 도형에 seam stroke 를 긋지 않는다(svg.js 와 같은 조건).
@@ -77,11 +82,12 @@ import {
 import {
   sceneOptionsForOA, centralN7FamilyForType, centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced,
   centralBeaconEncoderOptions, encodeOptionsForY, detectorEmphasisEquivalents, measuredStateAtTableKey, producerFaceGains,
-  cellShapeExportPlan,
+  cellShapeExportPlan, hCellStyleExportPlan,
 } from '../src/generator-render-config.js';
 import { faceGainsForRenderProfile } from '../src/render-profile.js';
 import {
-  EXPORT_DITHER_AUTO, EXPORT_FIXED_SIZES, EXPORT_MARGIN_TRIM, EXPORT_PPI_PRINT, minRoundtripPpu, minRoundtripPpuKey, resolveExportPpi,
+  EXPORT_DITHER_AUTO, EXPORT_FIXED_SIZES, EXPORT_MARGIN_INCLUDE, EXPORT_MARGIN_TRIM, EXPORT_PPI_PRINT, minRoundtripPpu, minRoundtripPpuKey,
+  resolveExportPpi,
   resolveExportSize, resolveRenderProfile, trimExportMargin,
 } from '../src/export-options.js';
 import { buildTrimmedScene } from '../src/export-render.js';
@@ -126,6 +132,14 @@ function decorationBlock(text) {
   const end = text.indexOf(call, start);
   assert.ok(start >= 0 && end > start, '꾸미기 블록을 못 찾았다');
   return text.slice(start, end + call.length);
+}
+
+/** index.html 의 내보내기 크기 · 커스텀 폭/높이 · 여백 없음 핸들러(디더 핸들러 앞까지 — 디더는 자기 핸들러가 schedule() 을 부른다). */
+function exportControlHandlers(text) {
+  const start = text.indexOf("els.exportSize.addEventListener('change', () => {");
+  const end = text.indexOf("els.exportDither.addEventListener('change', () => {", start);
+  assert.ok(start >= 0 && end > start, '내보내기 컨트롤 핸들러를 못 찾았다');
+  return text.slice(start, end);
 }
 
 function langBlock(lang) {
@@ -211,18 +225,18 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
     resolveCellShapeSpec, qrDecoHostOf, resolveQrDeco, hCellStyleCtx, resolveHCellStyleSpec, H_CELL_STYLE_DEFAULT,
     H_CELL_GROUND_DEFAULT, makeCustomPalette, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT,
     // H 경로(renderTypeH · hSceneOptions · 영상)는 decorationAllow 를 부르지 않고 hPreviewOptions 의 기본 허용표를 쓴다 —
-    // 그 셋은 다른 자(generator-h-qr-state 등)의 vm 하네스가 그대로 꺼내 돌리므로 새 이름을 들일 수 없다. 제품에서는
+    // 그 셋은 다른 자(generator-h-qr-state 등)의 vm 하네스도 꺼내 돌린다(새 이름은 그 하네스에도 같이 싣는다). 제품에서는
     // decorationAllow() 가 undefined(= 같은 기본표)라 둘이 같다. 그래서 이 하네스는 같은 fixture 를 hPreviewOptions 이음매에도
     // 넣는다(주입 지점 두 곳 = 제품이 표를 읽는 곳 두 곳).
     hPreviewOptions: (state, options = {}) => hPreviewOptions(state, { allow: c.decorationAllow(), ...options }),
     hMaskLuminance, encode, encodeA, encodeK, encodeY, encodeH, decodeH, sceneOptionsForOA, centralN7FamilyForType,
     centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced, centralBeaconEncoderOptions, encodeOptionsForY,
-    detectorEmphasisEquivalents, measuredStateAtTableKey, producerFaceGains, cellShapeExportPlan,
+    detectorEmphasisEquivalents, measuredStateAtTableKey, producerFaceGains, cellShapeExportPlan, hCellStyleExportPlan,
     // 면 게인 — index.html 의 실물 함수(exportDitherBits · resolvedRenderProfile · profileFaceGains · currentFaceGains)를 아래에서 꽂는다.
     resolveRenderProfile, faceGainsForRenderProfile, EXPORT_PPI_PRINT, EXPORT_DITHER_AUTO,
     // 내보내기 계획 — index.html 의 실물 exportPlanFor 를 아래에서 꽂는다(셀 꾸미기 내보내기 축이 그 계획을 읽는다). minRoundtripPpu 는
     // 실물을 감싸 index.html 호출 모양(문맥)을 기록한다 — 잰 하한 키가 그 호출 모양과 같은 키인지 재는 자가 쓴다.
-    trimExportMargin, buildTrimmedScene, resolveExportSize, resolveExportPpi, EXPORT_MARGIN_TRIM,
+    trimExportMargin, buildTrimmedScene, resolveExportSize, resolveExportPpi, EXPORT_MARGIN_TRIM, EXPORT_MARGIN_INCLUDE,
     minRoundtripPpu: (ctx) => { calls.minRoundtripPpu.push({ ...ctx }); return minRoundtripPpu(ctx); },
     // 렌더 예약 타이머(index.html `timer`) — 하네스의 schedule 은 pending 에 쌓기만 하므로 0(예약 없음)으로 둔다.
     timer: 0,
@@ -257,7 +271,7 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
   };
   for (const name of ['syncShotPresetUi', 'syncFaceGainLabel', 'syncHUi', 'syncExportPpiHint', 'syncQuietGaugeReadout',
     'syncTypeYCellEditorUi', 'emitProductGenerate', 'emitGeneratorFail', 'emitLabGen', 'applyPreviewFit',
-    'paintY3dPreview', 'updateGauge', 'updateOverflowHighlight', 'syncCubeMakeUi']) c[name] = () => {};
+    'paintY3dPreview', 'updateGauge', 'updateOverflowHighlight', 'syncCubeMakeUi', 'syncExportOptionsUi']) c[name] = () => {};
   vm.createContext(c);
   // 면 게인은 제품 함수 그대로(옛 하네스는 {1, .72, .57} 을 박아 두었다 — 제품 기본(화면용 .62)과 달라 Y 셀 꾸미기가 측정 게인 밖이었다).
   for (const name of ['exportDitherBits', 'resolvedRenderProfile', 'profileFaceGains', 'currentFaceGains',
@@ -267,6 +281,8 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
     vm.runInContext(fnSource(source, name), c);
   }
   vm.runInContext(decorationBlock(source), c);
+  // 내보내기 컨트롤의 실물 핸들러(크기 select · 커스텀 폭/높이 input · 여백 없음 체크) — 트리거 자가 모델 대입이 아니라 클릭 경로를 탄다.
+  vm.runInContext(exportControlHandlers(source), c);
   if (allow !== undefined) c.decorationAllow = () => allow;
   if (autoLocatorY) {
     Object.assign(c, { resolveAutoY, LOCATOR_PROFILE_CELL_SURFACE_V0TR });
@@ -692,7 +708,7 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
 });
 
 test('② ECC 사유의 실현 조건(제품 경로 · auto 사다리): auto 가 M 으로 내려간 길이(G 80 · A 85 · K 120 · Y 114 B)는 «ECC 탓»(g1210)이 아니라 미확인(g1162) · 같은 버전에서 H 로도 들어가는 길이의 수동 M 은 g1210', (t) => {
-  // 왜(DESIGN_002 §4.4): auto-M 길이는 그 버전의 표 키가 H 행과 같아 hit 가 나지만 그 버전에 H 로는 안 들어간다 — «ECC 를 H 로» 는
+  // 왜(ECC 실현 조건): auto-M 길이는 그 버전의 표 키가 H 행과 같아 hit 가 나지만 그 버전에 H 로는 안 들어간다 — «ECC 를 H 로» 는
   // 따를 수 없는 안내다. 사유는 index.html 렌더(cellShapeDecoFor)가 렌더에 쓴 인코더 · 페이로드 · 옵션으로 유도한 측정 상태
   // (generator-render-config measuredStateAtTableKey)에서 나온다. ECC 는 제품 auto 사다리(encodeWithEcc 실물)가 고른다.
   const nonDefault = (h) => h.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT);
@@ -1380,6 +1396,10 @@ test('② 미리보기 ↔ 내보내기(제품 경로): 내보내기 축으로 �
           JSON.stringify(square.c.current.encoded.cellDigits ? [...square.c.current.encoded.cellDigits.entries()] : null), `${name}: 인코딩이 다르다`);
       }
       const exported = h.run("exportPlanFor('png')").scene;
+      // 렌더 뒤 계획은 안정이다(판정 ppu = 내보내기 ppu — 다시 예약하지 않는다) · 여백 없음 재생성 장면의 치수도 셀 모양과 무관하다(모양 ·
+      // 사각의 내보내기 계획 ppu 가 같다 — 여백 포함 장면 치수만 재던 옛 자의 공백, 2026-09-28 검토 minor).
+      assert.equal(h.run('decorationExportPlanStale()'), false, `${name}: 렌더 뒤 계획이 판정과 다르다(판정 ppu ≠ 내보내기 ppu)`);
+      assert.equal(h.run("exportPlanFor('png')").plan.ppu, square.run("exportPlanFor('png')").plan.ppu, `${name}: 셀 모양이 내보내기 계획 ppu 를 바꿨다`);
       if (extra.exportMargin === 'trim') {
         assert.equal(decorated(exported), open, `${name}: 내보내기(여백 없음 재생성) 장면의 꾸밈이 미리보기와 어긋난다`);
       } else {
@@ -1421,6 +1441,21 @@ function exportTriggerSchedules(h, patch, kind) {
   return h.pending.length > 0;
 }
 
+/**
+ * **실제 컨트롤 핸들러**로 내보내기 설정을 바꾸고(index.html 핸들러 — 노드 값 · 체크를 넣고 그 노드의 이벤트를 흘린다) 이어서 문서까지 버블된
+ * 이벤트를 흘렸을 때 렌더가 예약되는가 — 브라우저 순서(대상 → 문서)와 같다. 핸들러가 상태를 동기로 안 쓰거나(마이크로태스크 · 지연) 다른
+ * 값으로 쓰면 문서 청취자가 옛 계획을 봐서 이 자가 빨개진다(2026-09-28 검토 minor — 옛 자는 상태를 직접 대입해 모델만 쟀다).
+ */
+function controlTriggerSchedules(h, id, kind, set) {
+  const node = h.$(id);
+  assert.ok(node, `컨트롤 #${id} 가 화면에 없다`);
+  Object.assign(node, set);
+  h.pending.length = 0;
+  node.dispatch(kind);
+  h.dispatchDocument(kind);
+  return h.pending.length > 0;
+}
+
 test('④ 내보내기 축의 파생값 트리거 — 크기 · 커스텀 폭 · 여백 없음 · 디더가 바뀌면(어느 컨트롤이든 문서 이벤트 한 곳) 렌더가 예약되고 카드 · 미리보기가 다시 판정된다 · 안 바뀌면 예약하지 않는다', () => {
   const entry = EXPORT_GRID.find((e) => e.name === 'A v0');
   const { base, shape } = exportBase(entry);
@@ -1428,28 +1463,39 @@ test('④ 내보내기 축의 파생값 트리거 — 크기 · 커스텀 폭 ·
   assert.deepEqual(cardView(h), cardView(base));
   // 바뀐 것이 없으면 예약하지 않는다(모든 클릭마다 렌더하지 않는다).
   assert.equal(exportTriggerSchedules(h, {}, 'click'), false, '계획이 그대로인데 렌더를 예약했다');
-  // 크기 select(change) → 잠금.
-  assert.equal(exportTriggerSchedules(h, { exportSize: 192 }, 'change'), true, '크기를 192 로 바꿨는데 렌더가 예약되지 않았다');
+  // 크기 select(change — 실물 핸들러) → 잠금.
+  assert.equal(controlTriggerSchedules(h, 'exportSize', 'change', { value: '192' }), true, '크기를 192 로 바꿨는데 렌더가 예약되지 않았다');
+  assert.equal(h.state.exportSize, 192, '크기 핸들러가 상태를 숫자 192 로 쓰지 않았다');
   h.render();
   assertLockedAs('트리거 192 px', base, h, 'export-size', 'g1214');
   // 자동으로 되돌리면 다시 열린다.
-  assert.equal(exportTriggerSchedules(h, { exportSize: 'auto-fit' }, 'change'), true);
+  assert.equal(controlTriggerSchedules(h, 'exportSize', 'change', { value: 'auto-fit' }), true);
   h.render();
   assert.deepEqual(cardView(h), cardView(base), '자동 맞춤으로 되돌렸는데 카드가 안 돌아왔다');
   assert.equal(producerOpts(h).cellShape.kind, shape);
-  // 커스텀 폭 · 높이(input) — 작은 크기는 잠그고 큰 크기는 연다.
-  assert.equal(exportTriggerSchedules(h, { exportSize: 'custom', exportWidth: 300, exportHeight: 300 }, 'input'), true);
+  // 커스텀(select) → 폭 · 높이(input — 실물 핸들러, 한 칸씩) — 작은 크기는 잠그고 큰 크기는 연다.
+  controlTriggerSchedules(h, 'exportSize', 'change', { value: 'custom' });
   h.render();
+  // 폭 1024 → 300 은 어느 종횡비에서도 계획 ppu 를 낮춘다(예약돼야 한다). 높이는 종횡비에 따라 ppu 를 안 바꿀 수 있다(그러면 예약 없음 — 맞다).
+  assert.equal(controlTriggerSchedules(h, 'exportWidth', 'input', { value: '300' }), true, '커스텀 폭을 줄였는데 렌더가 예약되지 않았다');
+  h.render();
+  controlTriggerSchedules(h, 'exportHeight', 'input', { value: '300' });
+  h.render();
+  assert.deepEqual([h.state.exportWidth, h.state.exportHeight], [300, 300], '폭 · 높이 핸들러가 상태를 안 썼다');
   assertLockedAs('트리거 커스텀 300', base, h, 'export-size', 'g1214');
-  assert.equal(exportTriggerSchedules(h, { exportWidth: 8000, exportHeight: 8000 }, 'input'), true);
+  controlTriggerSchedules(h, 'exportWidth', 'input', { value: '8000' });
+  h.render();
+  // 300×300 → 8000×8000 의 마지막 칸(높이)은 어느 종횡비에서도 ppu 를 올린다.
+  assert.equal(controlTriggerSchedules(h, 'exportHeight', 'input', { value: '8000' }), true, '커스텀 높이를 늘렸는데 렌더가 예약되지 않았다');
   h.render();
   assert.deepEqual(cardView(h), cardView(base), '커스텀을 크게 바꿨는데 카드가 안 돌아왔다');
-  // 디더(change).
+  // 디더(change) — 디더 핸들러는 스스로 렌더를 예약한다(schedule) · 여기서는 문서 청취자 한 곳이 같은 변화를 잡는지 잰다.
   assert.equal(exportTriggerSchedules(h, { exportDither: 16 }, 'change'), true);
   h.render();
   assertLockedAs('트리거 디더 16', base, h, 'export-dither', 'g1213');
-  // 여백 없음(change) — 고정 크기에서 여백 없음이 장면 치수(→ 계획 ppu)를 바꾸는 격자 칸에서 잰다(칸은 계획으로 고른다 — O 는 기본 여백이
-  // 이미 최소고, 코너 QR 이 있으면 여백 없음도 코너 QR 하한(20)이라 무동작이다: 그래서 QR 없음으로 그린다 — 카드 열림은 이 단언과 무관하다).
+  // 여백 없음(change — 실물 핸들러) — 고정 크기에서 여백 없음이 장면 치수(→ 계획 ppu)를 바꾸는 격자 칸에서 잰다(칸은 계획으로 고른다 — O 는
+  // 기본 여백이 이미 최소고, 코너 QR 이 있으면 여백 없음도 코너 QR 하한(20)이라 무동작이다: 그래서 QR 없음으로 그린다 — 카드 열림은 이 단언과
+  // 무관하다).
   let trimmed = 0;
   for (const e of EXPORT_GRID) {
     const x = exportHarness(e, { cellShape: 'bevel', exportSize: 512, qrPosition: 'none' });
@@ -1458,12 +1504,17 @@ test('④ 내보내기 축의 파생값 트리거 — 크기 · 커스텀 폭 ·
     const ppuTrim = x.run("exportPlanFor('png')").plan.ppu;
     x.state.exportMargin = 'margin';
     if (ppu === ppuTrim) {
-      assert.equal(exportTriggerSchedules(x, { exportMargin: 'trim' }, 'change'), false, `${e.name}: 계획이 그대로인데 예약했다`);
+      assert.equal(controlTriggerSchedules(x, 'exportTrim', 'change', { checked: true }), false, `${e.name}: 계획이 그대로인데 예약했다`);
       continue;
     }
-    assert.equal(exportTriggerSchedules(x, { exportMargin: 'trim' }, 'change'), true, `${e.name}: 여백 없음이 고정 크기 ppu 를 바꿨는데(${ppu} → ${ppuTrim}) 렌더가 예약되지 않았다`);
+    assert.equal(controlTriggerSchedules(x, 'exportTrim', 'change', { checked: true }), true, `${e.name}: 여백 없음이 고정 크기 ppu 를 바꿨는데(${ppu} → ${ppuTrim}) 렌더가 예약되지 않았다`);
+    assert.equal(x.state.exportMargin, EXPORT_MARGIN_TRIM, `${e.name}: 여백 없음 핸들러가 상태를 안 썼다`);
     x.render();
     assert.equal(x.c.current.deco.ctx.exportPlan.ppu, ppuTrim, `${e.name}: 다시 그린 문맥의 ppu 가 여백 없음 계획이 아니다`);
+    // 렌더 뒤 계획은 안정이다 — 판정 ppu = 내보내기 ppu(여백 없음 재생성 장면 치수가 셀 모양과 무관하다: 다시 예약하지 않는다).
+    assert.equal(x.run('decorationExportPlanStale()'), false, `${e.name}: 여백 없음 렌더 뒤에도 계획이 판정과 다르다`);
+    assert.equal(controlTriggerSchedules(x, 'exportTrim', 'change', { checked: false }), true, `${e.name}: 여백 포함으로 되돌렸는데 예약되지 않았다`);
+    assert.equal(x.state.exportMargin, EXPORT_MARGIN_INCLUDE);
     trimmed += 1;
   }
   assert.ok(trimmed > 0, '여백 없음이 고정 크기 ppu 를 바꾸는 격자 칸이 없다 — 여백 없음 트리거를 재지 못했다');
@@ -1490,6 +1541,273 @@ test('④ 심은 결함 — 문서 이벤트 트리거 · 두 번째 렌더를 �
   assert.equal(Boolean(broken.c.current.sceneOpts.cellShape), true, '심은 결함(두 번째 렌더 삭제)인데 미리보기가 사각이다 — 자가 결함을 못 본다');
   const fixed = exportHarness(entry, { cellShape: shape, exportSize: 192 });
   assert.equal(Boolean(fixed.c.current.sceneOpts.cellShape), false, '대조군: 실제 index.html 은 잠기면 미리보기가 사각이다');
+});
+
+// ── H 셀 스타일 카드의 내보내기 축(2026-09-28 후속 검토 major — 셀 모양 카드와 같은 거짓 열림이 H 카드에 남아 있었다) ─────────────
+// H 행도 비디더 · 잰 하한(허용표 MEASURED_FLOORS 의 H 키) 이상 ppu 에서만 잰 사실이다. 판정은 셀 모양과 한 벌(cell-shape `exportPlanAxes`)이고,
+// 제품 경로(index.html 실물 renderTypeH · render · hSceneOptions · exportPlanFor)로 잰다. 수치(하한 · ppu)는 박제하지 않는다.
+
+/** H 격자 — 표에 H 행이 있고 제품에서 그 표 키에 닿는 (버전 · 면 수 · 페이로드). H8 은 제품에서 늘 corners 파인더라(구조 잠금) 빠진다. */
+const H_EXPORT_GRID = Object.freeze([
+  { name: 'H0(3면)', state: { ...TYPE_STATES.H, versionH: 0, hFaces: 3, preset: 'slate' }, payload: 'x' },
+  { name: 'H2(3면)', state: { ...TYPE_STATES.H, versionH: 2, hFaces: 3, preset: 'slate' } },
+  { name: 'H5(6면)', state: { ...TYPE_STATES.H, versionH: 5, hFaces: 6, preset: 'slate' } },
+]);
+function hExportHarness(entry, extra = {}, source = INDEX) {
+  const h = harness({ state: { ...entry.state, ...extra }, payload: entry.payload ?? 'decoration-ui', source });
+  h.render();
+  return h;
+}
+const hStyleCards = (h) => h.cards('hCellStyle').filter((el) => el.dataset.decoValue !== H_CELL_STYLE_DEFAULT);
+const hCardView = (h) => hStyleCards(h).map((el) => `${el.dataset.decoValue}:${el.getAttribute('aria-disabled')}:${el.dataset.lockReason}:${el.dataset.lockKey}`);
+/** H 장면에 셀 스타일이 그려졌는가(바탕 도형) — 미리보기 · 내보내기 장면 공통. */
+const hStyled = (scene) => scene.shapes.some((s) => s.hCellGround);
+/** H 표 키(내보내기 계획 보조 필드 제외) — 대조군과 같은 표 키인지 본다. */
+const hTableKey = (h) => {
+  const { version, finder, tones, paletteGrade } = h.c.current.hDeco.ctx;
+  return { version, finder, tones, paletteGrade };
+};
+/** H 한 칸의 대조군(내보내기 기본 — 자동 맞춤 · 디더 자동)과 거기서 열린 스타일 하나(그 스타일을 골라 둔다). */
+function hExportBase(entry) {
+  const probe = hExportHarness(entry);
+  const open = hStyleCards(probe).filter((el) => el.getAttribute('aria-disabled') === 'false').map((el) => el.dataset.decoValue);
+  assert.ok(open.length > 0, `${entry.name}: 대조군에서 열린 H 스타일 카드가 없다 — 격자 칸이 표 행이 있는 문맥이 아니다`);
+  const style = open.includes('dots') ? 'dots' : open[0];
+  const base = hExportHarness(entry, { hCellStyle: style });
+  assert.equal(lastOf(base.calls.buildHScene).hCellStyle, style, `${entry.name}: 대조군의 열린 ${style} 가 생산자에 안 갔다`);
+  assert.ok(hStyled(base.c.current.scene), `${entry.name}: 대조군 미리보기에 셀 스타일이 없다`);
+  return { base, style };
+}
+/**
+ * H 카드가 `reason` 으로 잠겼는가 — 대조군에서 열린 카드는 `reason`(사전 키 `key`), 대조군에서도 잠긴 카드는 대조군 사유 그대로. 잠겼으니
+ * 미리보기(renderTypeH) · 3D 미리보기 옵션(hSceneOptions) · 내보내기 장면(exportPlanFor) 어디에도 스타일이 없고, 상태는 그대로다.
+ */
+function assertHLockedAs(name, base, h, reason, key) {
+  assert.deepEqual(hTableKey(h), hTableKey(base), `${name}: 표 키가 달라졌다 — 대조군이 아니다`);
+  const baseCards = hStyleCards(base);
+  let n = 0;
+  hStyleCards(h).forEach((el, i) => {
+    const b = baseCards[i];
+    assert.equal(el.dataset.decoValue, b.dataset.decoValue, name + ': 카드 순서');
+    assert.equal(el.getAttribute('aria-disabled'), 'true', `${name} ${el.dataset.decoValue}: 잠겨야 하는데 열렸다`);
+    if (b.getAttribute('aria-disabled') === 'false') {
+      assert.equal(el.dataset.lockReason, reason, `${name} ${el.dataset.decoValue}: 대조군에서 열린 카드`);
+      assert.equal(el.dataset.lockKey, key, `${name} ${el.dataset.decoValue}: 사전 키`);
+      n += 1;
+    } else {
+      assert.equal(el.dataset.lockReason, b.dataset.lockReason, `${name} ${el.dataset.decoValue}: 대조군 사유(${b.dataset.lockReason})`);
+    }
+  });
+  assert.ok(n > 0, `${name}: ${reason} 카드가 없다 — 대조군에서 열린 카드가 있었는데`);
+  assert.ok(h.$('cellShapeLockHint').textContent.includes(key), `${name}: 사유 줄에 ${key} 가 없다`);
+  assert.equal('hCellStyle' in lastOf(h.calls.buildHScene), false, `${name}: 잠겼는데 스타일이 미리보기 생산자에 갔다`);
+  assert.equal(hStyled(h.c.current.scene), false, `${name}: 잠겼는데 미리보기 장면에 스타일이 있다`);
+  assert.equal('hCellStyle' in h.run('hSceneOptions()'), false, `${name}: 잠겼는데 hSceneOptions(3D 미리보기 · 스냅샷 · 내보내기)가 스타일을 싣는다`);
+  assert.equal(hStyled(h.run("exportPlanFor('png')").scene), false, `${name}: 잠겼는데 내보내기 장면에 스타일이 있다`);
+  assert.equal(h.state.hCellStyle, base.state.hCellStyle, `${name}: 잠금이 상태를 고쳤다`);
+  return n;
+}
+/** H 카드 · 미리보기 · 내보내기가 대조군과 같이 열려 있다. */
+function assertHOpenAsBase(name, base, h, style) {
+  assert.deepEqual(hCardView(h), hCardView(base), `${name}: 카드가 대조군과 다르다`);
+  assert.equal(lastOf(h.calls.buildHScene).hCellStyle, style, `${name}: 열린 스타일이 미리보기 생산자에 안 갔다`);
+  assert.equal(h.run('hSceneOptions()').hCellStyle, style, `${name}: hSceneOptions 가 열린 스타일을 안 싣는다`);
+  assert.equal(hStyled(h.run("exportPlanFor('png')").scene), true, `${name}: 내보내기 장면에 열린 스타일이 없다`);
+}
+
+test('② H 셀 스타일 — 내보내기 크기(제품 경로): 고정 · 커스텀 크기의 계획 ppu 가 H 표 키의 잰 하한보다 낮으면 열리던 카드가 export-size(g1214)로 잠기고 미리보기 · 3D · 내보내기 장면도 사각이다 · 자동 크기 셋은 안 잠근다', (t) => {
+  const floors = DEFAULT_ALLOW.MEASURED_FLOORS;
+  const tally = {};
+  for (const entry of H_EXPORT_GRID) {
+    const { base, style } = hExportBase(entry);
+    const plan0 = base.c.current.hDeco.ctx.exportPlan;
+    assert.ok(plan0 && typeof plan0.floorKey === 'string', `${entry.name}: H 문맥에 내보내기 계획(잰 하한 키)이 없다`);
+    assert.ok(Object.prototype.hasOwnProperty.call(floors, plan0.floorKey), `${entry.name}: 잰 하한 키 ${plan0.floorKey} 가 표에 없다`);
+    const floor = floors[plan0.floorKey];
+    const row = { locked: [], open: [] };
+    for (const [label, extra] of EXPORT_SIZE_CASES) {
+      const h = hExportHarness(entry, { hCellStyle: style, ...extra });
+      const { plan } = h.run("exportPlanFor('png')");
+      assert.equal(h.c.current.hDeco.ctx.exportPlan.ppu, plan.ppu, `${entry.name} ${label}: 문맥의 ppu ≠ 내보내기 계획의 ppu`);
+      const below = plan.ppu < floor;
+      if (String(extra.exportSize).startsWith('auto')) assert.equal(below, false, `${entry.name} ${label}: 자동 크기가 잰 하한(${floor}) 아래 ppu ${plan.ppu}`);
+      if (below) {
+        assertHLockedAs(`${entry.name} ${label}(ppu ${plan.ppu.toFixed(2)} < ${floor})`, base, h, 'export-size', 'g1214');
+        row.locked.push(label);
+      } else {
+        assertHOpenAsBase(`${entry.name} ${label}(ppu ${plan.ppu.toFixed(2)} ≥ ${floor})`, base, h, style);
+        row.open.push(label);
+      }
+    }
+    assert.ok(row.locked.includes('192 px'), `${entry.name}: 192 px 가 잠기지 않았다 — ${JSON.stringify(row)}`);
+    assert.ok(row.open.length > 0, `${entry.name}: 열린 크기가 없다`);
+    tally[entry.name] = `잠김 ${row.locked.join('·')} | 열림 ${row.open.join('·')}`;
+  }
+  t.diagnostic(JSON.stringify(tally));
+});
+
+test('② H 셀 스타일 — 내보내기 디더(제품 경로): 양자화하는 비트깊이면 열리던 카드가 export-dither(g1213)로 잠기고 사각으로 그린다 · 24비트(항등)는 안 잠근다', () => {
+  let locked = 0;
+  for (const entry of H_EXPORT_GRID) {
+    const { base, style } = hExportBase(entry);
+    for (const bits of DITHER_BIT_DEPTHS) {
+      const h = hExportHarness(entry, { hCellStyle: style, exportDither: bits });
+      const name = `${entry.name} 디더 ${bits}`;
+      if (h.c.current.hDeco.ctx.exportPlan.dithered) {
+        assertHLockedAs(name, base, h, 'export-dither', 'g1213');
+        locked += 1;
+      } else {
+        assertHOpenAsBase(name, base, h, style);
+      }
+    }
+  }
+  assert.ok(locked > 0, '디더로 잠긴 H 칸이 없다');
+});
+
+test('② H 셀 스타일 — 사유 축 개수 · 사유는 참이다(제품 경로): 크기 하나면 export-size · 디더 하나면 export-dither 이고 그 축만 따르면 열린다 · 둘 다면 미확인(g1162)이고 어느 한 축만 따라서는 안 열린다', () => {
+  for (const entry of H_EXPORT_GRID) {
+    const { base, style } = hExportBase(entry);
+    const both = hExportHarness(entry, { hCellStyle: style, exportSize: 192, exportDither: 16 });
+    assertHLockedAs(`${entry.name} 192 px + 디더 16`, base, both, 'unmeasured', 'g1162');
+    // 한 축만 따른다 — 크기만 자동으로(디더 남음) · 디더만 끈다(192 남음): 둘 다 잠긴 채 남은 축의 사유다.
+    assertHLockedAs(`${entry.name} 크기만 따름(디더 16 남음)`, base, hExportHarness(entry, { hCellStyle: style, exportDither: 16 }), 'export-dither', 'g1213');
+    assertHLockedAs(`${entry.name} 디더만 따름(192 px 남음)`, base, hExportHarness(entry, { hCellStyle: style, exportSize: 192 }), 'export-size', 'g1214');
+    // 한 축 사유를 따르면 열린다 — 크기 사유 → 자동 맞춤 · 디더 사유 → 디더 자동(= 대조군).
+    assertHOpenAsBase(`${entry.name} 두 축 모두 따름`, base, hExportHarness(entry, { hCellStyle: style, exportSize: 'auto-fit', exportDither: EXPORT_DITHER_AUTO }), style);
+  }
+});
+
+test('② H 셀 스타일 — 미리보기 ↔ 내보내기(제품 경로): 잠기면 미리보기 장면 = 스타일 끈 장면(JSON) · 3D/평면 내보내기 장면도 같은 판정 · H 장면 치수(→ 계획 ppu)는 스타일 · 자세와 무관하다 · 렌더 뒤 계획은 안정', () => {
+  let checked = 0;
+  const tally = { open: 0, locked: 0 };
+  for (const entry of H_EXPORT_GRID) {
+    const { style } = hExportBase(entry);
+    for (const on of [true, false]) {
+      for (const [label, extra] of [['자동 맞춤', {}], ['192 px', { exportSize: 192 }], ['디더 16', { exportDither: 16 }],
+        ['커스텀 300×300', { exportSize: 'custom', exportWidth: 300, exportHeight: 300 }]]) {
+        const name = `${entry.name} ${on ? '3D' : '평면'} ${label}`;
+        const make = (s) => {
+          const h = harness({ state: { ...entry.state, hCellStyle: s, ...extra }, payload: entry.payload ?? 'decoration-ui' });
+          h.c.y3dPreview.on = on;
+          h.render();
+          return h;
+        };
+        const h = make(style);
+        const square = make(H_CELL_STYLE_DEFAULT);
+        const open = h.card('hCellStyle', style).getAttribute('aria-disabled') === 'false';
+        // 기대 판정은 계획에서 유도한다(수치 박제 없음) — 디더 또는 잰 하한 아래 ppu 면 잠금.
+        const plan = h.c.current.hDeco.ctx.exportPlan;
+        assert.equal(open, !(plan.dithered || plan.ppu < DEFAULT_ALLOW.MEASURED_FLOORS[plan.floorKey]), `${name}: 카드 판정이 계획(${JSON.stringify(plan)})과 어긋난다`);
+        tally[open ? 'open' : 'locked'] += 1;
+        assert.equal(hStyled(h.c.current.scene), open, `${name}: 미리보기 장면의 스타일이 카드 판정과 어긋난다`);
+        assert.equal('hCellStyle' in h.run('hSceneOptions()'), open, `${name}: hSceneOptions 가 카드 판정과 어긋난다`);
+        const exported = h.run("exportPlanFor('png')");
+        assert.equal(hStyled(exported.scene), open, `${name}: 내보내기 장면의 스타일이 카드 판정과 어긋난다`);
+        if (!on) assert.equal(exported.scene, h.c.current.scene, `${name}: 평면 내보내기 장면이 미리보기 장면이 아니다`);
+        if (!open) assert.equal(JSON.stringify(h.c.current.scene), JSON.stringify(square.c.current.scene), `${name}: 잠긴 렌더 ≠ 스타일 끈 렌더`);
+        // 셀 스타일은 장면 치수를 안 바꾼다 — 계획 ppu 가 스타일과 무관하다(두 번째 렌더의 계획 = 첫 렌더의 계획).
+        assert.equal(exported.plan.ppu, square.run("exportPlanFor('png')").plan.ppu, `${name}: 셀 스타일이 계획 ppu 를 바꿨다`);
+        assert.equal(h.run('decorationExportPlanStale()'), false, `${name}: 렌더 뒤 계획이 판정과 다르다`);
+        // 3D 자세 · 줌이 바뀌어도(자동 회전 경과 · 미리보기 여백) 계획 ppu 는 같다 — 판정에 쓴 ppu = 내보낼 때의 ppu.
+        if (on) {
+          for (const [elapsed, pad] of [[900, 24], [2500, 40], [5100, 18]]) {
+            h.c.hAnimation.elapsed = elapsed;
+            h.c.y3dPreview.pad = pad;
+            assert.equal(h.run("exportPlanFor('png')").plan.ppu, exported.plan.ppu, `${name}: 자세(경과 ${elapsed} · 여백 ${pad})가 계획 ppu 를 바꿨다`);
+          }
+        }
+        checked += 1;
+      }
+    }
+  }
+  assert.ok(checked > 0 && tally.open > 0 && tally.locked > 0, `열림 · 잠금 칸이 둘 다 있어야 한다 — ${JSON.stringify(tally)}`);
+});
+
+test('② H 잰 하한 키 = index.html 내보내기 호출 모양의 하한 키(제품 경로) · 표에 있는 키', () => {
+  for (const entry of H_EXPORT_GRID) {
+    for (const extra of [{}, { exportSize: 512 }, { exportDither: 16 }]) {
+      const h = hExportHarness(entry, extra);
+      const called = h.calls.minRoundtripPpu;
+      assert.ok(called.length > 0, `${entry.name}: 내보내기 계획이 minRoundtripPpu 를 안 불렀다`);
+      const product = minRoundtripPpuKey(lastOf(called));
+      assert.equal(h.c.current.hDeco.ctx.exportPlan.floorKey, product, `${entry.name} ${JSON.stringify(extra)}: 잰 하한 키 ≠ 호출 모양 ${product} (${JSON.stringify(lastOf(called))})`);
+      assert.ok(Object.prototype.hasOwnProperty.call(DEFAULT_ALLOW.MEASURED_FLOORS, product), `${entry.name}: 호출 모양의 키 ${product} 가 표에 없다`);
+      assert.equal(lastOf(called).type, 'H', `${entry.name}: H 내보내기 호출의 타입이 H 가 아니다`);
+    }
+  }
+});
+
+test('④ H 셀 스타일 — 내보내기 축의 파생값 트리거(실물 컨트롤 핸들러 → 문서 이벤트 한 곳): 크기 · 커스텀 크기가 바뀌면 렌더가 예약되고 카드 · 미리보기가 다시 판정된다', () => {
+  const entry = H_EXPORT_GRID.find((e) => e.name === 'H2(3면)');
+  const { base, style } = hExportBase(entry);
+  const h = hExportHarness(entry, { hCellStyle: style });
+  assert.equal(exportTriggerSchedules(h, {}, 'click'), false, '계획이 그대로인데 렌더를 예약했다');
+  assert.equal(controlTriggerSchedules(h, 'exportSize', 'change', { value: '192' }), true, 'H: 크기를 192 로 바꿨는데 렌더가 예약되지 않았다');
+  h.render();
+  assertHLockedAs('H 트리거 192 px', base, h, 'export-size', 'g1214');
+  assert.equal(controlTriggerSchedules(h, 'exportSize', 'change', { value: 'auto-fit' }), true);
+  h.render();
+  assertHOpenAsBase('H 트리거 자동 맞춤', base, h, style);
+  controlTriggerSchedules(h, 'exportSize', 'change', { value: 'custom' });
+  h.render();
+  assert.equal(controlTriggerSchedules(h, 'exportWidth', 'input', { value: '300' }), true, 'H: 커스텀 폭을 줄였는데 렌더가 예약되지 않았다');
+  h.render();
+  controlTriggerSchedules(h, 'exportHeight', 'input', { value: '300' });
+  h.render();
+  assertHLockedAs('H 트리거 커스텀 300', base, h, 'export-size', 'g1214');
+  assert.equal(exportTriggerSchedules(h, { exportSize: 'auto-fit', exportDither: 16 }, 'change'), true);
+  h.render();
+  assertHLockedAs('H 트리거 디더 16', base, h, 'export-dither', 'g1213');
+});
+
+test('④ H 심은 결함 — 두 번째 렌더 · hSceneOptions 의 계획 · 트리거의 H 갈래를 지우면 위 자들이 빨개진다(자의 판별력)', () => {
+  const entry = H_EXPORT_GRID.find((e) => e.name === 'H2(3면)');
+  const { style } = hExportBase(entry);
+  const plant = (from, to, what) => {
+    assert.ok(INDEX.includes(from), `${what} 철자가 바뀌었다 — 결함 심기를 갱신할 것`);
+    return INDEX.replace(from, to);
+  };
+  // (a) H 두 번째 렌더 삭제(판정만 갈아 끼움) — 카드는 잠기는데 미리보기에 스타일이 남는다.
+  const second = '        current = { ...current, scene: result.scene, sceneOpts: result.sceneOpts, hDeco: result.hDeco };\n';
+  const noSecond = plant(second, '        current = { ...current, hDeco };\n', 'H 두 번째 렌더');
+  const a = hExportHarness(entry, { hCellStyle: style, exportSize: 192 }, noSecond);
+  assert.equal(a.card('hCellStyle', style).getAttribute('aria-disabled'), 'true', '심은 결함에서도 카드 판정은 잠금이다');
+  assert.equal(hStyled(a.c.current.scene), true, '심은 결함(H 두 번째 렌더 삭제)인데 미리보기가 사각이다 — 자가 결함을 못 본다');
+  // (b) hSceneOptions 가 계획을 안 넘긴다 — 3D 미리보기 · 스냅샷 · 3D 내보내기가 카드와 어긋난다.
+  const withPlan = 'encoded:current.encoded,exportPlan:current.hDeco&&current.hDeco.render.exportPlan}),zoom:';
+  const b = hExportHarness(entry, { hCellStyle: style, exportSize: 192 }, plant(withPlan, 'encoded:current.encoded}),zoom:', 'hSceneOptions 계획'));
+  assert.equal(b.run('hSceneOptions()').hCellStyle, style, '심은 결함(hSceneOptions 계획 누락)인데 3D 옵션이 사각이다 — 자가 결함을 못 본다');
+  assert.equal(hStyled(b.run("exportPlanFor('png')").scene), true, '심은 결함인데 3D 내보내기가 사각이다');
+  // (c) 트리거의 H 갈래 삭제 — H 에서 크기를 바꿔도 렌더가 예약되지 않는다.
+  const hBranch = '  if (current.hDeco && current.hDeco.ctx) {\n    return JSON.stringify(hCellStyleExportPlanNow())';
+  const c = hExportHarness(entry, { hCellStyle: style }, plant(hBranch, '  if (false) {\n    return JSON.stringify(hCellStyleExportPlanNow())', '트리거 H 갈래'));
+  assert.equal(controlTriggerSchedules(c, 'exportSize', 'change', { value: '192' }), false, '심은 결함(트리거 H 갈래 삭제)을 자가 못 가른다');
+  // 대조군: 실제 index.html 은 셋 다 막는다.
+  const real = hExportHarness(entry, { hCellStyle: style, exportSize: 192 });
+  assert.equal(hStyled(real.c.current.scene), false);
+  assert.equal('hCellStyle' in real.run('hSceneOptions()'), false);
+  assert.equal(controlTriggerSchedules(hExportHarness(entry, { hCellStyle: style }), 'exportSize', 'change', { value: '192' }), true);
+});
+
+test('② 코너 QR 꾸미기 — 기본표에 qr 행이 0 이라 모든 비기본 조합이 표와 무관하게 잠겨 있다(내보내기 축과 무관한 잠금) · qr 행이 생기면 이 자가 빨개진다', () => {
+  // 코너 QR 꾸미기 카드(qr-colors `resolveQrDeco`)는 내보내기 축(디더 · 고정/커스텀 크기)을 판정하지 않는다 — 지금은 표에 qr 행이 없어 무엇도
+  // 열리지 않으므로 거짓 열림이 없다(2026-09-28 후속 검토가 H 와 같은 부류로 짚은 자리). qr 행은 px/모듈 기준이라 잰 하한 키가 없다
+  // (cell-shape `allowRowFloorCtx`) — qr 행을 들이는 착지는 QR 카드에 디더 잠금과 크기 기준(px/모듈 하한)을 먼저 배선해야 한다.
+  const qrRows = DEFAULT_ALLOW.ROWS.filter((r) => r && r.table === 'qr');
+  assert.equal(qrRows.length, 0, `기본표에 qr 행 ${qrRows.length} 개가 생겼다 — 코너 QR 꾸미기 카드에 내보내기 축 잠금을 배선하고 이 자를 고칠 것`);
+  // 행동으로도 잰다 — O · H 호스트, 크기 · 디더 무관하게 비기본 카드가 전부 잠긴다.
+  for (const [name, state, payload] of [['O', TYPE_STATES.O, undefined], ['H2', { ...TYPE_STATES.H, versionH: 2 }, undefined]]) {
+    for (const extra of [{}, { exportSize: 192 }, { exportDither: 16 }]) {
+      const h = harness({ state: { ...state, ...extra }, ...(payload ? { payload } : {}) });
+      h.render();
+      for (const group of ['qrCellStyle', 'qrColorMode', 'qrEye']) {
+        for (const el of h.cards(group)) {
+          if (el.dataset.decoValue === String(DECORATION_STATE_DOMAINS[group].defaultValue)) continue;
+          assert.equal(el.getAttribute('aria-disabled'), 'true', `${name} ${JSON.stringify(extra)} ${group}=${el.dataset.decoValue}: 기본표에서 코너 QR 꾸미기가 열렸다`);
+        }
+      }
+    }
+  }
 });
 
 test('② C(ultra)는 모든 모양이 «C 는 사각만» 사유로 잠긴다(구조 잠금 — fixture 로도 안 열린다)', () => {

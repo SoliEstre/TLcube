@@ -18,6 +18,8 @@
  *      hPreviewOptions 는 기본값에서 새 키를 만들지 않는다.
  *   ⑩ 코너 QR deco: 기능 모듈은 모듈 사각 그대로, 눈은 deco.eye, 조각마다 {qr, selfQuiet, noSeam}; deco 를 끈 뒤의
  *      출력은 처음 기본 출력과 같다(단일 칸 캐시 이력).
+ *   ⑨′ 내보내기 축(2026-09-28 후속 검토): 계획이 디더 · 잰 하한 아래 ppu 면 잠그고(사유 축 하나면 그 축 · 둘이면 unmeasured),
+ *      계획이 없거나 하한을 안 싣는 fixture 는 판정하지 않는다. 제품 경로(카드 · 미리보기 · 내보내기 · 트리거)는 decoration-ui.test.js.
  * 못 재는 것: 실제 카메라·디코더 판독(§7.3 H 판독 격자 — L6 영수증 몫), WebGL 드라이버의 실제 샘플링.
  */
 import test from 'node:test';
@@ -36,6 +38,8 @@ import { qrFunctionMapV1 } from '../src/qr-function-map.js';
 import { SQUARE_CELL_STYLES, STYLE_CENTER_CLEARANCE } from '../src/square-cell-style.js';
 import { resolveHCellStyleSpec, hPreviewOptions, hCellStyleCtx, H_CELL_STYLE_LOCK_REASONS } from '../src/generator-h.js';
 import { createGeneratorState } from '../src/generator-state.js';
+import { hCellStyleExportPlan } from '../src/generator-render-config.js';
+import { minRoundtripPpuKey } from '../src/export-options.js';
 
 const PALETTE = { levels: [{ r: 30, g: 55, b: 80 }, { r: 120, g: 140, b: 160 }, { r: 220, g: 230, b: 240 }], background: { r: 255, g: 255, b: 255 } };
 const STYLED = SQUARE_CELL_STYLES.filter(style => style !== 'square');
@@ -99,6 +103,41 @@ test('hPreviewOptions: 기본값·잠금·문맥 없음은 키를 만들지 않�
   assert.equal(opened.hCellStyle, 'rounded'); assert.equal(opened.hCellGround, 'white');
   const { hCellStyle, hCellGround, ...rest } = opened;
   assert.deepEqual(rest, plain, '다른 옵션은 그대로예요');
+});
+
+test('해석기 · 내보내기 축(2026-09-28 후속 검토): 계획이 디더면 export-dither · ppu 가 잰 하한 아래면 export-size · 둘 다면 unmeasured · 하한 키를 모르면 unmeasured · 계획이 없거나 하한을 안 싣는 fixture 는 판정 안 해요', () => {
+  const state = Object.freeze({ preset: 'slate', hCellStyle: 'dots', hCellGround: 'level5' });
+  const e = encoded(2);
+  const row = { table: 'h', version: 2, finder: 'frame', tones: 3, ground: 'level5', paletteGrade: 'slate', hCellStyle: 'dots' };
+  const allow = { ROWS: [row], MEASURED_FLOORS: { 'H:2': 12 } };
+  const R = H_CELL_STYLE_LOCK_REASONS;
+  const at = (exportPlan, a = allow) => resolveHCellStyleSpec(state, hCellStyleCtx(e, state, { exportPlan }), a);
+  // 계획 유도는 제품 함수(generator-render-config hCellStyleExportPlan) — 잰 하한 키 = 내보내기 하한 키 철자(export-options minRoundtripPpuKey).
+  const plan = (ppu, ditherBits) => hCellStyleExportPlan({ encoded: e, ppu, ditherBits });
+  assert.equal(plan(18, null).floorKey, minRoundtripPpuKey({ type: 'H', version: 2, cellSurfaceLayout: null }));
+  assert.deepEqual(at(undefined).spec, { style: 'dots', ground: 'level5' }, '계획 없음 = 판정 안 함(측정 하네스 경로 · 첫 판정)');
+  assert.deepEqual(at(plan(18, null)).spec, { style: 'dots', ground: 'level5' }, '비디더 · 잰 하한 이상은 열려요');
+  assert.deepEqual(at(plan(12, null)).spec, { style: 'dots', ground: 'level5' }, '잰 하한과 같은 ppu 는 잰 점이라 열려요');
+  assert.deepEqual(at(plan(18, 24)).spec, { style: 'dots', ground: 'level5' }, '24 비트는 항등 양자화라 디더가 아니에요');
+  assert.equal(at(plan(18, 16)).lockReason, R.EXPORT_DITHER);
+  assert.equal(at(plan(11.9, null)).lockReason, R.EXPORT_SIZE);
+  assert.equal(at(plan(3.9, 2)).lockReason, R.UNMEASURED, '두 축이면 어느 한 축만 따라서는 안 열려요');
+  assert.equal(at(plan(18, null), { ROWS: [row], MEASURED_FLOORS: { 'H:0': 12 } }).lockReason, R.UNMEASURED, '표가 하한을 싣는데 그 키가 없으면 잴 수 없어 잠가요');
+  assert.deepEqual(at(plan(3.9, null), { ROWS: [row] }).spec, { style: 'dots', ground: 'level5' }, '하한을 안 싣는 fixture 는 크기를 판정 안 해요');
+  assert.equal(at(plan(3.9, 16), { ROWS: [row] }).lockReason, R.EXPORT_DITHER, '디더는 하한 없이도 판정해요');
+  assert.equal(at(plan(undefined, null)).spec !== null, true, 'ppu 를 모르면(계획이 던졌다) 크기를 판정 안 해요');
+  // 행이 없으면 계획과 무관하게 unmeasured — 내보내기 축은 행이 있는 표 키에서만 사유가 돼요.
+  assert.equal(resolveHCellStyleSpec({ ...state, hCellStyle: 'rounded' }, hCellStyleCtx(e, state, { exportPlan: plan(3.9, 16) }), allow).lockReason, R.UNMEASURED);
+  // 모양이 틀린 계획은 문맥에 싣지 않아요(키 없음 — 판정 안 함).
+  for (const bad of [null, {}, { dithered: 'yes' }, { dithered: 1 }]) assert.equal('exportPlan' in hCellStyleCtx(e, state, { exportPlan: bad }), false, JSON.stringify(bad));
+  assert.equal('ppu' in hCellStyleCtx(e, state, { exportPlan: { dithered: false, ppu: -1, floorKey: 'H:2' } }).exportPlan, false, '양수가 아닌 ppu 는 싣지 않아요');
+  // 소비 경계(hPreviewOptions)도 같은 판정 — 잠그는 계획이면 키를 만들지 않아요.
+  const base = createGeneratorState({ type: 'Y', preset: 'slate' });
+  const on = { ...base, hCellStyle: 'dots', hCellGround: 'level5' };
+  assert.equal(hPreviewOptions(on, { encoded: e, allow, exportPlan: plan(18, null) }).hCellStyle, 'dots');
+  assert.equal('hCellStyle' in hPreviewOptions(on, { encoded: e, allow, exportPlan: plan(18, 16) }), false);
+  assert.equal('hCellStyle' in hPreviewOptions(on, { encoded: e, allow, exportPlan: plan(3.9, null) }), false);
+  assert.deepEqual(hPreviewOptions(on, { encoded: e, allow, exportPlan: plan(3.9, null) }), hPreviewOptions(base), '잠긴 계획 = 꺼짐 출력과 바이트 동일');
 });
 
 // ── ①–④ 장면 성질 ─────────────────────────────────────────────────────────────

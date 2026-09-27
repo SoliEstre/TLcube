@@ -1,4 +1,4 @@
-// cell-shape-measured-floors.test.js — 잰 하한(허용표 MEASURED_FLOORS) ↔ 제품 하한(export-options minRoundtripPpu) (DESIGN_002 §4.5, 2026-09-28)
+// cell-shape-measured-floors.test.js — 잰 하한(허용표 MEASURED_FLOORS) ↔ 제품 하한(export-options minRoundtripPpu) (길이 축 착지, 2026-09-28)
 //
 // 허용표 행은 «그 문맥의 **제품 하한 ppu** 부터 위로 잰 사다리» 에서 열렸다(영수증의 floorPpu — 비디더). 생성기(gen-allow)는 행을 연
 // 증거의 floorPpu 를 하한 키마다 MEASURED_FLOORS 로 표에 싣는다. 제품 하한이 그 값보다 **낮아지면** 그 사이 ppu 는 잰 적 없이 열린다
@@ -12,13 +12,16 @@
 //   ③ Y 행의 하한 문맥(n)은 내보내기 경로의 모양(버전 — index.html `minRoundtripPpu({type, version, cellSurfaceLayout})`)과 같은 키다.
 //   ④ 판정 함수의 판별력 — 심은 결함 표(하한 하나 올림 · 키 하나 빠짐 · 행 없는 키 · 모르는 실효 타입 행)마다 그 결함이 **각각** 잡힌다.
 // 못 재는 것: MEASURED_FLOORS 값 자체가 참인가(측정 영수증의 몫). 디더 하한은 L6 격자가 비디더 점만 잰다 — 그래서 제품은 디더
-//   내보내기에서 셀 모양 카드를 잠근다(2026-09-28 외부 검토 — 이 자가 아니라 test/decoration-ui.test.js «내보내기 디더» 가 잰다).
+//   내보내기에서 셀 모양 카드와 H 셀 스타일 카드를 잠근다(2026-09-28 외부 검토 · 후속 검토 — 이 자가 아니라 test/decoration-ui.test.js
+//   «내보내기 디더» · «H 셀 스타일 — 내보내기 디더» 가 잰다). 사다리 **위쪽** ppu(마름모 16 · H 12 초과)는 잰 적이 없다 — 단조 가정으로
+//   연다(덮는 자 없음 — cell-shape CELL_SHAPE_LOCK_REASONS 의 이름 붙인 축).
 //   · 내보내기 **호출부의 문맥 모양**은 이 자가 읽지 않는다(표 ↔ 제품 함수만) — index.html 내보내기 계획(exportPlanFor)이 minRoundtripPpu 에
 //     실제로 넘긴 문맥의 키가 셀 꾸미기 판정의 잰 하한 키와 같은지는 test/decoration-ui.test.js «잰 하한 키 = index.html 내보내기 호출
 //     모양» 이 제품 렌더로 잰다(2026-09-28 착지 검토 minor 해소).
 //   · 고정 크기(192 · 512 px) · 커스텀 크기 내보내기는 minPpu 를 안 써(export-options resolveExportSize) 잰 하한 아래 ppu 로 갈 수 있다 —
-//     이 자는 자동 크기의 하한 상수만 지킨다. 그 경로는 셀 모양 카드를 잠가 덮는다(cell-shape export-size — test/decoration-ui.test.js
-//     «내보내기 크기» 가 잰다).
+//     이 자는 자동 크기의 하한 상수만 지킨다. 그 경로는 셀 모양 카드와 H 셀 스타일 카드를 잠가 덮는다(export-size — test/decoration-ui.test.js
+//     «내보내기 크기» · «H 셀 스타일 — 내보내기 크기» 가 잰다). 코너 QR 꾸미기(qr 행 — 하한 키 없음)는 기본표에 행이 0 이라 전부 잠겨 있다 —
+//     qr 행을 들이는 착지는 QR 카드에 내보내기 축을 먼저 배선한다(test/decoration-ui.test.js «코너 QR 꾸미기 — 기본표» 가 행 0 을 잰다).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -63,7 +66,7 @@ test('① · ② 생성 허용표: 모든 하한 대상 행의 제품 하한 키
   assert.ok(Object.isFrozen(ALLOW.MEASURED_FLOORS), 'MEASURED_FLOORS 가 동결돼 있지 않다');
   const problems = floorProblems(ALLOW);
   assert.deepEqual(problems, [], '잰 하한 ↔ 제품 하한 — '
-    + 'missing/stale-key 면 생성기(gen-allow)의 하한 키 철자가 제품 minRoundtripPpuKey 와 어긋났다 · '
+    + 'missing/stale-key 면 허용표 생성기의 하한 키 철자가 제품 minRoundtripPpuKey 와 어긋났다 · '
     + 'below-measured 면 제품 하한이 잰 하한보다 낮다 — 그 사이 ppu 는 잰 적 없이 열린다(재측정하거나 착지 순서를 바꿀 것)');
   // 비공허 — 셀 표(oak · y)와 H 표의 키가 실제로 있다.
   const keys = Object.keys(ALLOW.MEASURED_FLOORS);

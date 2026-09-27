@@ -1849,8 +1849,10 @@
              붙였다. 키 g709 는 8언어에서 지웠다 — 남겨 두면 «정본이 둘» 이 된다. -->
       </div>
 
-      <!-- ② 적은 색상 화면 최적화 (디더링) — **고급 전용** (일반 모드는 기본값 = 양자화
-           없음). 「입력 힌트」가 아니라 실제로 그 비트깊이로 양자화·디더링해 내보낸다
+      <!-- ② 적은 색상 화면 최적화 (디더링) — **고급 전용 UI**. 값은 모드와 무관하게 적용된다 — 일반 모드로
+           돌아와도 고급에서 고른 비트깊이가 내보내기(와 셀 꾸미기 디더 잠금)에 남는다(모드 전환은 상태를 안 건드린다;
+           일반 모드에 기본값을 강제할지는 미결 — 2026-09-28 검토. 옛 주석 «일반 모드는 기본값» 은 코드와 달랐다).
+           「입력 힌트」가 아니라 실제로 그 비트깊이로 양자화·디더링해 내보낸다
            (src/dither.js — 무너지는 깊이를 정직하게 드러내는 장치). -->
       <div id="exportDitherSection" hidden>
         <div class="section-heading-row">
@@ -8905,7 +8907,7 @@ import {
 } from './src/finder-zone-ui.js';
 import {
   centralN7EmphasisAppliesTo, centralN7FamilyForType, detectorEmphasisEquivalents, detectorEmphasisRequiresAdvanced,
-  encodeOptionsForY, measuredStateAtTableKey, producerFaceGains, cellShapeExportPlan,
+  encodeOptionsForY, measuredStateAtTableKey, producerFaceGains, cellShapeExportPlan, hCellStyleExportPlan,
   sceneOptionsForOA, centralBeaconEncoderOptions,
 } from './src/generator-render-config.js';
 import {
@@ -9622,8 +9624,9 @@ for(const [id,key]of[['hVersionCards','versionH'],['hMaskCards','hMask']])for(co
   generatorState[key]=button.dataset[key==='versionH'?'hVersion':'hMask']==='auto'?'auto':Number(button.dataset[key==='versionH'?'hVersion':'hMask']);refreshHSelection();
 });
 function stopHAnimation(){if(hAnimation.request)cancelAnimationFrame(hAnimation.request);hAnimation.request=0;hAnimation.last=0;}
+// H 셀 스타일은 렌더가 판정에 쓴 내보내기 계획(current.hDeco — 꾸미기 블록 hCellStyleDecoFor)으로 같은 판정을 받아요(미리보기 = 내보내기).
 function hSceneOptions(){
-  return {...hPreviewOptions(generatorState,{elapsedMs:hAnimation.elapsed,palette:paletteOf(generatorState.preset),encoded:current.encoded}),zoom:Y3D_PAD_BASE/y3dPreview.pad,outline:true,faceImages:hFaceImages,lighting:{profile:resolvedRenderProfile(),shading:generatorState.shading,rotationFill:generatorState.hAutoRotate&&y3dPreview.on}};
+  return {...hPreviewOptions(generatorState,{elapsedMs:hAnimation.elapsed,palette:paletteOf(generatorState.preset),encoded:current.encoded,exportPlan:current.hDeco&&current.hDeco.render.exportPlan}),zoom:Y3D_PAD_BASE/y3dPreview.pad,outline:true,faceImages:hFaceImages,lighting:{profile:resolvedRenderProfile(),shading:generatorState.shading,rotationFill:generatorState.hAutoRotate&&y3dPreview.on}};
 }
 const hPositionNodes=new Map();let hPositionLines=null;
 function paintHPositionLabels(options,cssSide){
@@ -10025,13 +10028,15 @@ for(const videoButton of document.querySelectorAll('[data-video-size]'))videoBut
     hImageEditor.flush();flushScheduledRender();
     if(!current||current.type!=='H'||!hGeneratorActive()||!generatorState.hAutoRotate||!y3dPreview.on)return;
     const state={...generatorState},encoded=current.encoded,palette=structuredClone(paletteOf(state.preset)),qr={...current.hQr},faceImages=hFaceImages,fps=cubeVideoFps;
+    // H 셀 스타일 판정은 클릭 시점 렌더의 판정(내보내기 계획 포함 — current.hDeco)을 그대로 따라요: 카드가 잠겨 미리보기가 사각이면 영상도 사각이에요.
+    const exportPlan=current.hDeco&&current.hDeco.render.exportPlan;
     const side=Number(videoButton.dataset.videoSize),lighting={profile:resolvedRenderProfile(),shading:state.shading,rotationFill:true},zoom=Y3D_PAD_BASE/y3dPreview.pad;
     const elapsed=hAnimation.elapsed,filename=exportFilename('mp4').replace(/\.mp4$/,`_${side}p_${fps}fps.mp4`),background=state.bgMode==='transparent'?cubeVideoBackground:{...palette.background};
     cubeVideoJob=new AbortController();const signal=cubeVideoJob.signal;
     frameCanvas=document.createElement('canvas');stopHAnimation();syncCubeVideoUi();
     const blob=await exportCubeMp4({durationMs:cubeVideoDurationMs({speed:state.hRotationSpeed,axis:state.hRotationMode,tiltMode:clampHRotationTiltMode(state.hRotationTiltMode)}),width:side,height:side,fps,background,signal,requireFrameAccuracy:true,
       renderFrame:({context,canvas,timestampMs})=>{
-        const scene=withHCornerQr(buildHScene(encoded,{...hPreviewOptions(state,{elapsedMs:elapsed+timestampMs,palette,encoded}),outline:true,faceImages,lighting,zoom}),qr);
+        const scene=withHCornerQr(buildHScene(encoded,{...hPreviewOptions(state,{elapsedMs:elapsed+timestampMs,palette,encoded,exportPlan}),outline:true,faceImages,lighting,zoom}),qr);
         drawScene({...scene,background:null},frameCanvas,canvas.width/scene.width/(window.devicePixelRatio||1));
         context.drawImage(frameCanvas,0,0,canvas.width,canvas.height);
       },
@@ -10900,14 +10905,16 @@ for (const card of document.querySelectorAll('.toggle-card')) {
 
 /**
  * 꾸미기 허용표 — undefined 면 resolver 가 기본표(src/cell-shape-allow.js)를 쓴다. 제품에서는 언제나 undefined 다.
- * 마름모 셀(cellShapeDecoFor) · 코너 QR(paletteOf) · 카드 잠금 판정(syncDecorationUi)이 이 함수로 표를 고른다.
+ * 마름모 셀(cellShapeDecoFor) · H 셀 스타일 판정(hCellStyleDecoFor) · 코너 QR(paletteOf) · 카드 잠금 판정(syncDecorationUi)이 이 함수로
+ * 표를 고른다.
  * 테스트(test/decoration-ui.test.js)는 vm 문맥에서 이 이름을 fixture 표로 바꿔 끼운다 — 제품 코드에 전역 쓰기 훅을 두지 않는다.
  *
  * ⚠ **예외 — H 셀 스타일 렌더 3경로**(renderTypeH · hSceneOptions · 회전 영상)는 이 함수를 거치지 않고
- *   hPreviewOptions 의 기본표(인자 allow 생략)를 쓴다. 그 셋은 다른 자(generator-h-qr-state 등)의 vm 하네스가 그대로
- *   꺼내 돌려서 새 식별자를 들일 수 없기 때문이다. 제품에서는 둘 다 기본표라 결과가 같다 — 이 함수가 undefined 가 아닌
- *   값을 내게 되는 날에는 그 하네스들을 갱신하면서 세 곳에 `allow: decorationAllow()` 를 넣어야 H 셀 경로가 어긋나지
- *   않는다(D3 openIssue 2). decoration-ui 하네스는 같은 fixture 를 hPreviewOptions 이음매에도 넣어 이 차이를 덮는다.
+ *   hPreviewOptions 의 기본표(인자 allow 생략)를 쓴다. 그 셋은 다른 자(generator-h-qr-state · generator-h-rotation-fill 등)의
+ *   vm 하네스가 그대로 꺼내 돌리므로, 새 식별자를 들이면 그 하네스 문맥에도 같이 싣는다(2026-09-28 H 내보내기 축 — hCellStyleDecoFor
+ *   · current.hDeco 를 그렇게 들였다). 제품에서는 둘 다 기본표라 결과가 같다 — 이 함수가 undefined 가 아닌 값을 내게 되는 날에는
+ *   세 곳에 `allow: decorationAllow()` 를 넣어야 H 셀 경로가 판정(hCellStyleDecoFor)과 어긋나지 않는다(D3 openIssue 2).
+ *   decoration-ui 하네스는 같은 fixture 를 hPreviewOptions 이음매에도 넣어 이 차이를 덮는다.
  */
 function decorationAllow() {
   return undefined;
@@ -10934,7 +10941,7 @@ function basePaletteOf(name) {
  *   measuredStateAtTableKey — 와이어 축(자리 · ECC) 사유의 실현 조건이자 측정 밴드 판정: 제품 자동 경로가 측정 와이어 구성으로 이
  *     페이로드를 같은 표 키에 인코딩하는가. **렌더가 쓴 그 인코더 · 페이로드 · 옵션**(`source` = {fn, text, opts} — encodeOptsFor ·
  *     cfg.text)으로 generator-render-config `measuredStateAtTableKey` 가 유도한다. 거짓이면 «자리 · ECC 탓» 은 따를 수 없는 안내라
- *     사유가 unmeasured 로 떨어지고(DESIGN_002 §4.4 — auto-M 길이 · A 바깥 없음 79–80 B), 구성이 측정과 같아도 잠근다(버전 고정 ·
+ *     사유가 unmeasured 로 떨어지고(ECC 실현 조건 — auto-M 길이 · A 바깥 없음 79–80 B), 구성이 측정과 같아도 잠근다(버전 고정 ·
  *     Y 로케이터 직접 선택의 짧은 페이로드 — 잰 적 없는 영 패딩).
  *   faceGains — 생산자가 쓸 면 게인(Y 큐브 입체감): **넘길 그 옵션**에서 generator-render-config `producerFaceGains` 가 읽는다. 측정
  *     게인과 다르면 잠긴다(사유 face-gain). O/A/K 생산자는 게인을 안 읽어 판정하지 않는다.
@@ -10981,33 +10988,70 @@ function cellShapeDecoWith(encoded, render) {
  * `current` 가 이 렌더 결과여야 한다(render() 가 current 를 세운 뒤 부른다).
  */
 function cellShapeExportPlanNow() {
+  const { ppu, ditherBits } = decorationExportPlanInput();
+  return cellShapeExportPlan({
+    type: generatorState.type, state: generatorState, encoded: current.encoded, ppu, ditherBits,
+    faceGainsDitherOff: producerFaceGains(generatorState.type, { palette: { faceGains: currentFaceGains(null) } }),
+  });
+}
+
+/** 지금 내보내기 계획의 ppu · 비트깊이(exportPlanFor — 셀 모양 · H 셀 스타일 판정이 같은 입력을 쓴다). 계획이 던지면 ppu 는 모름이다. */
+function decorationExportPlanInput() {
   let plan = null;
   try {
     plan = exportPlanFor('png').plan;
   } catch {
     plan = null;
   }
-  return cellShapeExportPlan({
-    type: generatorState.type, state: generatorState, encoded: current.encoded,
-    ppu: plan ? plan.ppu : undefined,
-    ditherBits: plan ? plan.ditherBits : exportDitherBits(),
-    faceGainsDitherOff: producerFaceGains(generatorState.type, { palette: { faceGains: currentFaceGains(null) } }),
-  });
+  return { ppu: plan ? plan.ppu : undefined, ditherBits: plan ? plan.ditherBits : exportDitherBits() };
 }
 
-/** 내보내기 계획이 지금 렌더가 셀 꾸미기 판정에 쓴 값과 다른가(렌더된 셀 꾸미기 문맥이 없으면 판정할 것이 없다). */
-function cellShapeExportPlanStale() {
-  if (!current || !current.deco || !current.deco.ctx) return false;
+/**
+ * H 셀 스타일 — 지금 내보내기 계획 → 문맥 보조 필드 exportPlan(generator-render-config `hCellStyleExportPlan` — 셀 모양과 같은 입력 ·
+ * 같은 규칙, 2026-09-28 후속 검토: H 카드는 잰 하한 아래 ppu · 디더 내보내기에서도 열려 있었다). H 내보내기 계획은 3D 면
+ * hSceneOptions 장면, 평면이면 current.scene 의 치수로 ppu 를 푼다(exportPlanFor). `current` 가 이 렌더 결과여야 한다.
+ */
+function hCellStyleExportPlanNow() {
+  const { ppu, ditherBits } = decorationExportPlanInput();
+  return hCellStyleExportPlan({ encoded: current.encoded, ppu, ditherBits });
+}
+
+/**
+ * H 셀 스타일 판정 — renderTypeH 가 인코딩 뒤에 부르고, render() 가 내보내기 계획을 더해 다시 부른다(셀 모양 cellShapeDecoFor ·
+ * cellShapeDecoWith 와 같은 두 단계). 반환의 render.exportPlan 은 H 경로(renderTypeH · hSceneOptions · 회전 영상)가 hPreviewOptions 에
+ * 넘기는 그 계획이다 — 세 경로가 카드와 같은 판정을 받는다(잠기면 미리보기 · 내보내기 · 영상 모두 사각).
+ * @param {object} encoded 실제 인코딩 결과
+ * @param {object} [exportPlan] 내보내기 계획(render() 의 두 번째 판정만 — 없으면 내보내기 축을 판정 안 함)
+ * @returns {{ctx: object|null, spec: object|null, lockReason: string|null, render: {exportPlan?: object}}}
+ */
+function hCellStyleDecoFor(encoded, exportPlan) {
+  const render = exportPlan !== undefined ? { exportPlan } : {};
+  const ctx = hCellStyleCtx(encoded, generatorState, render);
+  const resolved = resolveHCellStyleSpec(generatorState, ctx, decorationAllow());
+  return { ctx, spec: resolved.spec, lockReason: resolved.lockReason ?? null, render };
+}
+
+/**
+ * 내보내기 계획이 지금 렌더가 꾸미기 판정에 쓴 값과 다른가 — 셀 모양(current.deco)과 H 셀 스타일(current.hDeco)을 같은 규칙으로 본다
+ * (렌더된 꾸미기 문맥이 없으면 판정할 것이 없다).
+ */
+function decorationExportPlanStale() {
+  if (!current) return false;
+  if (current.hDeco && current.hDeco.ctx) {
+    return JSON.stringify(hCellStyleExportPlanNow()) !== JSON.stringify(current.hDeco.render.exportPlan);
+  }
+  if (!current.deco || !current.deco.ctx) return false;
   return JSON.stringify(cellShapeExportPlanNow()) !== JSON.stringify(current.deco.render.exportPlan);
 }
 
-// 셀 꾸미기 내보내기 축의 **파생값 트리거 — 한 곳**. 내보내기 계획은 크기 · 커스텀 폭 · 높이 · 여백 없음 · 디더 · 출력 갈래 · 입체감이
-// 바꾼다 — 그 컨트롤 목록을 손으로 들지 않는다: 어떤 입력이든 그 컨트롤의 핸들러가 상태를 바꾼 뒤(문서까지 버블된 뒤) 계획이 렌더
-// 때와 다르면 다시 렌더한다. 렌더(render → cellShapeDecoWith)가 카드 판정과 미리보기를 다시 하고 syncDecorationUi 가 카드 · 사유를
-// 다시 그린다. 렌더가 이미 예약돼 있으면(timer) 그 렌더가 다시 판정한다. 내보내기 버튼은 flushScheduledRender 로 예약 렌더를 먼저 돌린다.
+// 꾸미기 내보내기 축의 **파생값 트리거 — 한 곳**(셀 모양 · H 셀 스타일). 내보내기 계획은 크기 · 커스텀 폭 · 높이 · 여백 없음 · 디더 ·
+// 출력 갈래 · 입체감이 바꾼다 — 그 컨트롤 목록을 손으로 들지 않는다: 어떤 입력이든 그 컨트롤의 핸들러가 상태를 바꾼 뒤(문서까지 버블된
+// 뒤) 계획이 렌더 때와 다르면 다시 렌더한다. 렌더(render → cellShapeDecoWith · hCellStyleDecoFor)가 카드 판정과 미리보기를 다시 하고
+// syncDecorationUi 가 카드 · 사유를 다시 그린다. 렌더가 이미 예약돼 있으면(timer) 그 렌더가 다시 판정한다. 내보내기 버튼은
+// flushScheduledRender 로 예약 렌더를 먼저 돌린다.
 for (const kind of ['change', 'input', 'click']) {
   document.addEventListener(kind, () => {
-    if (!timer && cellShapeExportPlanStale()) schedule();
+    if (!timer && decorationExportPlanStale()) schedule();
   });
 }
 
@@ -11220,7 +11264,8 @@ function syncDecorationUi() {
   const whiteCtx = shapeCtx
     ? cellShapeCtx(generatorState.type, rendered.encoded, generatorState, { ...rendered.deco.render, quietColor: 'white' })
     : null;
-  const hCtx = rendered && isH ? hCellStyleCtx(rendered.encoded, generatorState) : null;
+  // H 문맥은 렌더가 판정에 쓴 내보내기 계획(current.hDeco.render — hCellStyleDecoFor)을 싣는다: 카드도 미리보기와 같은 계획으로 판정한다.
+  const hCtx = rendered && isH ? hCellStyleCtx(rendered.encoded, generatorState, rendered.hDeco && rendered.hDeco.render) : null;
   const host = qrDecoHostOf(generatorState.type, generatorState);
   const base = basePaletteOf(generatorState.preset);
   const probe = {
@@ -16442,7 +16487,8 @@ function syncExportPpiHint() {
 
 function syncExportOptionsUi() {
   const advanced = mode === 'advanced';
-  // ② 전체는 고급 전용 — 일반 모드는 기본값(자동 = 양자화 없음)으로 동작한다.
+  // ② 전체는 고급 전용 UI — 값은 모드와 무관하게 적용된다(일반 모드에서도 고급에서 고른 비트깊이가 내보내기 · 셀 꾸미기 디더 잠금에
+  // 남는다 — exportDitherBits 는 모드를 안 본다. 일반 모드에 기본값을 강제할지는 미결, 2026-09-28 검토).
   els.exportDitherSection.hidden = !advanced;
   // ③ 의 세부 select 도 고급 전용 (일반 모드는 갈래 카드 2장만).
   els.exportPpiDetailRow.style.display = advanced ? '' : 'none';
@@ -17063,14 +17109,15 @@ function renderTypeH(cfg){
   hFaceImages=hImageEditor.syncQrText(cfg.qrText);
   const {fn,opts}=encodeOptsFor(cfg),encoded=encodeWithEcc(fn,cfg.text,opts,cfg.eccLevel);
   // 셀 꾸미기는 hPreviewOptions 가 실제 인코딩으로 문맥을 풀어 연 경우에만 hCellStyle · hCellGround 키를 싣는다(§4.2 generator-h).
+  // 내보내기 계획(cfg.exportPlan)은 render() 의 두 번째 판정만 싣는다 — 판정(hDeco)과 그림이 같은 계획을 쓴다(hCellStyleDecoFor).
   const palette=paletteOf(cfg.presetName);
-  let sceneOpts={...hPreviewOptions({...generatorState,hAutoRotate:false},{encoded}),palette,outline:true,faceImages:hFaceImages,lighting:{profile:resolvedRenderProfile(),shading:generatorState.shading}};
+  let sceneOpts={...hPreviewOptions({...generatorState,hAutoRotate:false},{encoded,exportPlan:cfg.exportPlan}),palette,outline:true,faceImages:hFaceImages,lighting:{profile:resolvedRenderProfile(),shading:generatorState.shading}};
   if(!y3dPreview.on)sceneOpts=hPlanarPreviewOptions(encoded,sceneOpts,hFaceImages)??sceneOpts;
   // 코너 QR 꾸미기 deco 는 paletteOf 가 호스트 'h' 로 푼 값이다(QR 경로 정본 한 곳). 없으면 키도 없다(꺼짐 = 현재 출력).
   const hQr=cfg.fallback.mode==='corner'?{text:cfg.qrText,corner:cfg.fallback.corner,...(palette.qrDeco?{deco:palette.qrDeco}:{})}:{};
   const scene=withHCornerQr(buildHScene(encoded,sceneOpts),hQr),check=decodeH(encoded.faces,{version:encoded.version,mode:encoded.mode,tones:encoded.tones,ecc:encoded.ecc,mask:encoded.mask,routeId:encoded.routeId,finder:encoded.finder});
   if(!check.ok)throw new Error(`${hText('selfCheckFailure')} ${check.reason}`);
-  return {type:'H',encoded,scene,sceneOpts,hQr,
+  return {type:'H',encoded,scene,sceneOpts,hQr,hDeco:hCellStyleDecoFor(encoded,cfg.exportPlan),
     info:`H${encoded.version} · ${encoded.n}×${encoded.n} · ${encoded.mode}F · ${encoded.tones} tone · ECC ${encoded.eccLevel} · mask ${encoded.mask} · ${encoded.finder==='corners'?'4▣':'▣'}<br>${payloadByteLength(cfg.text)} B / ${encoded.capacity.maxPayloadBytes} B`,
     selfCheck:`<span class="badge ok">${hText('selfCheck')}</span>`};
 }
@@ -17461,6 +17508,8 @@ function render() {
       hQr: result.hQr,
       // 셀 모양 문맥·spec·잠금 사유(O/A/K/Y) — 꾸미기 카드가 «렌더된 것» 기준으로 잠금을 보인다(syncDecorationUi).
       deco: result.deco,
+      // H 셀 스타일 문맥·spec·잠금 사유 — 같은 이유(카드) + H 경로(hSceneOptions · 회전 영상)가 판정에 쓴 내보내기 계획을 여기서 읽는다.
+      hDeco: result.hDeco,
     };
     // 셀 꾸미기 내보내기 축(디더 · 고정/커스텀 크기 — cellShapeDecoFor 주석): 내보내기 계획은 장면 치수를 읽어 여기서야 안다. 계획을 더해
     // 다시 판정하고, 계획이 새로 잠그면(첫 판정은 열었다) 계획을 실어 한 번 더 그린다 — 미리보기도 잠금대로 사각이라 내보내기 결과
@@ -17476,6 +17525,20 @@ function render() {
         current = { ...current, scene: result.scene, sceneOpts: result.sceneOpts, deco: result.deco };
       } else {
         current.deco = deco;
+      }
+    }
+    // H 셀 스타일도 같은 내보내기 축을 같은 두 단계로 받는다(2026-09-28 후속 검토 — H 카드는 잰 하한 아래 ppu · 디더 내보내기에서도 열려
+    // 있었다). H 내보내기 계획은 3D 면 hSceneOptions 장면, 평면이면 current.scene 의 치수에서 ppu 를 푼다 — H 장면 치수는 셀 스타일 ·
+    // 자세와 무관하다(test/decoration-ui.test.js 가 잰다). 계획은 current.hDeco.render 에 남아 hSceneOptions · 회전 영상 · 카드가 같이 쓴다.
+    if (current.hDeco && current.hDeco.ctx) {
+      const exportPlan = hCellStyleExportPlanNow();
+      const hDeco = hCellStyleDecoFor(current.encoded, exportPlan);
+      if (current.hDeco.spec && !hDeco.spec) {
+        cfg.exportPlan = exportPlan;
+        result = renderCurrent();
+        current = { ...current, scene: result.scene, sceneOpts: result.sceneOpts, hDeco: result.hDeco };
+      } else {
+        current.hDeco = hDeco;
       }
     }
     // 자동 해상도가 본문·면수·ECC에 따라 바뀌어도 속도/영상 길이는 실제 H 버전을 따라가요.

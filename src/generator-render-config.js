@@ -318,7 +318,7 @@ const AUTO_Y_PROBE_FALLBACK = Object.freeze({ mode: 'off' });
 
 /**
  * **측정 상태가 이 표 키에 있는가** — 셀 꾸미기 문맥 보조 필드(cell-shape `cellShapeCtx` 의 render.measuredStateAtTableKey)의 유도
- * (2026-09-28, DESIGN_002 §4.4 의 ECC 실현 조건을 착지 검토 major 두 건으로 넓혔다).
+ * (2026-09-28, 길이 축 착지의 ECC 실현 조건을 착지 검토 major 두 건으로 넓혔다).
  *
  * 뜻: 제품의 **자동 경로**(자동 버전 · Y 는 자동 사다리 `resolveAutoY`)가 그 타입의 **측정 와이어 구성**(cell-shape
  * `CELL_SHAPE_MEASURED_CONFIG` 의 자리 · ECC — `CELL_SHAPE_WIRE_CONFIG_KEYS`)으로 이 페이로드를 인코딩하면 지금 인코딩과 **같은 표 키**에
@@ -428,15 +428,36 @@ function ditherIsIdentity(bits) {
  */
 export function cellShapeExportPlan({ type, state, encoded, ppu, ditherBits, faceGainsDitherOff } = {}) {
   if (!encoded || typeof encoded !== 'object' || !state || typeof state !== 'object') return undefined;
+  const ctx = cellShapeCtx(type, encoded, state, TABLE_KEY_PROBE_RENDER);
+  const plan = exportPlanOf(ctx ? allowRowFloorCtx(cellShapeAllowCtx(ctx)) : null, ppu, ditherBits);
+  if (plan && faceGainsDitherOff !== undefined) plan.faceGainsDitherOff = faceGainsDitherOff;
+  return plan;
+}
+
+/**
+ * **지금 내보내기 계획** → H 셀 스타일 문맥 보조 필드(generator-h `hCellStyleCtx` 의 render.exportPlan)의 유도 — 셀 모양의
+ * `cellShapeExportPlan` 과 같은 규칙 · 같은 입력(index.html 이 자기 내보내기 계획 exportPlanFor 의 ppu · 비트깊이를 넘긴다). 2026-09-28
+ * 후속 검토: 셀 모양 카드만 내보내기 축(디더 · 고정/커스텀 크기)으로 잠그고 H 셀 스타일 카드는 잰 하한 아래 ppu · 디더 내보내기에서도
+ * 열려 있었다 — H 행도 비디더에서 잰 사실이고, 표가 싣는 잰 하한(허용표 `MEASURED_FLOORS` 의 H 키) 아래 ppu 는 잠근다.
+ *   floorKey — H 표 키의 잰 하한 키(cell-shape `allowRowFloorCtx` 의 h 행 유도 — 표 키의 버전은 generator-h `hCellStyleCtx` 와 같이 실제
+ *     인코딩 버전이다). index.html 내보내기 호출 모양의 키와 같은지는 test/decoration-ui.test.js 가 잰다.
+ * 면 게인 필드는 없다(H 표에는 면 게인 축이 없다 — 셀 모양의 디더 ↔ 면 게인 규칙은 해당 없음).
+ * @param {{encoded: object, ppu?: number, ditherBits: number|null}} input
+ * @returns {{dithered: boolean, ppu?: number, floorKey?: string}|undefined} 입력을 모르면 undefined(→ 내보내기 축을 판정 안 함)
+ */
+export function hCellStyleExportPlan({ encoded, ppu, ditherBits } = {}) {
+  if (!encoded || typeof encoded !== 'object') return undefined;
+  return exportPlanOf(allowRowFloorCtx({ table: 'h', version: encoded.version }), ppu, ditherBits);
+}
+
+/** 내보내기 계획의 공통 모양 {dithered, ppu?, floorKey?} — 비트깊이가 도메인 밖이면 undefined, 하한 문맥 · ppu 가 없으면 크기 필드 없음. */
+function exportPlanOf(floorCtx, ppu, ditherBits) {
   if (!(ditherBits === null || DITHER_BIT_DEPTHS.includes(ditherBits))) return undefined;
   const plan = { dithered: ditherBits !== null && !ditherIsIdentity(ditherBits) };
-  const ctx = cellShapeCtx(type, encoded, state, TABLE_KEY_PROBE_RENDER);
-  const floorCtx = ctx ? allowRowFloorCtx(cellShapeAllowCtx(ctx)) : null;
   if (floorCtx && typeof ppu === 'number' && Number.isFinite(ppu) && ppu > 0) {
     plan.ppu = ppu;
     plan.floorKey = minRoundtripPpuKey(floorCtx);
   }
-  if (faceGainsDitherOff !== undefined) plan.faceGainsDitherOff = faceGainsDitherOff;
   return plan;
 }
 

@@ -37,7 +37,7 @@
 //      (내보내기 축 — 디더 · 크기 — 은 이 합성 격자 밖이다: 렌더 값 exportPlan 이 있을 때만 판정하고, ⓚ 와 decoration-ui 가 잰다.)
 //      반사실은 **표 키 고정**(같은 버전)이다 — 제품 자동 버전은 구성을 바꾸면 재인코딩으로 버전이 바뀔 수 있어(짧은 페이로드의
 //      G + 사괘 · G ECC M 실측) «되돌리면 열린다» 까지는 이 자가 말하지 않는다(사유 문구 «이 구성으로는 확인 안 됨» 은 그때도 참).
-//   ⓗ ECC 반사실의 실현 조건(2026-09-28, DESIGN_002 §4.4) — ecc-level 은 제품 자동 경로가 측정 ECC(H)로 그 페이로드를 **같은 표 키**에
+//   ⓗ ECC 반사실의 실현 조건(2026-09-28, 길이 축 착지) — ecc-level 은 제품 자동 경로가 측정 ECC(H)로 그 페이로드를 **같은 표 키**에
 //      인코딩할 때만(보조 필드 measuredStateAtTableKey). 제품 인코더로 길이를 훑어(G · A · K · Y v0tr n25) M 인코딩의 표 키에 행이 있으면
 //      «H 가 그 버전에 들어가고 그 길이가 그 버전의 자동 H 밴드 안인가»(그 버전 · 한 단계 아래 버전의 H 용량 — 유도 함수와 다른 길)에
 //      따라 ecc-level ↔ unmeasured 인지 잰다. 설계가 이름 붙인 auto-M 길이(G 80 · A 85 · K 120 · Y 114 B)는 unmeasured.
@@ -135,7 +135,7 @@ const measuredEmphasis = (type) => (CELL_SHAPE_MEASURED_CONFIG[type] ? CELL_SHAP
  * producerFaceGains)로 만든다 — 생산자 옵션은 팔레트(제품 기본 게인) · 그린 파인더(상태 선택 — 이 자의 문맥은 중앙 QR · daehan 이
  * 아니다) · 넘긴 강조(기본 = 그 타입의 측정 구성 값). `source`({fn, text, opts} — 그 인코딩을 만든 인코더 · 페이로드 · eccLevel 뺀
  * 옵션)를 주면 측정 상태(render.measuredStateAtTableKey — 와이어 축 사유의 실현 조건 · 측정 밴드)도 **제품 유도 함수**
- * (generator-render-config `measuredStateAtTableKey`)로 싣는다(2026-09-28 — DESIGN_002 §4.4 + 착지 검토). 안 주면 싣지 않는다 —
+ * (generator-render-config `measuredStateAtTableKey`)로 싣는다(2026-09-28 — ECC 실현 조건 + 착지 검토). 안 주면 싣지 않는다 —
  * 그 문맥은 자리 · ECC 가 측정과 달라도 그 축 사유를 안 받고(unmeasured) 측정 밴드를 판정하지 않는다.
  */
 function renderOf(type, enc, state, quietColor = 'white', emphasis = measuredEmphasis(type), source = null) {
@@ -722,7 +722,7 @@ test('ⓕ 사유는 참이다(표 키 고정 반사실) — 자리 · ECC · 강
     y: { nBand: String(Math.max(...cellRows.filter((r) => r.table === 'y').map((r) => Number(r.nBand))) + 8) },
   };
   // 표 키 문맥(중복 제거) — 행의 모양 · 강도는 떼고 문맥만. 측정 상태(보조 필드)는 기본 «이 표 키에 있다»(참). 모든 변형에서
-  // 측정 상태 참 · 거짓 · 모름(필드 없음)을 더 잰다(2026-09-28 — DESIGN_002 §4.4 + 착지 검토).
+  // 측정 상태 참 · 거짓 · 모름(필드 없음)을 더 잰다(2026-09-28 — ECC 실현 조건 + 착지 검토).
   const bases = new Map();
   for (const row of cellRows) {
     const t = row.table === 'y' ? 'Y' : row.type;
@@ -861,7 +861,7 @@ function hCapacityOf(fn, opts) {
 }
 
 test('ⓗ ECC 실현 조건 — 같은 표 키(버전 · n · 레이아웃)에서 측정 ECC(H)로 그 페이로드가 안 들어가거나 그 버전의 자동 H 밴드 밖이면 unmeasured, 아니면 ecc-level (제품 인코더 · 길이 훑기 · auto-M 길이 G 80 · A 85 · K 120 · Y 114 B)', (t) => {
-  // 왜(DESIGN_002 §4.4): 제품 auto 는 H 가 안 들어가는 길이에서 M 을 고르고, 그 버전의 표 키가 H 행과 같으면 hit 가 난다. 그 버전에
+  // 왜(ECC 실현 조건): 제품 auto 는 H 가 안 들어가는 길이에서 M 을 고르고, 그 버전의 표 키가 H 행과 같으면 hit 가 난다. 그 버전에
   // H 로는 안 들어가므로 «ECC 를 H 로» 는 따를 수 없는 안내다 — 사유는 unmeasured(g1162)여야 한다. 반대로 같은 버전에서 H 로도
   // 들어가고 그 길이가 그 버전의 자동 H 밴드(한 단계 아래 버전 H 용량 초과)인 수동 M 은 «ECC 탓»(g1210)이 참이다. 제품 경로
   // (index.html auto 사다리 · 카드 사유 문구)는 decoration-ui 가 잰다.
@@ -1093,7 +1093,7 @@ test('ⓘ 측정 상태 유도 — 입력을 모르면 undefined(판정 안 함)
 // ── ⓙ 면 게인(Y 큐브 입체감) ─────────────────────────────────────────────────
 
 test('ⓙ 면 게인 — 측정 게인 선언 = 하네스 규약(자동 · 인쇄용 아님 · 디더 없음)의 게인 · Y 장면만 게인을 읽는다 · 다른 게인이면 face-gain · 모름은 판정 안 함', (t) => {
-  // 선언 ↔ 측정 하네스 규약(동결 하네스 lib-assemble defaultFaceGains 와 같은 호출) — 값의 출처가 바뀌면 빨개진다(재측정할 것).
+  // 선언 ↔ 측정 하네스 규약(동결 하네스의 기본 면 게인 조립과 같은 호출) — 값의 출처가 바뀌면 빨개진다(재측정할 것).
   const harnessGains = faceGainsForRenderProfile(resolveRenderProfile('auto', { printPurpose: false, ditherBits: null }));
   assert.deepEqual({ ...CELL_SHAPE_MEASURED_FACE_GAINS.Y }, { ...harnessGains }, '측정 게인 선언 ≠ 하네스 규약의 게인');
   assert.deepEqual(Object.keys(CELL_SHAPE_MEASURED_FACE_GAINS), ['Y'], '면 게인 판정은 Y 만(아래 장면 대조가 근거)');

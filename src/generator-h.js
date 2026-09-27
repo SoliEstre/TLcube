@@ -4,7 +4,7 @@ import {hAutoRotation,hPalette,H_CELL_GROUND_LEVELS} from './h-render.js';
 import {hMaskValue} from './h-profile.js';
 import {H_ARRANGEMENTS} from './h-face-arrangement.js';
 import {composeHRotation,hOrbitRotation,hOrbitFromRotation,hDragRotation,hAlignmentRotation,H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MODES} from './h-rotation.js';
-import {paletteGradeOf} from './cell-shape.js';
+import {paletteGradeOf,CELL_SHAPE_LOCK_REASONS,exportPlanAux,exportPlanAxes} from './cell-shape.js';
 import {SQUARE_CELL_STYLES} from './square-cell-style.js';
 import * as DEFAULT_CELL_ALLOW from './cell-shape-allow.js';
 export {H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MODES} from './h-rotation.js';
@@ -180,7 +180,12 @@ export const H_CELL_STYLE_LOCK_REASONS=Object.freeze({
   // 1차 구조 잠금(§3.3): 2톤은 colors[5]=levels[1] 이 데이터 톤이 아니라 바탕 쏠림 기전이 달라요.
   // corners 파인더(H5–H8)는 10×10 마커·2×2 포맷 배치를 재지 않았어요. 둘 다 허용표 행이 있어도 열지 않아요 —
   // 측정 레인이 연다면 이 두 줄을 먼저 지우고 이유를 적어야 해요.
-  TWO_TONE:'h-two-tone',CORNERS_FINDER:'h-corners-finder',UNMEASURED:'unmeasured'});
+  TWO_TONE:'h-two-tone',CORNERS_FINDER:'h-corners-finder',UNMEASURED:'unmeasured',
+  // 내보내기 축(2026-09-28 후속 검토 — 셀 모양 카드와 같은 거짓 열림이 H 카드에 남아 있었다): H 행도 비디더에서 잰 사실이고, 표가 싣는
+  // 잰 하한(허용표 MEASURED_FLOORS 의 H 키) 아래 ppu 는 잠가요(보수 — 표가 싣는 하한만 맞대요). 셀 모양과 같은 문자열 · 같은 판정
+  // 한 벌(cell-shape `exportPlanAxes`)이에요.
+  // 문맥에 내보내기 계획(render.exportPlan — generator-render-config `hCellStyleExportPlan`)이 있을 때만 판정해요.
+  EXPORT_DITHER:CELL_SHAPE_LOCK_REASONS.EXPORT_DITHER,EXPORT_SIZE:CELL_SHAPE_LOCK_REASONS.EXPORT_SIZE});
 /** 팔레트 등급 {slate, ember, mono, custom} — 모르는 프리셋은 undefined(문맥 불완전 → 잠금).
  *  마름모 셀 문맥과 한 벌이에요(`cell-shape.paletteGradeOf` — 통합자 결정 1: 문맥 유도는 제품 코드에 한 벌). */
 export function hPaletteGrade(state){
@@ -188,19 +193,32 @@ export function hPaletteGrade(state){
 }
 /** 렌더 문맥 — 버전·파인더·톤은 실제 인코딩(자동 해상도·finder:'auto' 해석 뒤)에서 읽어요.
  *  모양은 마름모 셀의 `cell-shape.cellShapeCtx(type, encoded, state, render)` 와 같은 결: 인코딩 + 상태 → 표 키 문맥.
- *  H 는 바탕(ground)이 상태 선택이라 렌더 뒤 값(render)이 없어요 — ground 는 resolver 가 상태에서 붙여요. */
-export function hCellStyleCtx(encoded,state){
+ *  H 는 바탕(ground)이 상태 선택이라 ground 는 resolver 가 상태에서 붙여요.
+ *  렌더 값(render — 선택)은 내보내기 계획 하나예요: render.exportPlan(generator-render-config `hCellStyleExportPlan`)을 셀 모양 문맥과
+ *  같은 검증(cell-shape `exportPlanAux`)으로 보조 필드 exportPlan 에 실어요(표 키도 필수 키도 아니에요 — 모양이 틀리거나 없으면 키를
+ *  만들지 않고, resolver 는 내보내기 축을 판정하지 않아요: 측정 하네스 경로 · 제품 렌더의 첫 판정). */
+export function hCellStyleCtx(encoded,state,render){
   if(!encoded||typeof encoded!=='object')return null;
-  return {version:encoded.version,finder:encoded.finder,tones:encoded.tones,paletteGrade:hPaletteGrade(state)};
+  const ctx={version:encoded.version,finder:encoded.finder,tones:encoded.tones,paletteGrade:hPaletteGrade(state)};
+  const exportPlan=render?exportPlanAux(render.exportPlan):undefined;
+  if(exportPlan)ctx.exportPlan=exportPlan;
+  return ctx;
 }
 /**
  * 상태 + 렌더 문맥 + 허용표 → H 셀 스타일 spec. 순수 함수 — 상태를 읽기만 해요(동결 객체로도 동작).
  * - square(키 없음 포함) → `{spec:null}` (기본값 — 사유 없음).
  * - 허용표에 `table:'h'` · 스타일 · 문맥 키 전부가 같은 행이 있으면 `{spec:{style, ground}}`.
  * - 그 밖은 `{spec:null, lockReason}`. 2톤 · corners 파인더는 표와 무관하게 잠가요(§3.3 1차 잠금).
+ * - 행이 있어도 내보내기 축이 측정 밖이면 잠가요(문맥 보조 필드 exportPlan 이 있을 때만 — cell-shape `exportPlanAxes`, 셀 모양과 한 벌):
+ *   디더 내보내기 → export-dither · 계획 ppu < 그 표 키의 잰 하한 → export-size. 사유 축은 **정확히 하나**일 때만 그 축이고(따르면 열려요 —
+ *   디더를 꺼도 고정 · 커스텀 크기의 ppu 는 그대로이고, 자동 크기는 제품 하한 ≥ 잰 하한: test/cell-shape-measured-floors.test.js ②), 둘
+ *   다면 unmeasured 예요
+ *   (어느 한쪽만 따라서는 안 열려요 — 셀 모양 `CELL_SHAPE_LOCK_AXES` 와 같은 규칙). 표가 하한을 싣는데 그 키가 없으면 unmeasured 예요.
+ *   H 표에는 측정 구성 축(자리 · ECC · 강조 · 면 게인)이 없어요 — H 행의 표 키가 곧 인코딩 · 상태 전부예요.
  * @param {object} state `hCellStyle` · `hCellGround` · `preset` 을 읽어요
- * @param {{version, finder, tones, paletteGrade}|null} ctx `hCellStyleCtx(encoded, state)`
- * @param {{ROWS?: object[]}} [allow] 허용표(기본 `src/cell-shape-allow.js`, 테스트는 fixture 주입)
+ * @param {{version, finder, tones, paletteGrade, exportPlan?}|null} ctx `hCellStyleCtx(encoded, state, render)`
+ * @param {{ROWS?: object[], MEASURED_FLOORS?: object}} [allow] 허용표(기본 `src/cell-shape-allow.js`, 테스트는 fixture 주입) — MEASURED_FLOORS 는
+ *   내보내기 크기 판정에만 써요(행만 주입한 fixture 는 크기를 판정하지 않아요)
  */
 export function resolveHCellStyleSpec(state,ctx,allow=DEFAULT_CELL_ALLOW){
   const R=H_CELL_STYLE_LOCK_REASONS,style=state?.hCellStyle??H_CELL_STYLE_DEFAULT;
@@ -215,13 +233,20 @@ export function resolveHCellStyleSpec(state,ctx,allow=DEFAULT_CELL_ALLOW){
   const rows=allow&&Array.isArray(allow.ROWS)?allow.ROWS:[];
   const hit=rows.some(row=>row&&row.table==='h'&&row.hCellStyle===style
     &&H_CELL_STYLE_ALLOW_KEYS.every(k=>Object.prototype.hasOwnProperty.call(row,k)&&row[k]===key[k]));
-  return hit?{spec:Object.freeze({style,ground})}:{spec:null,lockReason:R.UNMEASURED};
+  if(!hit)return {spec:null,lockReason:R.UNMEASURED};
+  const ex=exportPlanAxes(key.exportPlan,allow);
+  if(ex.floorUnknown)return {spec:null,lockReason:R.UNMEASURED};
+  const axes=[...(ex.dithered?[R.EXPORT_DITHER]:[]),...(ex.belowFloor?[R.EXPORT_SIZE]:[])];
+  if(axes.length===0)return {spec:Object.freeze({style,ground})};
+  return {spec:null,lockReason:axes.length===1?axes[0]:R.UNMEASURED};
 }
 /** 화면·검증이 같은 도→라디안 및 회전 유도를 사용해요.
  *  셀 꾸미기: `encoded` 를 넘기면 `resolveHCellStyleSpec` 이 연 경우에만 `hCellStyle` · `hCellGround` 키를 실어요.
  *  기본(square)·잠금·문맥 없음은 키를 만들지 않아요 — 꺼짐 = 현재 출력 바이트 동일(§7.1)이고, 회전·3D-on·스냅샷·영상·
- *  renderTypeH 가 모두 이 함수를 거쳐 한 곳에서 따라와요(§4.2 wiring M2). */
-export function hPreviewOptions(state,{elapsedMs=0,palette,encoded,allow}={}){
+ *  renderTypeH 가 모두 이 함수를 거쳐 한 곳에서 따라와요(§4.2 wiring M2).
+ *  `exportPlan`(선택 — generator-render-config `hCellStyleExportPlan`)을 넘기면 내보내기 축까지 판정해요: 제품의 H 경로는 렌더가 판정에
+ *  쓴 그 계획(index.html current.hDeco)을 넘겨 미리보기 · 내보내기 · 영상이 카드와 같은 판정을 받아요. */
+export function hPreviewOptions(state,{elapsedMs=0,palette,encoded,allow,exportPlan}={}){
   const view=orbitStateToViewerInput(state);
   const axis=state.hRotationMode??'y';
   // 옆 4면 전용 배치는 정렬축을 지켜 Z cap을 숨겨요. 기본 iso에는 읽기용 S 기울임을 적용해요.
@@ -232,7 +257,7 @@ export function hPreviewOptions(state,{elapsedMs=0,palette,encoded,allow}={}){
   const pose=composeHRotation(hOrbitRotation(view),auto);
   const options={palette,margin:2,...pose,perspective:view.perspective,arrangement:state.hArrangement??'isometric',renderFaces:state.hRenderFaces??(state.hFaces>3?6:3)};
   if((state.hCellStyle??H_CELL_STYLE_DEFAULT)!==H_CELL_STYLE_DEFAULT){
-    const {spec}=resolveHCellStyleSpec(state,hCellStyleCtx(encoded,state),allow);
+    const {spec}=resolveHCellStyleSpec(state,hCellStyleCtx(encoded,state,{exportPlan}),allow);
     if(spec){options.hCellStyle=spec.style;options.hCellGround=spec.ground;}
   }
   return options;

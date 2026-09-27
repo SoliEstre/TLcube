@@ -31,7 +31,7 @@ const FACE_IMAGES_SENTINEL=Object.freeze({sentinel:'face-images'});
 const H_QR_SENTINEL=Object.freeze({deco:null,sentinel:'h-qr'});
 const VIDEO_PAD=48,VIDEO_PAD_BASE=24;
 
-async function runVideoListener({state,encoded,allow,elapsed=500,timestampMs=40}){
+async function runVideoListener({state,encoded,allow,hDeco,elapsed=500,timestampMs=40}){
   const start=html.indexOf("for(const videoButton of document.querySelectorAll('[data-video-size]'))");
   const end=html.indexOf('const CUBE_EXPORT_IDS',start);
   assert.ok(start>=0&&end>start,'전제: 회전 영상 리스너 블록이 없어요');
@@ -44,7 +44,7 @@ async function runVideoListener({state,encoded,allow,elapsed=500,timestampMs=40}
     window:{devicePixelRatio:1},AbortController,structuredClone,
     cubeVideoJob:null,cubeVideoFps:30,cubeVideoBackground:'green',
     hImageEditor:{flush:()=>{}},flushScheduledRender:()=>{},
-    current:{type:'H',encoded,hQr:H_QR_SENTINEL},hGeneratorActive:()=>true,generatorState:{...state},
+    current:{type:'H',encoded,hQr:H_QR_SENTINEL,...(hDeco?{hDeco}:{})},hGeneratorActive:()=>true,generatorState:{...state},
     y3dPreview:{on:true,pad:VIDEO_PAD},Y3D_PAD_BASE:VIDEO_PAD_BASE,hAnimation:{elapsed},hFaceImages:FACE_IMAGES_SENTINEL,
     paletteOf:()=>({background:{r:1,g:2,b:3},levels:[]}),resolvedRenderProfile:()=>'screen',
     exportFilename:()=>'x.mp4',stopHAnimation:()=>{},syncCubeVideoUi:()=>{},paintY3dPreview:()=>{},
@@ -58,6 +58,8 @@ async function runVideoListener({state,encoded,allow,elapsed=500,timestampMs=40}
     exportCubeMp4:async({renderFrame})=>{
       context.generatorState.hRotationTiltDeg=(state.hRotationTiltDeg??0)+11;context.generatorState.preset='__live-mutated__';
       context.current.encoded={version:99,finder:'live-mutated'};
+      // 셀 스타일 판정도 클릭 시점 렌더의 것(current.hDeco — 내보내기 계획 포함)이어야 해요 — 라이브로 읽으면 이 잠그는 계획이 새요.
+      context.current.hDeco={render:{exportPlan:{dithered:true}}};
       renderFrame({context:{drawImage:()=>{}},canvas:{width:10,height:10},timestampMs});return new Uint8Array(0);
     },
   };
@@ -107,4 +109,17 @@ test('회전 영상 프레임도 H 셀 꾸미기를 미리보기와 같은 resol
   const locked=(await runVideoListener({state,encoded:H_ENCODED,allow:{ROWS:[]}})).calls.buildHScene[0].opts;
   assert.equal('hCellStyle' in locked,false,'스텁 허용표인데 셀 스타일이 실렸어요');
   assert.equal('hCellGround' in locked,false);
+});
+
+test('회전 영상 프레임은 클릭 시점 렌더 판정의 내보내기 계획(current.hDeco)을 따라요 — 계획이 잠그면(디더 · 잰 하한 아래 ppu) 셀 스타일을 안 싣고, 계획이 없거나 여는 계획이면 실어요',async()=>{
+  // 카드 · 미리보기 · 3D 내보내기와 같은 판정이에요(2026-09-28 후속 검토 — H 셀 스타일 카드의 내보내기 축): 카드가 잠겨 미리보기가
+  // 사각이면 영상도 사각이에요. 계획 모양은 generator-render-config hCellStyleExportPlan 의 결과와 같아요.
+  const state=createGeneratorState({type:'Y',yRepresentation:'3d',orbitView:'3d',hAutoRotate:true,preset:'slate',hCellStyle:'dots'});
+  const row={table:'h',version:2,finder:'center',tones:3,ground:H_CELL_GROUND_DEFAULT,paletteGrade:'slate',hCellStyle:'dots'};
+  const allow={ROWS:[row],MEASURED_FLOORS:{'H:2':12}};
+  const frame=async hDeco=>(await runVideoListener({state,encoded:H_ENCODED,allow,hDeco})).calls.buildHScene[0].opts;
+  assert.equal((await frame(undefined)).hCellStyle,'dots','계획이 없는 렌더(판정 전)인데 스타일이 빠졌어요');
+  assert.equal((await frame({render:{exportPlan:{dithered:false,ppu:18,floorKey:'H:2'}}})).hCellStyle,'dots','여는 계획인데 스타일이 빠졌어요');
+  assert.equal('hCellStyle' in await frame({render:{exportPlan:{dithered:true}}}),false,'디더 계획으로 잠긴 판정인데 영상에 스타일이 실렸어요');
+  assert.equal('hCellStyle' in await frame({render:{exportPlan:{dithered:false,ppu:3.9,floorKey:'H:2'}}}),false,'잰 하한 아래 ppu 로 잠긴 판정인데 영상에 스타일이 실렸어요');
 });

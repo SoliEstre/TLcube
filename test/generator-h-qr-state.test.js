@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createGeneratorState,versionStateKey} from '../src/generator-state.js';
 import {selectQrPosition,selectGeneratorType,commitFinderQrTransition} from '../src/finder-selection.js';
-import {isHGenerator,hPreviewOptions,hUiLabel,hMaskLuminance,clampHRotationSpeed,clampHRotationTiltMode,selectHRepresentation,selectHFaceCount,selectHRenderFaces,reconcileHContentRotation} from '../src/generator-h.js';
+import {isHGenerator,hPreviewOptions,hUiLabel,hMaskLuminance,clampHRotationSpeed,clampHRotationTiltMode,selectHRepresentation,selectHFaceCount,selectHRenderFaces,reconcileHContentRotation,hCellStyleCtx,resolveHCellStyleSpec} from '../src/generator-h.js';
 import {encodeH,decodeH} from '../src/h-codec.js';
 import {buildHScene} from '../src/h-render.js';
 import {withHCornerQr,hQrPosition,hFaceQrSummary,hEffectiveQrPosition,hCornerTooCorner} from '../src/generator-h-qr.js';
@@ -17,6 +17,7 @@ import {TL_READER_URL,tlReaderUrlWithHint,qrMatrix} from '../src/qr.js';
 import {renderWithErrorDisplay} from '../src/render-status.js';
 import {payloadByteLength} from '../src/header.js';
 import {minRoundtripPpu,resolveExportPpi,resolveExportSize} from '../src/export-options.js';
+import {hCellStyleExportPlan} from '../src/generator-render-config.js';
 import {cubeVideoDurationMs} from '../src/cube-video-export.js';
 import {hControlIcon,hBrightestPaletteHex} from '../src/h-preview-controls.js';
 import {generatorCubeModel} from '../src/generator-cube-export.js';
@@ -55,6 +56,8 @@ function harness(text,overrides={},{realEditor=false}={}){
     selectQrPosition,selectGeneratorType,commitFinderQrTransition,GENERATOR_DEFAULT_FINDER_PATTERN_ID:state.finderPatternId,
     TL_READER_URL,tlReaderUrlWithHint,payloadByteLength,versionStateKey,renderWithErrorDisplay,
     minRoundtripPpu,resolveExportPpi,resolveExportSize,EXPORT_MARGIN_TRIM:'trim',
+    // H 셀 스타일 판정(renderTypeH · render 의 내보내기 계획 두 번째 판정 — index.html 꾸미기 블록의 실물 함수를 아래에서 꽂아요).
+    hCellStyleCtx,resolveHCellStyleSpec,hCellStyleExportPlan,
     LOCATOR_PROFILE_CELL_SURFACE_V0:'cell-surface-v0',Y_T_SERIES_PROFILES:[],detectorAutoY:false,
     hGeneratorActive:()=>isHGenerator(state),currentType:()=>state.type,typeCGeneratorActive:()=>false,
     normalPayloadText:()=>c.payload??'H QR current handoff',effectiveVersionYForEncode:()=>0,cornerMarkerSeatActive:()=>false,currentFaceGains:()=>({T:1,L:1,R:1}),paletteOf:()=>palette,
@@ -69,7 +72,8 @@ function harness(text,overrides={},{realEditor=false}={}){
   };
   for(const name of ['syncShotPresetUi','syncFaceGainLabel','syncExportPpiHint','syncQuietGaugeReadout','syncTypeYCellEditorUi','syncHFaceImagesUi','syncHUi','syncCubeMakeUi','emitProductGenerate','emitGeneratorFail','emitLabGen','applyPreviewFit','syncBackdropLayer','updateGauge','updateOverflowHighlight','syncTypeUi','renderFinderUi','syncResTierUi','syncYLocatorUi','applyAutoLocatorProfileY','syncSeatUi','deriveYLocatorForQrPosition','stopHAnimation','syncOrbitPreviewUi'])c[name]=()=>{};
   vm.createContext(c);
-  for(const name of ['resolveFallback','resolvedQrText','reportedQrPosition','buildConfig','encodeWithEcc','encodeOptsFor','renderTypeH','isCapacityError','eccTierLabel','render','hSceneOptions','drawHPreviewFrame','exportPlanFor','renderQrPositionUi','hQrTextEncodable','hSchemQrNote','commitFinderQrUi','cancelScheduledRender','runScheduledRender','flushScheduledRender','schedule'])vm.runInContext(fn(text,name),c);
+  for(const name of ['resolveFallback','resolvedQrText','reportedQrPosition','buildConfig','encodeWithEcc','encodeOptsFor','renderTypeH','isCapacityError','eccTierLabel','render','hSceneOptions','drawHPreviewFrame','exportPlanFor','renderQrPositionUi','hQrTextEncodable','hSchemQrNote','commitFinderQrUi','cancelScheduledRender','runScheduledRender','flushScheduledRender','schedule',
+    'decorationAllow','decorationExportPlanInput','hCellStyleExportPlanNow','hCellStyleDecoFor'])vm.runInContext(fn(text,name),c);
   if(realEditor){
     delete c.syncHFaceImagesUi;vm.runInContext(fn(text,'syncHFaceImagesUi'),c);
     const editorStart=text.indexOf('const hImageEditor=createHImageEditor(');assert.ok(editorStart>0);
