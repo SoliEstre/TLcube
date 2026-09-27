@@ -853,7 +853,9 @@ function allowTableOf(type) {
  * 그림 집합에 드는가» 로 비교한다(`measuredValueMatches` — 해당 없음이면 늘 같다). 선언이 없는 타입(V · C)은 판정하지
  * 않는다(행이 0 이라 unmeasured). ⚠ 이 갈래는 fail-open 이다 — 선언 없는 타입에 행이 생기면 자리 · ECC · 강조와 무관하게
  * 열린다. 런타임 가드는 없고 테스트(cell-shape-measured-config ⓒ «행이 있는 타입마다 선언» · cell-shape-allow-generated)만
- * 막는다(런타임 fail-closed 여부는 결정 대기 — 2026-09-27 검토). 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로
+ * 막는다. 런타임은 fail-open 을 유지한다(2026-09-27 통합자 결정) — resolver 에서 «선언 없는 타입의 행» 을 잠그면 측정
+ * 하네스의 계약(주입한 행은 구조 잠금이 없으면 연다 — 아니면 «키 드리프트» 로 멈춘다)과 V 에서 충돌한다(시험해 확인). 선언
+ * 없는 타입의 행은 표를 다시 생성할 때만 들어오고, 그때 ⓒ 가 빨개진다. 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로
  * 잠근다(다른 구조 잠금 줄과 같은 결: 증거가 있을 때만 사유를 낸다).
  */
 function measuredConfigLock(table, ctx) {
