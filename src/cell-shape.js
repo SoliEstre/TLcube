@@ -19,10 +19,10 @@
  *      떨어뜨리지 않는다 — 잠금은 사유와 함께 보인다, wiring M10).
  *      **구조 잠금**(설계 1차 잠금 — 통합자 결정 2, 2026-09-26)은 허용표보다 먼저 건다: 표에
  *      행이 있어도 잠긴다(`cellShapeStructuralLock` · `CELL_SHAPE_STRUCTURAL_LOCK_REASONS`).
- *      **측정 구성 불일치**(2026-09-27)도 구조 잠금이다 — 표 행은 표 키 밖 축(코너 마커 · 사괘 · ECC)의 한 값
- *      (`CELL_SHAPE_MEASURED_CONFIG`)에서만 잰 사실이라, 렌더 구성이 그와 다르면 표 키가 같아도 잠근다.
- *      사유는 반사실로 고른다 — 측정 구성으로 바꾸면 표 행이 열릴 때만 «자리 · ECC 탓»(seat-config · ecc-level),
- *      아니면 설계 잠금 · 미확인 사유 그대로다(잠금 여부는 같고 사유만 참이게 — 2026-09-27 검토).
+ *      **측정 구성 불일치**(2026-09-27)도 구조 잠금이다 — 표 행은 표 키 밖 축(코너 마커 · 사괘 · ECC · 실효 검출 강조)의
+ *      한 값(`CELL_SHAPE_MEASURED_CONFIG`)에서만 잰 사실이라, 렌더 구성이 그와 다르면 표 키가 같아도 잠근다.
+ *      사유는 반사실로 고른다 — 측정 구성으로 바꾸면 표 행이 열릴 때만 «자리 · ECC · 강조 탓»(seat-config · ecc-level ·
+ *      detector-emphasis), 아니면 설계 잠금 · 미확인 사유 그대로다(잠금 여부는 같고 사유만 참이게 — 2026-09-27 검토).
  *   ⑤ 문맥 — `cellShapeCtx(type, encoded, state, render)`: 제품이 resolver 에 넘길 문맥을
  *      **한 벌만** 유도한다(통합자 결정 1 — 하네스도 이 함수를 import 한다, H 의
  *      `generator-h.hCellStyleCtx` 가 선례). `cellShapeAllowCtx(ctx)` 는 그 문맥을 허용표 행
@@ -616,16 +616,53 @@ export const CELL_SHAPE_ALLOW_KEYS = Object.freeze({
  *   sagoae — 심부 자리 사괘(합성 고리). 같은 버전에서 data 셀이 예약으로 빠진다(12 B 실측: O v2 40셀 · A v0 20셀).
  *     finderPatternId 는 사괘 합성을 못 가른다(원자 daehan 과 daehanFinder 가 같다 — 광학 구분은 인코딩 `sagoae`).
  *   eccLevel — 인코딩이 실제로 쓴 ECC 레벨(auto 해석 뒤). 기하는 같아도 정정 한도(nsym)와 렌더 숫자가 다르다.
- * 값은 **인코딩 결과**에서 유도한다(`cellShapeCtx`) — 상태 표지(outerSeat · deepSeat)가 아니다: 매퍼가 사괘를 떨구는
- * 조합(A a-cm + 사괘 선택 · O daehan + 사괘 선택)은 와이어가 측정 구성과 같아 열려야 맞다.
+ *   detectorEmphasis — **실효 검출 강조**: 생산자에 실제로 넘어간 강조가 그 렌더에서 어떤 강조 값들과 같은 그림인가
+ *     (`CELL_SHAPE_DETECTOR_EMPHASIS_MODES` 의 부분집합을 '+' 로 이은 문자열 — 예 'all' · 'locator+all'). 도형 좌표는 같아도
+ *     검출 셀 · 중앙 검출기의 채움색이 달라진다(실측: O v2 · A · K 자동에서 'locator' · 'default' 가 'all' 과 38–133 도형).
+ *     렌더 뒤에야 아는 값이라 `render.detectorEmphasis` 로 받는다(유도는 생산자 옵션을 만드는 쪽 —
+ *     generator-render-config `detectorEmphasisEquivalents`). 세 값 전부면 «해당 없음»(`CELL_SHAPE_DETECTOR_EMPHASIS_NOT_APPLICABLE`
+ *     — 강조를 소비하는 표면이 없어 무엇을 넘겨도 같은 그림)이고, 측정 구성과의 비교는 «측정 값이 이 집합에 드는가» 다.
+ * 값은 **인코딩 결과**(과 생산자 옵션)에서 유도한다(`cellShapeCtx`) — 상태 표지(outerSeat · deepSeat · centralN7Emphasis)가
+ * 아니다: 매퍼가 사괘를 떨구는 조합(A a-cm + 사괘 선택 · O daehan + 사괘 선택)은 와이어가 측정 구성과 같아 열려야 맞고,
+ * 강조 상태가 무엇이든 생산자에 안 넘어갔거나(Y 일반 화면) 소비 표면이 없으면 그림은 측정 때와 같다.
  */
 export const CELL_SHAPE_MEASURED_CONFIG_KEYS = Object.freeze({
-  oak: Object.freeze(['cornerMarker', 'sagoae', 'eccLevel']),
-  y: Object.freeze(['eccLevel']),
+  oak: Object.freeze(['cornerMarker', 'sagoae', 'eccLevel', 'detectorEmphasis']),
+  y: Object.freeze(['eccLevel', 'detectorEmphasis']),
 });
 
-/** 측정 구성 키 중 «자리» 축(사유 `seat-config`). 나머지(eccLevel)는 사유 `ecc-level` — 뜻이 달라 사유를 나눈다. */
+/** 측정 구성 키 중 «자리» 축(사유 `seat-config`). eccLevel 은 `ecc-level`, detectorEmphasis 는 `detector-emphasis` — 뜻이 달라 사유를 나눈다. */
 export const CELL_SHAPE_SEAT_CONFIG_KEYS = Object.freeze(['cornerMarker', 'sagoae']);
+
+/**
+ * 검출 강조 값의 폐쇄집합 — `centralN7Emphasis.CENTRAL_N7_EMPHASIS_MODES` 의 **검증되는 사본**(순서까지 같다).
+ * ⚠ 이 모듈은 build-single MODULE_ORDER 에서 centralN7Emphasis 보다 앞이라 import 할 수 없다(`CELL_GAP_QUIET_COLORS` 와 같은 사정).
+ * `test/cell-shape-measured-config.test.js` 가 두 목록이 같은지 잰다.
+ */
+export const CELL_SHAPE_DETECTOR_EMPHASIS_MODES = Object.freeze(['default', 'locator', 'all']);
+
+/** «해당 없음» — 세 값이 전부 같은 그림(강조를 소비하는 표면이 없다). 측정 구성의 어떤 값과도 일치한다(집합에 든다). */
+export const CELL_SHAPE_DETECTOR_EMPHASIS_NOT_APPLICABLE = CELL_SHAPE_DETECTOR_EMPHASIS_MODES.join('+');
+
+/**
+ * `render.detectorEmphasis` → 문맥 값. 폐쇄집합 순서 · 중복 없음 · 빈 집합 아님인 '+' 목록만 받는다 — 아니면 값 모름(undefined →
+ * resolver `ctx-incomplete`). 추측으로 채우지 않는다.
+ */
+function detectorEmphasisCtxValue(value) {
+  if (typeof value !== 'string' || value === '') return undefined;
+  const parts = value.split('+');
+  const canon = CELL_SHAPE_DETECTOR_EMPHASIS_MODES.filter((m) => parts.includes(m));
+  return canon.length === parts.length && canon.join('+') === value ? value : undefined;
+}
+
+/**
+ * 문맥의 측정 구성 값이 측정 구성 선언 값과 «같다» 인가 — 키마다 뜻이 다르다. detectorEmphasis 는 집합(같은 그림을 내는
+ * 값들)이라 «측정 값이 그 집합에 드는가»(해당 없음 = 세 값 전부라 늘 참), 나머지는 값이 같은가.
+ */
+function measuredValueMatches(key, ctxValue, measured) {
+  if (key === 'detectorEmphasis') return typeof ctxValue === 'string' && ctxValue.split('+').includes(measured);
+  return ctxValue === measured;
+}
 
 /**
  * 측정 구성 — 허용표 행을 **잰** 렌더 구성. 키 = 실효 타입(oak 행의 `type`) · Y(y 표). 한 번만 선언한다.
@@ -633,7 +670,12 @@ export const CELL_SHAPE_SEAT_CONFIG_KEYS = Object.freeze(['cornerMarker', 'sagoa
  * 출처: L6 측정 하네스 규약(동결 하네스 `lib-assemble.mjs` assembleOak) — 계열 상태의 자리는 그때의 제품 자동 자리표
  * (`autoSeatsFor`, 비-taegeuk · 막힌 칸 불허)로 채운 뒤 **O · C 는 안쪽을 «없음»** 으로, **V 는 turnA + 바깥 «없음»** 으로
  * 내렸다(안쪽 코너 마커 O 는 타입 G 로 따로 갈린다 · C · V 는 지금 행이 0 이라 선언이 없다). 사괘는 전 계열 없음,
- * ECC 는 전 영수증 H(짧은 페이로드 · auto). 허용표 행 키에는 이 값이 없다 — 영수증 code «A k=6 v=0» 로는 A 와 A-CM 을
+ * ECC 는 전 영수증 H(짧은 페이로드 · auto). 검출 강조(detectorEmphasis — 생산자에 넘어간 값)는 O · A · K 가 'all' — 조립이
+ * `createGeneratorState` 기본(GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS, 0d2e67b 에서도 'all')을 sceneOptionsForOA(O · A) ·
+ * 손 조립(K)으로 늘 실었다 — 이고, Y 는 'default' — assembleY 가 강조 옵션을 안 실어 라이브러리 기본(DEFAULT_CENTRAL_N7_EMPHASIS)
+ * 으로 그렸다(0d2e67b → a886347 사이 scene · sceneY · centralN7Emphasis · generator-render-config · generator-state 변경 없음
+ * — 2026-09-27 git diff 확인. 이 착지는 generator-render-config 에 유도 함수만 더했다).
+ * 허용표 행 키에는 이 값들이 없다 — 영수증 code «A k=6 v=0» 로는 A 와 A-CM 을
  * 못 가른다. 그래서 여기 적고, `test/cell-shape-measured-config.test.js` 가 (1) 선언이 묶인 영수증 sha
  * (`CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256`)와 허용표 RECEIPT_SHA256 이 같은지(표를 다시 생성하면 빨개진다 — 재유도할 것)
  * (2) 제품 자동 자리가 이 선언과 다르면 제품 기본이 잠기는지(성질 — 값의 같음을 강제하지 않는다)
@@ -645,12 +687,15 @@ export const CELL_SHAPE_SEAT_CONFIG_KEYS = Object.freeze(['cornerMarker', 'sagoa
  * 잠긴다. 그 타입의 행이 생기면 선언도 같이 생겨야 한다(위 (3)). V 를 잴 때는 cornerMarker 와 co2AnchorTones 를 함께
  * 키로 올릴 것 — 제품 기본 V 는 v-cm 이다.
  * TODO(다음 재측정): 생성기(gen-allow)가 이 구성을 허용표 머리로 내보내도록 옮기고, 이 상수는 표에서 읽게 바꿀 것.
+ *   그때 측정 하네스(L0 tl-decode · lib-ctx)의 `cellShapeCtx` 호출도 `render.detectorEmphasis`(조립 sceneOpts 로
+ *   generator-render-config `detectorEmphasisEquivalents`)를 실어야 한다 — 지금 하네스는 quietColor 만 넘겨, 처치 행을 제품
+ *   resolver 에 주입하면 측정 구성 키 값 모름(ctx-incomplete → «키 드리프트»)이 난다(표 키 대조 ⑥ 은 표 키만 봐서 무관하다).
  */
 export const CELL_SHAPE_MEASURED_CONFIG = Object.freeze({
-  O: Object.freeze({ cornerMarker: false, sagoae: false, eccLevel: 'H' }),
-  A: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H' }),
-  K: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H' }),
-  Y: Object.freeze({ eccLevel: 'H' }),
+  O: Object.freeze({ cornerMarker: false, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),
+  A: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),
+  K: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),
+  Y: Object.freeze({ eccLevel: 'H', detectorEmphasis: 'default' }),
 });
 
 /** 위 선언을 읽어 낸 허용표 영수증(`cell-shape-allow.js` RECEIPT_SHA256). 표가 바뀌면 선언을 재유도하고 이 값을 갱신한다. */
@@ -693,6 +738,10 @@ for (const [configType, config] of Object.entries(CELL_SHAPE_MEASURED_CONFIG)) {
   if (Object.keys(config).sort().join(',') !== want) {
     throw new Error(`cell-shape: 측정 구성 ${configType} 의 키가 ${want} 가 아니다`);
   }
+  // 측정 구성의 강조는 «넘긴 값» 하나다(집합이 아니다) — 문맥 쪽이 집합이고 비교는 «이 값이 그 집합에 드는가».
+  if (!CELL_SHAPE_DETECTOR_EMPHASIS_MODES.includes(config.detectorEmphasis)) {
+    throw new Error(`cell-shape: 측정 구성 ${configType} 의 detectorEmphasis(${config.detectorEmphasis})가 강조 값 하나가 아니다`);
+  }
 }
 
 /**
@@ -719,11 +768,14 @@ export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
   //   표 행이 열리는 경우(그 축이 실제로 가른다). 행이 없거나 설계 잠금이면 그 사유(unmeasured · bevel-raised …)가 나간다.
   SEAT_CONFIG: 'seat-config', // 자리(코너 마커 · 사괘) 구성이 그 타입의 측정 구성과 다르고, 측정 구성이면 열린다
   ECC_LEVEL: 'ecc-level', // 인코딩 ECC 레벨이 측정 구성과 다르고, 측정 구성이면 열린다(같은 기하라도 정정 여유가 다르다)
+  // 실효 검출 강조가 측정 구성과 다르고(측정 값이 «같은 그림 집합» 에 없다), 측정 구성이면 열린다(같은 기하라도 채움색이 다르다).
+  // 강조를 소비하는 표면이 없는 렌더(«해당 없음»)에서는 나지 않는다 — 무엇을 넘겨도 측정 때와 같은 그림이다.
+  DETECTOR_EMPHASIS: 'detector-emphasis',
 });
 
 /**
  * 구조 잠금 사유 id 전부 — `cellShapeStructuralLock` 이 낼 수 있는 값의 목록(테스트 · i18n 대조용).
- * seat-config · ecc-level 은 resolver 가 반사실로 거른 뒤에만 카드 사유로 나간다(`resolveCellShapeSpec`).
+ * seat-config · ecc-level · detector-emphasis 는 resolver 가 반사실로 거른 뒤에만 카드 사유로 나간다(`resolveCellShapeSpec`).
  */
 export const CELL_SHAPE_STRUCTURAL_LOCK_REASONS = Object.freeze([
   CELL_SHAPE_LOCK_REASONS.TYPE_C_ULTRA,
@@ -735,7 +787,27 @@ export const CELL_SHAPE_STRUCTURAL_LOCK_REASONS = Object.freeze([
   CELL_SHAPE_LOCK_REASONS.BEVEL_RAISED,
   CELL_SHAPE_LOCK_REASONS.SEAT_CONFIG,
   CELL_SHAPE_LOCK_REASONS.ECC_LEVEL,
+  CELL_SHAPE_LOCK_REASONS.DETECTOR_EMPHASIS,
 ]);
+
+/**
+ * 측정 구성 축 → 사유(판정 순서 그대로) — 자리(와이어 셀 역할) → ECC(와이어 정정 여유) → 실효 검출 강조(렌더 채움색).
+ * 여러 축이 함께 다르면 앞 축의 사유다(각 문구는 «이 설정에서는 판독이 확인되지 않았다» 라 어느 축이든 참이다).
+ * 측정 구성 키 전부가 정확히 한 축에 든다(아래 로드 시 자기검증 — 새 키가 사유 없이 조용히 빠지지 않게).
+ */
+export const CELL_SHAPE_MEASURED_CONFIG_AXES = Object.freeze([
+  Object.freeze({ reason: CELL_SHAPE_LOCK_REASONS.SEAT_CONFIG, keys: CELL_SHAPE_SEAT_CONFIG_KEYS }),
+  Object.freeze({ reason: CELL_SHAPE_LOCK_REASONS.ECC_LEVEL, keys: Object.freeze(['eccLevel']) }),
+  Object.freeze({ reason: CELL_SHAPE_LOCK_REASONS.DETECTOR_EMPHASIS, keys: Object.freeze(['detectorEmphasis']) }),
+]);
+{
+  const axisKeys = CELL_SHAPE_MEASURED_CONFIG_AXES.flatMap((a) => a.keys);
+  const configKeys = [...new Set([...CELL_SHAPE_MEASURED_CONFIG_KEYS.oak, ...CELL_SHAPE_MEASURED_CONFIG_KEYS.y])];
+  if (new Set(axisKeys).size !== axisKeys.length || axisKeys.length !== configKeys.length
+    || !configKeys.every((k) => axisKeys.includes(k))) {
+    throw new Error(`cell-shape: 측정 구성 축(${axisKeys.join(',')})이 측정 구성 키(${configKeys.join(',')})와 한 번씩 맞지 않는다`);
+  }
+}
 
 /**
  * 불스아이 계열 파인더 id — 라이브러리 불스아이(`LEGACY_FINDER_PATTERN_ID`) + renderKind
@@ -758,17 +830,17 @@ function allowTableOf(type) {
 
 /**
  * 측정 구성 불일치 — 문맥의 측정 구성 키가 그 타입의 측정 구성(`CELL_SHAPE_MEASURED_CONFIG`)과 다르면 사유 id.
- * 자리 축(코너 마커 · 사괘)이 먼저, 그다음 ECC. 선언이 없는 타입(G · V · C)은 판정하지 않는다(행이 0 이라 unmeasured).
- * 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로 잠근다(다른 구조 잠금 줄과 같은 결:
- * 증거가 있을 때만 사유를 낸다).
+ * 축 순서(`CELL_SHAPE_MEASURED_CONFIG_AXES`): 자리(코너 마커 · 사괘) → ECC → 실효 검출 강조. 강조는 «측정 값이 문맥의 같은
+ * 그림 집합에 드는가» 로 비교한다(`measuredValueMatches` — 해당 없음이면 늘 같다). 선언이 없는 타입(G · V · C)은 판정하지
+ * 않는다(행이 0 이라 unmeasured). 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로
+ * 잠근다(다른 구조 잠금 줄과 같은 결: 증거가 있을 때만 사유를 낸다).
  */
 function measuredConfigLock(table, ctx) {
-  const R = CELL_SHAPE_LOCK_REASONS;
   const config = CELL_SHAPE_MEASURED_CONFIG[table === 'y' ? 'Y' : ctx.type];
   if (!config) return null;
-  const differs = (k) => Object.prototype.hasOwnProperty.call(config, k) && ctx[k] !== undefined && ctx[k] !== config[k];
-  if (CELL_SHAPE_SEAT_CONFIG_KEYS.some(differs)) return R.SEAT_CONFIG;
-  if (differs('eccLevel')) return R.ECC_LEVEL;
+  const differs = (k) => Object.prototype.hasOwnProperty.call(config, k) && ctx[k] !== undefined
+    && !measuredValueMatches(k, ctx[k], config[k]);
+  for (const axis of CELL_SHAPE_MEASURED_CONFIG_AXES) if (axis.keys.some(differs)) return axis.reason;
   return null;
 }
 
@@ -802,7 +874,7 @@ function designLock(table, kind, param, ctx) {
  * resolver 가 허용표보다 먼저 판정한다(측정 영수증에 그 조합의 행이 생겨도 열리지 않는다).
  * 여는 쪽(측정 레인)이 풀려면 이 함수의 해당 줄을 **먼저 지우고 이유를 적어야** 한다.
  *
- * 순서: 설계 잠금(`designLock` — 문맥 전체 → 모양별) → 측정 구성 불일치(자리 · ECC — 모든 모양).
+ * 순서: 설계 잠금(`designLock` — 문맥 전체 → 모양별) → 측정 구성 불일치(자리 · ECC · 실효 검출 강조 — 모든 모양).
  * 여기서 낸 측정 구성 사유는 **표 없는** 답이다 — resolver 는 잠금은 그대로 두고, 카드 사유로는 측정 구성으로 바꾸면
  * 표 행이 열릴 때만 그 사유를 내고 아니면 unmeasured 로 떨어뜨린다(반사실 — `resolveCellShapeSpec`).
  *
@@ -823,7 +895,7 @@ export function cellShapeStructuralLock(table, kind, param, ctx) {
  * - 판정 순서: 모양 · 강도 도메인 → 표(타입) → 문맥 완전성(표 키 + 설계 잠금 키) → **설계 잠금**(표와 무관 · 영구) →
  *   문맥 완전성(측정 구성 키) → 허용표 행 × **측정 구성 불일치**(표와 무관하게 잠근다). 행은 문맥 · 모양 · 파라미터가
  *   **모두** 같아야 연다. round-bevel 의 param 은 null(고정 조합).
- * - 사유는 참이어야 한다(반사실): seat-config · ecc-level 은 «측정 구성으로 바꾸면 이 행이 열린다» 일 때만,
+ * - 사유는 참이어야 한다(반사실): seat-config · ecc-level · detector-emphasis 는 «측정 구성으로 바꾸면 이 행이 열린다» 일 때만,
  *   exposed-gap 은 «틈만 흰색으로 바꾸면 열린다»(측정 구성 일치 ∧ 흰 틈 형제 행) 일 때만. 그 밖은 unmeasured.
  * - 그 밖은 `{spec:null, lockReason}`. **상태는 읽기만 한다**(동결 객체로도 동작).
  * 강도 키가 없으면 그 모양의 기본값으로 읽는다(«키 없음 ≡ 명시적 기본값», §7.1 (a)).
@@ -869,7 +941,7 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
     && row.param === param
     && keys.every((k) => Object.prototype.hasOwnProperty.call(row, k) && row[k] === ctx[k]));
   // 측정 구성 불일치는 행이 있어도 잠근다(표 행은 측정 구성에서만 잰 사실). 행 매칭은 표 키만 보므로, 여기서 hit 는
-  // 곧 «측정 구성으로 바꾼 반사실 문맥에서 이 행이 연다» 이다 — 그때만 자리 · ECC 사유가 참이다.
+  // 곧 «측정 구성으로 바꾼 반사실 문맥에서 이 행이 연다» 이다 — 그때만 자리 · ECC · 강조 사유가 참이다.
   const config = measuredConfigLock(table, ctx);
   if (hit) return config === null ? { spec: { kind, param } } : { spec: null, lockReason: config };
 
@@ -877,7 +949,7 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
   // 나머지 표 키 · 모양 · 강도가 같은 행 — 측정 격자에서 틈 등급과 bgMode 는 짝지어 움직인다). 틈이 실제로
   // 가르는 축일 때만 «틈 탓» 이다. 스텁 표 시절의 «노출형 × 비흰 틈 ⇒ 틈 탓» 은 실측 표에서 거짓이 됐다 —
   // Y 투명(unknown) n13 은 둥글게를 여는데 행이 없는 n21 에서도 «틈 탓» 이라 말했다(2026-09-27 화면 확인).
-  // 측정 구성까지 다르면 틈만 바꿔서는 안 열린다(자리 · ECC 도 같이 바꿔야 한다) — 한 축이 가르지 않으니 unmeasured.
+  // 측정 구성까지 다르면 틈만 바꿔서는 안 열린다(자리 · ECC · 강조도 같이 바꿔야 한다) — 한 축이 가르지 않으니 unmeasured.
   // 그 밖은 unmeasured — 미측정 · 측정 실패 · 판정 무효를 표는 가르지 않으므로 «판독이 확인되지 않음» 이다.
   const whiteSibling = config === null && EXPOSED_CELL_SHAPES.includes(kind) && ctx.gapGrade !== 'white'
     && rows.some((row) => row
@@ -970,9 +1042,11 @@ const ECC_LEVEL_NAMES = Object.freeze(Object.values(ECC_NAME_BY_VALUE));
  *   sagoae: 인코더가 돌려준 boolean 이 늘 우선. 키가 없으면 실효 타입 K 만 false — «개념 없음»(encodeK 는 sagoae:true 에
  *     던지고 결과에 키를 싣지 않는다; 반례 자는 test/cell-shape-measured-config.test.js). 그 밖(O/A 인데 키 없음)은 undefined.
  *   eccLevel: 인코딩이 실제로 쓴 레벨(auto 해석 뒤)이 L · M · H 중 하나면 그 값, 아니면 undefined.
+ *   detectorEmphasis: **렌더 값**(`render.detectorEmphasis` — 생산자 옵션에서 유도한 «같은 그림 집합»)이 폐쇄집합의 '+' 목록이면
+ *     그 값, 아니면 undefined(값 모름 — render 인자에 없음 포함). 인코딩에서 읽지 않는다(강조는 와이어가 아니라 렌더 축이다).
  * undefined 는 resolver 가 `ctx-incomplete` 로 잠근다 — 개념 없음(명시 값)과 값 모름(undefined)을 가른다.
  */
-function measuredConfigCtx(effType, encoded) {
+function measuredConfigCtx(effType, encoded, render) {
   let sagoae;
   if (typeof encoded.sagoae === 'boolean') sagoae = encoded.sagoae;
   else if (effType === 'K') sagoae = false;
@@ -980,6 +1054,7 @@ function measuredConfigCtx(effType, encoded) {
     cornerMarker: typeof encoded.cornerMarker === 'boolean' ? encoded.cornerMarker : undefined,
     sagoae,
     eccLevel: ECC_LEVEL_NAMES.includes(encoded.eccLevel) ? encoded.eccLevel : undefined,
+    detectorEmphasis: detectorEmphasisCtxValue(render ? render.detectorEmphasis : undefined),
   };
 }
 
@@ -997,18 +1072,19 @@ function hasSlotCells(encoded) {
  *       paletteGrade = `paletteGradeOf(state)`.
  * O/A/K(+C/G/V) `table:'oak'`: type(실효 — `cellShapeTypeOf`) · version = 인코딩 · finderPatternId = 상태
  *       **선택값**(중앙 QR 로 렌더가 양보해도 선택값) · qrPosition = 상태 ·
- *       측정 구성 키 cornerMarker · sagoae · eccLevel(인코딩 — `measuredConfigCtx`).
+ *       측정 구성 키 cornerMarker · sagoae · eccLevel(인코딩) · detectorEmphasis(렌더 값) — `measuredConfigCtx`.
  * Y `table:'y'`: cellSurfaceLayout = 인코딩 ?? 'none' · locatorProfile = 인코딩 ?? 상태 locatorProfileY(해석 뒤) ·
  *       nBand = String(인코딩 n)(구간 = n 하나) · seamAdjacent = `Y_SEAM_ADJACENT_PRODUCT` ·
  *       설계 잠금 키 qrPosition(상태) · qrWindow(인코딩 window) · qrSlot(인코딩 role 'slot' 셀 유무) ·
- *       측정 구성 키 eccLevel(인코딩).
+ *       측정 구성 키 eccLevel(인코딩) · detectorEmphasis(렌더 값).
  * 값을 모르면 그 키는 undefined 로 남는다 — resolver 가 `ctx-incomplete` 로 잠근다(추측으로 채우지 않는다).
  *
  * @param {'O'|'A'|'K'|'Y'} type 생성기 타입(`generatorState.type`)
  * @param {object} encoded 실제 인코딩 결과(자동 버전 · 레이아웃 해석 뒤)
  * @param {object} state 생성기 상태
- * @param {{quietColor?: 'white'|'black'|'none'|'surface'}} [render] 렌더 뒤에야 아는 값 —
- *   `resolveQuietZoneChoice(...).color`. 없으면 gapGrade 가 undefined(잠금).
+ * @param {{quietColor?: 'white'|'black'|'none'|'surface', detectorEmphasis?: string}} [render] 렌더 뒤에야 아는 값 —
+ *   quietColor = `resolveQuietZoneChoice(...).color`(없으면 gapGrade 가 undefined — 잠금) · detectorEmphasis = 생산자 옵션에서
+ *   유도한 실효 검출 강조(generator-render-config `detectorEmphasisEquivalents(type, encoded, sceneOpts)` — 없으면 undefined, 잠금).
  * @returns {object|null} 문맥, 또는 마름모 셀이 아닌 타입(H 등) · 입력 없음이면 null
  */
 export function cellShapeCtx(type, encoded, state, render) {
@@ -1021,12 +1097,13 @@ export function cellShapeCtx(type, encoded, state, render) {
     bgMode: state.bgMode,
     paletteGrade: paletteGradeOf(state),
   };
-  const config = measuredConfigCtx(effType, encoded);
+  const config = measuredConfigCtx(effType, encoded, render);
   if (effType !== 'Y') {
     return {
       table: 'oak', type: effType, version: encoded.version, finderPatternId: state.finderPatternId,
       qrPosition: state.qrPosition, ...common,
       cornerMarker: config.cornerMarker, sagoae: config.sagoae, eccLevel: config.eccLevel,
+      detectorEmphasis: config.detectorEmphasis,
     };
   }
   return {
@@ -1041,6 +1118,7 @@ export function cellShapeCtx(type, encoded, state, render) {
     qrWindow: encoded.window === true,
     qrSlot: hasSlotCells(encoded),
     eccLevel: config.eccLevel,
+    detectorEmphasis: config.detectorEmphasis,
   };
 }
 

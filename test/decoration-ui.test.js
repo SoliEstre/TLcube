@@ -11,7 +11,9 @@
  *      자리 · ECC 가 측정 구성(cell-shape CELL_SHAPE_MEASURED_CONFIG — A · K 자동 코너 마커 · 사괘 없음 · ECC H)과 다르면
  *      표 키가 같아도 전부 잠기고, 매퍼가 사괘를 떨군 조합은 열린 채다(2026-09-27). 사유는 반사실이다 — 측정 구성에서
  *      열리던 카드만 «자리 · ECC 탓»(seat-config g1209 · ecc-level g1210), 측정 구성에서도 잠기던 카드는 그 사유 그대로.
- *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats). O 는 안쪽 «없음»(측정 구성).
+ *      실효 검출 강조(2026-09-27)도 같은 규칙이다 — 생산자에 넘어간 강조가 측정(O/A/K 'all' · Y 미전달)과 다른 그림이면
+ *      잠기고(detector-emphasis g1211), 강조를 소비하는 표면이 없으면 무엇을 골라도 강조로는 안 잠긴다. Y 는 고급 화면에서만 넘긴다.
+ *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats) · 강조 'all'. O 는 안쪽 «없음»(측정 구성).
  *   ③ 기본 상태에서는 어떤 타입(O · A · K · Y · H)도 생산자에 꾸미기 키를 넘기지 않는다 — sceneOpts.cellShape ·
  *      palette.qrDeco · hQr.deco · hCellStyle 부재(D1 이 넘긴 «이름 붙인 미측정 축»). 켬 → 끔 클릭 경로 뒤에도.
  *   ④ fixture 허용표를 주입하면(테스트 전용 경로 — decorationAllow 만 바꾼다) 카드가 열리고, 카드를 누르면
@@ -35,7 +37,8 @@ import {
   decorationValueFromInput, exposedGeneratorStateKeys, versionStateKey,
 } from '../src/generator-state.js';
 import {
-  CELL_SHAPE_DEFAULT, CELL_SHAPE_PARAMS, cellShapeAllowCtx, cellShapeCtx, cellShapeStructuralLock, resolveCellShapeSpec,
+  CELL_SHAPE_DEFAULT, CELL_SHAPE_DETECTOR_EMPHASIS_NOT_APPLICABLE, CELL_SHAPE_PARAMS, cellShapeAllowCtx, cellShapeCtx,
+  cellShapeStructuralLock, resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 import * as DEFAULT_ALLOW from '../src/cell-shape-allow.js';
 import { qrDecoHostOf, resolveQrDeco } from '../src/qr-colors.js';
@@ -58,7 +61,7 @@ import {
 } from '../src/generator-h-qr.js';
 import {
   sceneOptionsForOA, centralN7FamilyForType, centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced,
-  centralBeaconEncoderOptions, encodeOptionsForY,
+  centralBeaconEncoderOptions, encodeOptionsForY, detectorEmphasisEquivalents,
 } from '../src/generator-render-config.js';
 import { daehanPatternId, isDaehanFinderPatternId } from '../src/finder-daehan.js';
 import { CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId } from '../src/finder-selection.js';
@@ -183,6 +186,7 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
     hPreviewOptions: (state, options = {}) => hPreviewOptions(state, { allow: c.decorationAllow(), ...options }),
     hMaskLuminance, encode, encodeA, encodeK, encodeY, encodeH, decodeH, sceneOptionsForOA, centralN7FamilyForType,
     centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced, centralBeaconEncoderOptions, encodeOptionsForY,
+    detectorEmphasisEquivalents,
     daehanPatternId, isDaehanFinderPatternId, CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId,
     isCentralMarkerN7FinderPatternId, centralMarkerN7FamilyForType, CENTRAL_N7_FINDER_PATTERN_ID,
     LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_CELL_SURFACE_V0, isCellSurfaceLocatorProfileY, hasCenterQrSlot,
@@ -556,6 +560,114 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     assert.ok(open.length > 0, name + ': 열린 카드가 없다 — «열린 채» 를 재지 못한다(표 행이 있는 문맥이 아니다)');
     assert.equal(lastOf(h.calls.buildScene).cellShape && lastOf(h.calls.buildScene).cellShape.kind, 'bevel', name + ': 열린 bevel 이 생산자까지 안 갔다');
   }
+});
+
+/**
+ * 강조 한 축만 바꾼 쌍(base = 측정 구성 강조) — 표 키가 같고, base 에서 열린 카드는 detector-emphasis 로, base 에서도 잠긴 카드는
+ * base 와 같은 사유로 잠긴다(반사실 — 강조를 되돌려도 안 열리는 카드에 «강조 탓» 은 틀린 안내). 반환: 강조 사유 카드 수.
+ */
+function assertEmphasisAxisLocks(name, base, h) {
+  assert.deepEqual(cellShapeAllowCtx(h.c.current.deco.ctx), cellShapeAllowCtx(base.c.current.deco.ctx), name + ': 표 키가 달라졌다 — 대조군이 아니다');
+  const nonDefault = (x) => x.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT);
+  const baseCards = nonDefault(base);
+  let axis = 0;
+  nonDefault(h).forEach((el, i) => {
+    const b = baseCards[i];
+    assert.equal(el.dataset.decoValue, b.dataset.decoValue, name + ': 카드 순서');
+    assert.equal(el.getAttribute('aria-disabled'), 'true', `${name} ${el.dataset.decoValue}: 측정 밖 강조인데 열렸다`);
+    const baseOpen = b.getAttribute('aria-disabled') === 'false';
+    const want = baseOpen ? 'detector-emphasis' : (b.dataset.lockReason === 'exposed-gap' ? 'unmeasured' : b.dataset.lockReason);
+    assert.equal(el.dataset.lockReason, want, `${name} ${el.dataset.decoValue}: 대조군 ${baseOpen ? '열림' : b.dataset.lockReason}`);
+    if (baseOpen) axis += 1;
+  });
+  assert.equal(h.$('cellShapeLockHint').textContent.includes('g1211'), axis > 0, `${name}: 사유 줄의 g1211 은 측정 구성에서 열린 카드가 있을 때만`);
+  return axis;
+}
+
+test('② 실효 검출 강조(O · A · K 제품 경로): 측정(\'all\')과 다른 그림이면 카드가 잠기고(g1211 — 측정 구성에서 열리던 카드만), 소비 표면이 없으면 무엇을 골라도 강조로는 안 잠긴다', () => {
+  const O2 = { ...TYPE_STATES.O, versionO: 2 };
+  let axis = 0;
+  // (a) 중앙 TL(강조 대상) + A · K 는 코너 마커 검출 셀 — 'locator' · 'default' 는 측정 구성('all')과 다른 그림이다.
+  for (const [name, state] of [['O2', O2], ['A 자동', TYPE_STATES.A], ['K 자동', TYPE_STATES.K]]) {
+    const base = harness({ state: { ...state, centralN7Emphasis: 'all', cellShape: 'bevel' } });
+    base.render();
+    const baseOpts = lastOf(base.calls.buildScene);
+    assert.equal(baseOpts.centralN7Emphasis, 'all', name + ': 대조군 생산자 입력');
+    assert.equal(base.c.current.deco.ctx.detectorEmphasis, 'all', name + ': 중앙 TL 은 세 값이 다른 그림');
+    assert.equal(baseOpts.cellShape && baseOpts.cellShape.kind, 'bevel', name + ': 측정 구성(강조 all)인데 bevel 이 생산자에 안 갔다');
+    for (const mode of ['locator', 'default']) {
+      const h = harness({ state: { ...state, centralN7Emphasis: mode, cellShape: 'bevel' } });
+      h.render();
+      const opts = lastOf(h.calls.buildScene);
+      assert.equal(opts.centralN7Emphasis, mode, `${name} ${mode}: 생산자에 넘어간 강조`);
+      assert.equal(h.c.current.deco.ctx.detectorEmphasis, mode, `${name} ${mode}: 문맥의 실효 강조`);
+      axis += assertEmphasisAxisLocks(`${name} 강조 ${mode}`, base, h);
+      assert.equal('cellShape' in opts, false, `${name} ${mode}: 잠겼는데 모양이 생산자에 갔다`);
+      assert.equal(h.state.cellShape, 'bevel', `${name} ${mode}: 잠금이 상태를 고쳤다`);
+      assert.equal(h.state.centralN7Emphasis, mode, `${name} ${mode}: 잠금이 강조 상태를 고쳤다`);
+    }
+  }
+  assert.ok(axis > 0, '강조 사유 카드가 하나도 안 났다 — 자가 비었다');
+  // (b) 소비 표면 없음(O v2 핀휠 · 불스아이 — 대상 아닌 중앙 · 코너 마커 없음): 강조를 무엇으로 골라도 생산자는 그 값을 받지만 그림이
+  //     같아 «해당 없음» 이고, 카드 잠금 · 사유 · 생산자에 간 모양이 'all' 과 같다(거짓 잠금 없음).
+  let opened = 0;
+  for (const finder of ['pinwheel-c2-2-1100-cw', 'bullseye']) {
+    const ref = harness({ state: { ...O2, finderPatternId: finder, centralN7Emphasis: 'all', cellShape: 'bevel' } });
+    ref.render();
+    assert.equal(ref.c.current.deco.ctx.detectorEmphasis, CELL_SHAPE_DETECTOR_EMPHASIS_NOT_APPLICABLE, finder + ': 해당 없음이 아니다');
+    const view = (x) => x.cards('cellShape').map((el) => `${el.dataset.decoValue}:${el.getAttribute('aria-disabled')}:${el.dataset.lockReason}`);
+    opened += ref.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT && el.getAttribute('aria-disabled') === 'false').length;
+    for (const mode of ['locator', 'default']) {
+      const h = harness({ state: { ...O2, finderPatternId: finder, centralN7Emphasis: mode, cellShape: 'bevel' } });
+      h.render();
+      assert.equal(lastOf(h.calls.buildScene).centralN7Emphasis, mode, `${finder} ${mode}: 생산자 입력`);
+      assert.deepEqual(view(h), view(ref), `${finder} ${mode}: 소비 표면이 없는데 카드가 강조에 따라 달라졌다`);
+      assert.ok(!view(h).some((v) => v.endsWith(':detector-emphasis')), `${finder} ${mode}: 거짓 강조 잠금`);
+      // 두 하네스는 vm 문맥이 달라 객체 원형이 다르다 — 값은 JSON 으로 비교한다.
+      assert.equal(JSON.stringify(lastOf(h.calls.buildScene).cellShape), JSON.stringify(lastOf(ref.calls.buildScene).cellShape),
+        `${finder} ${mode}: 생산자에 간 모양이 달라졌다`);
+    }
+  }
+  assert.ok(opened > 0, '해당 없음 문맥에서 열린 카드가 없다 — «거짓 잠금 없음» 을 재지 못한다');
+});
+
+test('② 실효 검출 강조(Y 제품 경로): 일반 화면은 강조를 안 넘겨 무엇을 골라도 측정 구성이다 · 고급 화면은 넘긴 값이 측정(미전달)과 다른 그림이면 잠긴다', () => {
+  const Y = { ...TYPE_STATES.Y, cellShape: 'bevel' };
+  const make = (mode, advanced) => {
+    const h = harness({ state: { ...Y, centralN7Emphasis: mode }, quietColor: 'none', autoLocatorY: true });
+    h.c.advancedOnlyCardsVisible = () => advanced;
+    h.render();
+    return h;
+  };
+  const base = make('all', false);
+  const baseOpts = lastOf(base.calls.buildSceneY);
+  assert.equal('centralN7Emphasis' in baseOpts, false, 'Y 일반 화면이 강조를 넘겼다(renderTypeY 고급 게이트)');
+  assert.equal(base.c.current.deco.ctx.detectorEmphasis, 'default', 'Y 셀 표면 로케이터 — 미전달 = 라이브러리 기본 그림');
+  const openBase = base.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT && el.getAttribute('aria-disabled') === 'false');
+  assert.ok(openBase.length > 0, 'Y 일반 화면에서 열린 카드가 없다 — 자가 비었다');
+  assert.equal(baseOpts.cellShape && baseOpts.cellShape.kind, 'bevel', 'Y 일반 화면(측정 구성)의 bevel 이 생산자에 안 갔다');
+  const view = (x) => x.cards('cellShape').map((el) => `${el.dataset.decoValue}:${el.getAttribute('aria-disabled')}:${el.dataset.lockReason}`);
+  // 일반 화면 — 상태 강조가 무엇이든 생산자 입력 · 카드가 같다.
+  for (const mode of ['locator', 'default']) {
+    const h = make(mode, false);
+    assert.equal('centralN7Emphasis' in lastOf(h.calls.buildSceneY), false, `일반 ${mode}: 강조를 넘겼다`);
+    assert.deepEqual(view(h), view(base), `일반 ${mode}: 넘기지 않은 강조로 카드가 달라졌다`);
+  }
+  // 고급 화면 — 상태 강조를 넘긴다. 'all' · 'locator' 는 검출 셀 팔 하나라 같은 그림(측정과 다름), 'default' 는 측정과 같은 그림.
+  let axis = 0;
+  for (const mode of ['all', 'locator']) {
+    const h = make(mode, true);
+    const opts = lastOf(h.calls.buildSceneY);
+    assert.equal(opts.centralN7Emphasis, mode, `고급 ${mode}: 생산자 입력`);
+    assert.equal(h.c.current.deco.ctx.detectorEmphasis, 'locator+all', `고급 ${mode}: 문맥의 실효 강조`);
+    axis += assertEmphasisAxisLocks(`Y 고급 ${mode}`, base, h);
+    assert.equal('cellShape' in opts, false, `고급 ${mode}: 잠겼는데 모양이 생산자에 갔다`);
+  }
+  assert.ok(axis > 0);
+  const back = make('default', true);
+  assert.equal(lastOf(back.calls.buildSceneY).centralN7Emphasis, 'default', '고급 default: 생산자 입력');
+  assert.deepEqual(view(back), view(base), '고급 화면에서 강조를 측정 구성(기본)으로 되돌렸는데 카드가 안 돌아왔다');
+  assert.equal(lastOf(back.calls.buildSceneY).cellShape && lastOf(back.calls.buildSceneY).cellShape.kind, 'bevel');
 });
 
 test('② C(ultra)는 모든 모양이 «C 는 사각만» 사유로 잠긴다(구조 잠금 — fixture 로도 안 열린다)', () => {

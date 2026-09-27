@@ -33,6 +33,7 @@ import { TL_READER_URL } from '../src/qr.js';
 import {
   CELL_TIERS, cellShapeAllowedKinds, cellShapeCtx, cellShapeTier, resolveCellShapeSpec,
 } from '../src/cell-shape.js';
+import { detectorEmphasisEquivalents } from '../src/generator-render-config.js';
 
 const SLATE = getPreset('slate');
 const paletteWith = (background) => ({
@@ -433,9 +434,12 @@ describe('기본값 · resolver 경유', () => {
     const b = built(fx);
     // 문맥은 제품 함수로 이 fixture 의 실제 인코딩에서 유도한다(손 문맥은 측정 구성 키 — 코너 마커 · 사괘 · ECC — 를
     // 빠뜨리거나 거짓으로 채운다). 이 fixture 는 O + 코너 마커(안쪽 o-cm)라 실효 타입 G 다 — G 행은 생성 표에 없다.
+    // 실효 검출 강조(렌더 값)는 이 fixture 가 buildScene 에 넘기는 **그 옵션**에서 제품 유도 함수로 만든다.
+    const render = { quietColor: 'white', detectorEmphasis: detectorEmphasisEquivalents('O', b.encoded, { ...fx.opts, palette: b.palette }) };
     const ctx = cellShapeCtx('O', b.encoded, {
       finderPatternId: fx.opts.finderPatternId, innerSeat: 'o-cm', tone: 3, bgMode: 'white', preset: 'slate', qrPosition: 'none',
-    }, { quietColor: 'white' });
+    }, render);
+    assert.equal(typeof ctx.detectorEmphasis, 'string', '실효 검출 강조가 문맥에 없다');
     assert.equal(ctx.type, 'G');
     const state = Object.freeze({ cellShape: 'gap', cellGap: 0.08 });
     const locked = resolveCellShapeSpec(state, ctx);

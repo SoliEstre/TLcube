@@ -1,36 +1,47 @@
-// cell-shape-measured-config.test.js — 셀 꾸미기 «측정 구성» 잠금 (2026-09-27 자리 레인)
+// cell-shape-measured-config.test.js — 셀 꾸미기 «측정 구성» 잠금 (2026-09-27 자리 레인 · 강조 레인)
 //
 // 허용표 행은 표 키(타입 · 버전 · 파인더 · 톤 · 틈 · 바탕 · 팔레트 · QR 위치)만 갖지만, 그 행이 참인 것은 **측정 구성**
-// (L6 측정 하네스 규약 — 자동 자리 · O · C 는 안쪽 없음 · 사괘 없음 · ECC H)에서다. 표 키 밖의 축이 다르면 같은 표 키에서도
-// 셀 역할 · 정정 여유가 달라진다(A · K 바깥 «없음» 이 a-cm/k-cm 에서 잰 행으로 열리던 거짓 열림). 그래서 resolver 는
-// 렌더 구성이 그 타입의 측정 구성(cell-shape `CELL_SHAPE_MEASURED_CONFIG`)과 다르면 모든 모양을 잠근다.
-// 사유는 참이어야 한다(2026-09-27 검토) — «자리 · ECC 탓» 은 측정 구성으로 바꾸면 그 행이 열릴 때만, 행이 없거나 영구 설계
-// 잠금이면 그 사유(unmeasured · bevel-raised · bullseye-dot …)다. 측정 구성 키는 설계 잠금 문맥 키(하네스 계약)와 따로 둔다.
+// (L6 측정 하네스 규약 — 자동 자리 · O · C 는 안쪽 없음 · 사괘 없음 · ECC H · 검출 강조 O/A/K 'all' · Y 미전달)에서다.
+// 표 키 밖의 축이 다르면 같은 표 키에서도 셀 역할 · 정정 여유 · 채움색이 달라진다(A · K 바깥 «없음» 이 a-cm/k-cm 에서 잰 행으로
+// 열리던 거짓 열림 · 강조 'locator' · 'default' 가 'all' 에서 잰 행으로 열리던 거짓 열림). 그래서 resolver 는 렌더 구성이 그
+// 타입의 측정 구성(cell-shape `CELL_SHAPE_MEASURED_CONFIG`)과 다르면 모든 모양을 잠근다.
+// 사유는 참이어야 한다(2026-09-27 검토) — «자리 · ECC · 강조 탓» 은 측정 구성으로 바꾸면 그 행이 열릴 때만, 행이 없거나 영구
+// 설계 잠금이면 그 사유(unmeasured · bevel-raised · bullseye-dot …)다. 측정 구성 키는 설계 잠금 문맥 키(하네스 계약)와 따로 둔다.
+// 검출 강조는 «넘긴 값» 이 아니라 «그 렌더에서 같은 그림을 내는 값의 집합»(generator-render-config `detectorEmphasisEquivalents`)
+// 이고, 측정 구성과의 비교는 «측정 값이 그 집합에 드는가» 다 — 소비 표면이 없으면 세 값 전부(«해당 없음», 늘 일치).
 //
-// 재는 것(실제 인코더 · 생성 허용표 · 제품 자동 자리표):
+// 재는 것(실제 인코더 · 생성 허용표 · 제품 자동 자리표 · 실제 렌더):
 //   ⓐ 유닛 — 측정 구성 문맥은 생성 표 행으로 열리고, 표 키가 같은 «한 축만 다른» 문맥은 새 사유로 잠긴다:
-//      A · K 바깥 없음(seat-config) · O 사괘(seat-config) · 같은 버전 ECC M · L(ecc-level, Y 포함) · O 안쪽 o-cm = G(unmeasured).
+//      A · K 바깥 없음(seat-config) · O 사괘(seat-config) · 같은 버전 ECC M · L(ecc-level, Y 포함) · O 안쪽 o-cm = G(unmeasured) ·
+//      강조(detector-emphasis): 중앙 TL 의 O · A · K 에서 'locator' · 'default', Y 고급 화면이 실은 'all' · 'locator'.
+//      강조를 소비하는 표면이 없는 렌더(대상 아닌 중앙 · 검출 셀 없음 · Y hex-frame)는 무엇을 넘겨도 «해당 없음» 이라 안 잠긴다.
 //      K · Y 기본 인코딩이 ctx-incomplete 로 잠기지 않는다(K 사괘 «개념 없음» = false).
 //   ⓑ 유도 규칙의 반례 — K 는 사괘를 던지고 결과에 키가 없다(«개념 없음» 의 근거) · 인코더가 boolean 을 주면 늘 그 값 ·
-//      O/A 에서 키가 빠지면 값 모름(ctx-incomplete) · ECC 이름 밖 값은 값 모름.
+//      O/A 에서 키가 빠지면 값 모름(ctx-incomplete) · ECC 이름 밖 값은 값 모름 · 렌더 강조가 없거나 폐쇄집합 '+' 목록이
+//      아니면 값 모름 · 유도 함수는 입력을 모르면 undefined.
 //   ⓒ 생성 표 성질 — 행이 있는 타입마다 선언이 있고, 모든 셀 행은 그 타입 측정 구성 문맥에서 열리며, 측정 구성 키를 하나
-//      바꾸면 그 축의 사유로 잠긴다(ECC 는 다른 레벨 전부).
-//   ⓓ 선언 ↔ 제품 자동 자리표(성질) — 제품 자동 자리의 와이어가 선언과 같으면 그 문맥의 표 행이 열리고, 다르면 잠긴다.
-//      값의 같음은 강제하지 않는다(제품 기본이 바뀌면 그 기본이 잠기는 것이 맞다 — 선언은 영수증에서만 바꾼다). O 는 측정
-//      하네스 규약(안쪽 없음)이라 false 이고 제품 자동 O(안쪽 o-cm)는 타입 G 로 갈린다.
+//      바꾸면 그 축의 사유로 잠긴다(ECC 는 다른 레벨 전부 · 강조는 측정 값을 안 담은 집합 전부). 측정 값을 담은 집합은 열린다.
+//   ⓓ 선언 ↔ 제품 기본(성질) — 제품 자동 자리 · 제품 기본 강조로 그린 와이어/그림이 선언과 같으면 그 문맥의 표 행이 열리고,
+//      다르면 잠긴다. 값의 같음은 강제하지 않는다(제품 기본이 바뀌면 그 기본이 잠기는 것이 맞다 — 선언은 영수증에서만 바꾼다).
 //   ⓔ 선언이 묶인 영수증 = 허용표 RECEIPT_SHA256 — 표를 다시 생성하면 빨개진다(선언을 재유도하고 sha 를 갱신할 것).
-//   ⓕ 사유는 참이다(반사실 불변식) — 생성 표의 문맥 격자(측정 구성 · 자리/ECC 뒤집기 · 틈 · 행 없는 버전 × 모든 선택지)에서
-//      seat-config · ecc-level ⇒ 측정 구성으로 바꾸면 열린다 · exposed-gap ⇒ 틈만 흰색으로 바꾸면 열린다 · unmeasured ⇒ 그 어느
-//      한 축만 바꿔서는 안 열린다 · 설계 잠금 ⇒ 측정 구성으로 바꿔도 같은 사유다. 측정 구성과 다르면 열림은 없다.
+//   ⓕ 사유는 참이다(반사실 불변식) — 생성 표의 문맥 격자(측정 구성 · 자리/ECC/강조 뒤집기 · 두 축 동시 · 같은 그림 집합 · 틈 ·
+//      행 없는 버전 × 모든 선택지)에서 seat-config · ecc-level · detector-emphasis ⇒ 측정 구성으로 바꾸면 열린다 · 사유는 첫 번째로
+//      다른 축(자리 → ECC → 강조) · exposed-gap ⇒ 틈만 흰색으로 바꾸면 열린다 · unmeasured ⇒ 그 어느 한 축만 바꿔서는 안 열린다 ·
+//      설계 잠금 ⇒ 측정 구성으로 바꿔도 같은 사유다. 측정 구성과 다르면 열림은 없다.
+//   ⓖ 실효 검출 강조 ≡ 실제 렌더 — 제품 조립 격자(O · A · K 파인더 × 코너 마커 × 중앙 QR × 팔레트, Y 스키마 레이아웃 전부)에서
+//      «q 가 넘긴 p 의 집합에 든다 ⟺ p 와 q 가 같은 장면(채움색)» 을 buildScene · buildSceneY 로 잰다 — 유도 함수의 렌더 구조
+//      (중앙 검출기 두 팔 · 검출 셀 한 팔 · Y 셀 표면 로케이터)를 믿지 않는다.
 // 못 재는 것: 측정 구성 자체가 참인가(private 측정 하네스 · 영수증의 몫). ECC 는 기하가 아니라 판독 여유 축이다 — 같은
-//   버전의 M · L 이 실제로 안 읽힌다는 증거가 아니라 «측정 밖» 이라서 잠근다.
+//   버전의 M · L 이 실제로 안 읽힌다는 증거가 아니라 «측정 밖» 이라서 잠근다(강조도 같다 — 다른 그림이 안 읽힌다는 증거가 아니다).
+//   중앙 M7(central-marker-n7)은 제품 파인더 선택지에 없어 ⓖ 격자 밖이다(유도 함수는 그 화법에서 'locator' · 'all' 을 보수로 가른다).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as ALLOW from '../src/cell-shape-allow.js';
 import {
-  CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_LOCK_REASONS, CELL_SHAPE_MEASURED_CONFIG,
+  CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_DETECTOR_EMPHASIS_MODES, CELL_SHAPE_DETECTOR_EMPHASIS_NOT_APPLICABLE,
+  CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_LOCK_REASONS, CELL_SHAPE_MEASURED_CONFIG, CELL_SHAPE_MEASURED_CONFIG_AXES,
   CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256, CELL_SHAPE_PARAMS, CELL_SHAPE_REQUIRED_CTX_KEYS,
   CELL_SHAPE_SEAT_CONFIG_KEYS, CELL_SHAPE_STRUCTURAL_LOCK_REASONS, EXPOSED_CELL_SHAPES, cellShapeAllowCtx, cellShapeCtx,
   cellShapeTypeOf, resolveCellShapeSpec,
@@ -40,20 +51,78 @@ import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
 import { encodeK } from '../src/encodeK.js';
 import { encodeY } from '../src/encodeY.js';
-import { centralBeaconEncoderOptions, encodeOptionsForY } from '../src/generator-render-config.js';
+import {
+  centralBeaconEncoderOptions, centralN7FamilyForType, detectorEmphasisEquivalents, encodeOptionsForY, sceneOptionsForOA,
+} from '../src/generator-render-config.js';
+import {
+  CENTRAL_N7_EMPHASIS_MODES, DEFAULT_CENTRAL_N7_EMPHASIS, GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS,
+} from '../src/centralN7Emphasis.js';
 import { AUTO_SEAT_TYPES, SEAT_NONE, SEAT_SAGOAE, autoSeatsFor } from '../src/generator-seat-auto.js';
 import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
-import { DECORATION_STATE_DOMAINS, createGeneratorState } from '../src/generator-state.js';
+import { DECORATION_STATE_DOMAINS, GENERATOR_STATE_SCHEMA, createGeneratorState } from '../src/generator-state.js';
+import { BULLSEYE_DARK, BULLSEYE_LIGHT, getPreset } from '../src/luminance.js';
+import { makeCustomPalette } from '../src/palette-hue.js';
+import { buildScene } from '../src/scene.js';
+import { buildSceneY } from '../src/sceneY.js';
+import { TL_READER_URL } from '../src/qr.js';
+import { daehanPatternId } from '../src/finder-daehan.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 
 const R = CELL_SHAPE_LOCK_REASONS;
 const PAYLOAD = 'https://tl.estre.so'; // 19 B — 제품 기본 URL
 const P12 = 'https://tl.e'; // 12 B — O 사괘가 측정 버전(V2)에 머무는 길이
 const N7 = centralBeaconEncoderOptions('central-n7-payload', false);
 const FRESH = createGeneratorState({ qrPosition: 'TL' });
-const WHITE = { quietColor: 'white' };
 const ECC_NAMES = Object.freeze(Object.values(ECC_NAME_BY_VALUE));
 const Y_TL = { mode: 'corner', corner: 'TL' };
-const yEnc = (eccLevel) => encodeY(PAYLOAD, { ...encodeOptionsForY({ tone: 3, fallback: Y_TL, locatorProfileY: 'cell-surface-v0' }), eccLevel });
+const yEnc = (eccLevel, locatorProfileY = 'cell-surface-v0') => encodeY(PAYLOAD, { ...encodeOptionsForY({ tone: 3, fallback: Y_TL, locatorProfileY }), eccLevel });
+const NA = CELL_SHAPE_DETECTOR_EMPHASIS_NOT_APPLICABLE;
+
+/** 생산자 팔레트 모양(index.html paletteOf — 배경 · 레벨 · 파인더 축 · 면 게인). */
+const paletteOf = (levels) => ({
+  background: { r: 255, g: 255, b: 255 }, levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+  faceGains: { T: 1, L: 0.72, R: 0.57 },
+});
+const SLATE = paletteOf(getPreset('slate').levels);
+
+/** 생산자 옵션에 강조를 **안 싣는다**(라이브러리 기본으로 그린다 — Y 일반 화면 · Y 측정 조립). */
+const NOT_PASSED = Symbol('강조 안 넘김');
+/** 그 생성기 타입의 측정 구성 강조(선언이 없으면 안 넘김). */
+const measuredEmphasis = (type) => (CELL_SHAPE_MEASURED_CONFIG[type] ? CELL_SHAPE_MEASURED_CONFIG[type].detectorEmphasis : NOT_PASSED);
+/**
+ * 제품 렌더 값 — 안전영역 판 색 + 실효 검출 강조. 강조는 **제품 유도 함수**(detectorEmphasisEquivalents)로 만든다 — 생산자 옵션은
+ * 팔레트 · 그린 파인더(상태 선택 — 이 자의 문맥은 중앙 QR · daehan 이 아니다) · 넘긴 강조(기본 = 그 타입의 측정 구성 값).
+ */
+function renderOf(type, enc, state, quietColor = 'white', emphasis = measuredEmphasis(type)) {
+  const sceneOpts = { palette: SLATE, finderPatternId: state.finderPatternId };
+  if (emphasis !== NOT_PASSED) sceneOpts.centralN7Emphasis = emphasis;
+  return { quietColor, detectorEmphasis: detectorEmphasisEquivalents(type, enc, sceneOpts) };
+}
+function ctxOf(type, enc, state, quietColor = 'white', emphasis = measuredEmphasis(type)) {
+  return cellShapeCtx(type, enc, state, renderOf(type, enc, state, quietColor, emphasis));
+}
+
+/** 강조 값 집합 전부(빈 집합 제외, 폐쇄집합 순서 '+') — 문맥 값 도메인. 제품 폐쇄집합(centralN7Emphasis)에서 만든다. */
+function emphasisSets() {
+  const out = [];
+  for (let mask = 1; mask < (1 << CENTRAL_N7_EMPHASIS_MODES.length); mask += 1) {
+    out.push(CENTRAL_N7_EMPHASIS_MODES.filter((_, i) => mask & (1 << i)).join('+'));
+  }
+  return out;
+}
+/** 이 자의 비교(유도 코드와 독립): 강조는 «측정 값이 집합에 드는가», 나머지는 같은 값인가. */
+const sameAsMeasured = (k, v, measured) => (k === 'detectorEmphasis' ? v.split('+').includes(measured) : v === measured);
+/** 측정 구성 키의 «다른 값» 전부 — boolean 은 반대, ECC 는 다른 레벨, 강조는 측정 값을 안 담은 집합. */
+function otherValues(key, measured) {
+  if (key === 'eccLevel') return ECC_NAMES.filter((e) => e !== measured);
+  if (key === 'detectorEmphasis') return emphasisSets().filter((s) => !sameAsMeasured(key, s, measured));
+  return [!measured];
+}
+/** 사유 순서(설계 결정 — 자리 → ECC → 강조). 이 자가 따로 적고, 선언 자가 제품 표와 같은지 본다. */
+const AXIS_ORDER = Object.freeze([
+  [R.SEAT_CONFIG, ['cornerMarker', 'sagoae']], [R.ECC_LEVEL, ['eccLevel']], [R.DETECTOR_EMPHASIS, ['detectorEmphasis']],
+]);
+const reasonOfKey = (key) => AXIS_ORDER.find(([, keys]) => keys.includes(key))[0];
 
 /** 문맥의 표 키와 같은 생성 표 행(셀 표) — 행은 박제하지 않고 표에서 고른다. */
 function rowsFor(ctx) {
@@ -84,7 +153,7 @@ function assertMeasuredOpensOtherLocks(name, measured, other, reason) {
 
 // ── 선언의 모양 ─────────────────────────────────────────────────────────────
 
-test('선언: 측정 구성 키는 설계 잠금 문맥 키(하네스 계약)와 겹치지 않고 resolver 요구 키에 든다 · 새 사유 둘은 구조 잠금 사유다', () => {
+test('선언: 측정 구성 키는 설계 잠금 문맥 키(하네스 계약)와 겹치지 않고 resolver 요구 키에 든다 · 새 사유 셋은 구조 잠금 사유다', () => {
   // 설계 잠금 문맥 키는 L0 하네스가 케이스마다 유도하는 계약이다(tl-decode LOCK_DERIVE — 모르는 키면 «키 드리프트» 로 멈춘다).
   // 측정 구성 키를 거기 섞으면 표준 원격 전수(TL_L0_DIR)의 cell-shape-ctx-locks ⑥ 이 빨개진다(2026-09-27 검토 blocking).
   for (const t of ['oak', 'y']) {
@@ -92,6 +161,7 @@ test('선언: 측정 구성 키는 설계 잠금 문맥 키(하네스 계약)와
       assert.ok(!CELL_SHAPE_LOCK_CTX_KEYS[t].includes(k), `${t}.${k} 가 설계 잠금 문맥 키(하네스 계약)에 섞였다`);
       assert.ok(CELL_SHAPE_REQUIRED_CTX_KEYS[t].includes(k), `${t}.${k} 를 resolver 가 요구하지 않는다`);
     }
+    assert.ok(CELL_SHAPE_MEASURED_CONFIG_KEYS[t].includes('detectorEmphasis'), `${t}: 실효 검출 강조가 측정 구성 키가 아니다`);
   }
   assert.ok(CELL_SHAPE_SEAT_CONFIG_KEYS.every((k) => CELL_SHAPE_MEASURED_CONFIG_KEYS.oak.includes(k)));
   for (const [type, config] of Object.entries(CELL_SHAPE_MEASURED_CONFIG)) {
@@ -99,35 +169,40 @@ test('선언: 측정 구성 키는 설계 잠금 문맥 키(하네스 계약)와
     assert.deepEqual(Object.keys(config).sort(), [...want].sort(), type);
     assert.ok(Object.isFrozen(config), type);
     assert.ok(ECC_NAMES.includes(config.eccLevel), `${type}: eccLevel ${config.eccLevel}`);
+    assert.ok(CENTRAL_N7_EMPHASIS_MODES.includes(config.detectorEmphasis), `${type}: 측정 구성 강조는 넘긴 값 하나 — ${config.detectorEmphasis}`);
   }
-  assert.ok(CELL_SHAPE_STRUCTURAL_LOCK_REASONS.includes(R.SEAT_CONFIG));
-  assert.ok(CELL_SHAPE_STRUCTURAL_LOCK_REASONS.includes(R.ECC_LEVEL));
+  for (const reason of [R.SEAT_CONFIG, R.ECC_LEVEL, R.DETECTOR_EMPHASIS]) assert.ok(CELL_SHAPE_STRUCTURAL_LOCK_REASONS.includes(reason), reason);
+  // 강조 값 도메인은 제품 폐쇄집합의 검증되는 사본이다(cell-shape 는 build-single 순서상 centralN7Emphasis 를 import 못 한다).
+  assert.deepEqual([...CELL_SHAPE_DETECTOR_EMPHASIS_MODES], [...CENTRAL_N7_EMPHASIS_MODES]);
+  assert.equal(NA, CENTRAL_N7_EMPHASIS_MODES.join('+'), '«해당 없음» = 세 값 전부');
+  // 사유 순서 표 — 이 자가 적은 순서(자리 → ECC → 강조)와 같고 측정 구성 키를 정확히 한 번씩 덮는다.
+  assert.deepEqual(CELL_SHAPE_MEASURED_CONFIG_AXES.map((a) => [a.reason, [...a.keys]]), AXIS_ORDER.map(([r, k]) => [r, [...k]]));
 });
 
 // ── ⓐ 유닛 (실제 인코더) ────────────────────────────────────────────────────
 
 test('ⓐ A · K: 자동 바깥 자리(코너 마커)는 생성 표 행으로 열리고, 바깥 «없음» 은 표 키가 같아도 seat-config 로 잠긴다', () => {
   const A = { ...FRESH, type: 'A' };
-  const aMeasured = cellShapeCtx('A', encodeA(PAYLOAD, { ...N7, cornerMarker: true, eccLevel: 'H' }), { ...A, outerSeat: 'a-cm' }, WHITE);
-  const aNone = cellShapeCtx('A', encodeA(PAYLOAD, { ...N7, eccLevel: 'H' }), A, WHITE);
+  const aMeasured = ctxOf('A', encodeA(PAYLOAD, { ...N7, cornerMarker: true, eccLevel: 'H' }), { ...A, outerSeat: 'a-cm' });
+  const aNone = ctxOf('A', encodeA(PAYLOAD, { ...N7, eccLevel: 'H' }), A);
   assert.equal(aMeasured.cornerMarker, true);
   assert.equal(aNone.cornerMarker, false);
   assertMeasuredOpensOtherLocks('A 바깥 없음', aMeasured, aNone, R.SEAT_CONFIG);
 
   const K = { ...FRESH, type: 'K' };
-  const kMeasured = cellShapeCtx('K', encodeK(PAYLOAD, { ...N7, cornerMarker: true, eccLevel: 'H' }), { ...K, outerSeat: 'k-cm' }, WHITE);
-  const kNone = cellShapeCtx('K', encodeK(PAYLOAD, { ...N7, eccLevel: 'H' }), K, WHITE);
+  const kMeasured = ctxOf('K', encodeK(PAYLOAD, { ...N7, cornerMarker: true, eccLevel: 'H' }), { ...K, outerSeat: 'k-cm' });
+  const kNone = ctxOf('K', encodeK(PAYLOAD, { ...N7, eccLevel: 'H' }), K);
   assertMeasuredOpensOtherLocks('K 바깥 없음', kMeasured, kNone, R.SEAT_CONFIG);
 });
 
 test('ⓐ O: 안쪽 없음은 열리고, 안쪽 o-cm 은 타입 G(행 0 — unmeasured), 사괘는 같은 버전에서 seat-config 로 잠긴다', () => {
   const O = { ...FRESH, type: 'O' };
-  const oMeasured = cellShapeCtx('O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), O, WHITE);
-  const oSagoae = cellShapeCtx('O', encode(P12, { ...N7, sagoae: true, eccLevel: 'H', version: 2 }), { ...O, deepSeat: 'sagoae' }, WHITE);
+  const oMeasured = ctxOf('O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), O);
+  const oSagoae = ctxOf('O', encode(P12, { ...N7, sagoae: true, eccLevel: 'H', version: 2 }), { ...O, deepSeat: 'sagoae' });
   assert.equal(oSagoae.sagoae, true);
   assertMeasuredOpensOtherLocks('O 사괘', oMeasured, oSagoae, R.SEAT_CONFIG);
   // 안쪽 o-cm(제품 자동) — 타입 G 로 갈리고 G 행이 없어 미확인. 측정 구성 선언도 없다(자리 사유가 아니다).
-  const g = cellShapeCtx('O', encode(PAYLOAD, { ...N7, cornerMarker: true, markerTones: true, eccLevel: 'H' }), { ...O, innerSeat: 'o-cm' }, WHITE);
+  const g = ctxOf('O', encode(PAYLOAD, { ...N7, cornerMarker: true, markerTones: true, eccLevel: 'H' }), { ...O, innerSeat: 'o-cm' });
   assert.equal(g.type, 'G');
   assert.equal(Object.prototype.hasOwnProperty.call(CELL_SHAPE_MEASURED_CONFIG, 'G'), false);
   for (const row of rowsFor({ ...g, type: 'O' })) {
@@ -142,17 +217,17 @@ test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 �
   let measured = 0;
   for (const ecc of ECC_NAMES.filter((e) => e !== 'H')) {
     measured += assertMeasuredOpensOtherLocks(`O v2 ECC ${ecc}`,
-      cellShapeCtx('O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), O, WHITE),
-      cellShapeCtx('O', encode(P12, { ...N7, eccLevel: ecc, version: 2 }), O, WHITE), R.ECC_LEVEL);
+      ctxOf('O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), O),
+      ctxOf('O', encode(P12, { ...N7, eccLevel: ecc, version: 2 }), O), R.ECC_LEVEL);
     measured += assertMeasuredOpensOtherLocks(`A v0 ECC ${ecc}`,
-      cellShapeCtx('A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), A, WHITE),
-      cellShapeCtx('A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: ecc, version: 0 }), A, WHITE), R.ECC_LEVEL);
+      ctxOf('A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), A),
+      ctxOf('A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: ecc, version: 0 }), A), R.ECC_LEVEL);
     measured += assertMeasuredOpensOtherLocks(`K v0 ECC ${ecc}`,
-      cellShapeCtx('K', encodeK(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), K, WHITE),
-      cellShapeCtx('K', encodeK(P12, { ...N7, cornerMarker: true, eccLevel: ecc, version: 0 }), K, WHITE), R.ECC_LEVEL);
+      ctxOf('K', encodeK(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), K),
+      ctxOf('K', encodeK(P12, { ...N7, cornerMarker: true, eccLevel: ecc, version: 0 }), K), R.ECC_LEVEL);
     const Y = { ...FRESH, type: 'Y', bgMode: 'white' };
-    const yH = cellShapeCtx('Y', yEnc('H'), Y, { quietColor: 'none' });
-    const yOther = cellShapeCtx('Y', yEnc(ecc), Y, { quietColor: 'none' });
+    const yH = ctxOf('Y', yEnc('H'), Y, 'none');
+    const yOther = ctxOf('Y', yEnc(ecc), Y, 'none');
     if (JSON.stringify(cellShapeAllowCtx(yOther)) === JSON.stringify(cellShapeAllowCtx(yH))) {
       measured += assertMeasuredOpensOtherLocks(`Y v0 ECC ${ecc}`, yH, yOther, R.ECC_LEVEL);
     } else {
@@ -163,12 +238,96 @@ test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 �
   assert.ok(measured > 0);
 });
 
+test('ⓐ 강조: 중앙 TL(강조 대상)의 O · A · K 는 측정 구성 \'all\' 에서 열리고, \'locator\' · \'default\' 는 표 키가 같아도 detector-emphasis 로 잠긴다', () => {
+  const cases = [
+    ['O v2', 'O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), { ...FRESH, type: 'O' }],
+    ['A v0 a-cm', 'A', encodeA(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), { ...FRESH, type: 'A', outerSeat: 'a-cm' }],
+    ['K v0 k-cm', 'K', encodeK(P12, { ...N7, cornerMarker: true, eccLevel: 'H', version: 0 }), { ...FRESH, type: 'K', outerSeat: 'k-cm' }],
+  ];
+  let n = 0;
+  for (const [name, type, enc, state] of cases) {
+    assert.equal(CELL_SHAPE_MEASURED_CONFIG[type].detectorEmphasis, 'all', name + ': 선언 전제');
+    const measured = ctxOf(type, enc, state, 'white', 'all');
+    // 중앙 TL 은 로케이터 · 데이터 두 팔을 가져 세 값이 서로 다른 그림이다(ⓖ 가 렌더로 잰다).
+    assert.equal(measured.detectorEmphasis, 'all', name);
+    for (const other of ['locator', 'default']) {
+      const ctx = ctxOf(type, enc, state, 'white', other);
+      assert.equal(ctx.detectorEmphasis, other, `${name} ${other}`);
+      n += assertMeasuredOpensOtherLocks(`${name} 강조 ${other}`, measured, ctx, R.DETECTOR_EMPHASIS);
+    }
+  }
+  assert.ok(n > 0);
+});
+
+test('ⓐ 강조: 소비 표면이 없는 렌더(대상 아닌 중앙 · 검출 셀 없음)는 «해당 없음» — 무엇을 넘겨도 같은 문맥이고 강조로 안 잠긴다', () => {
+  let opened = 0;
+  for (const finder of ['bullseye', 'pinwheel-c2-2-1100-cw', 'cube-bullseye', 'central-cube-3tone', 'gap-ring-01-2-1-solid']) {
+    const state = { ...FRESH, type: 'O', finderPatternId: finder };
+    const enc = encode(P12, { ...centralBeaconEncoderOptions(finder, false), eccLevel: 'H', version: 2 });
+    const ctxs = CENTRAL_N7_EMPHASIS_MODES.map((m) => ctxOf('O', enc, state, 'white', m));
+    for (const ctx of ctxs) {
+      assert.equal(ctx.detectorEmphasis, NA, `${finder}: 해당 없음이 아니다`);
+      assert.deepEqual(ctx, ctxs[0], `${finder}: 넘긴 강조에 따라 문맥이 달라졌다`);
+    }
+    // 표 행이 있으면 세 값 모두에서 열리고, 모든 선택지에서 사유가 강조가 아니다(거짓 잠금 없음).
+    for (const ctx of ctxs) {
+      for (const row of rowsFor(ctx)) {
+        assert.deepEqual(resolveRow(row, ctx), { spec: { kind: row.cellShape, param: row.param } }, `${finder} ${row.cellShape}`);
+        opened += 1;
+      }
+      for (const c of cellChoices()) assert.notEqual(resolveCellShapeSpec(c, ctx).lockReason, R.DETECTOR_EMPHASIS, `${finder} ${JSON.stringify(c)}`);
+    }
+  }
+  assert.ok(opened > 0, '해당 없음 문맥에서 연 행이 없다 — 자가 비었다');
+  // 대상 아닌 중앙이라도 코너 마커 검출 셀이 있으면 강조가 그림을 바꾼다 — 'locator' ≡ 'all'(검출 셀 한 팔), 'default' 는 다르다.
+  // (A · K 의 불스아이 · 핀휠은 표 행이 없어 잠금 사유는 미확인이다 — 강조를 되돌려도 안 열리니 «강조 탓» 이 아니다.)
+  for (const [type, fn, seat] of [['A', encodeA, { outerSeat: 'a-cm' }], ['K', encodeK, { outerSeat: 'k-cm' }]]) {
+    for (const finder of ['bullseye', 'pinwheel-c2-2-1100-cw']) {
+      const state = { ...FRESH, type, finderPatternId: finder, ...seat };
+      const enc = fn(PAYLOAD, { cornerMarker: true, eccLevel: 'H' });
+      const on = ctxOf(type, enc, state, 'white', 'all');
+      assert.equal(on.detectorEmphasis, 'locator+all', `${type} ${finder}`);
+      assert.deepEqual(ctxOf(type, enc, state, 'white', 'locator'), on, `${type} ${finder}: locator 와 all 은 같은 그림`);
+      const off = ctxOf(type, enc, state, 'white', 'default');
+      assert.equal(off.detectorEmphasis, 'default');
+      assert.equal(rowsFor(off).length, 0, `${type} ${finder}: 표 행이 생겼다 — 이 단언을 «강조 탓» 반사실로 바꿀 것`);
+      assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, off).lockReason, R.UNMEASURED);
+    }
+  }
+});
+
+test('ⓐ 강조 Y: 일반 화면(강조 미전달)은 측정 구성이라 열리고, 고급 화면이 실은 \'all\' · \'locator\' 는 detector-emphasis 로 잠긴다 · hex-frame 은 해당 없음', () => {
+  assert.equal(CELL_SHAPE_MEASURED_CONFIG.Y.detectorEmphasis, DEFAULT_CENTRAL_N7_EMPHASIS, '선언 전제 — Y 측정은 강조 미전달');
+  const Y = { ...FRESH, type: 'Y', bgMode: 'white' };
+  const enc = yEnc('H');
+  const notPassed = cellShapeCtx('Y', enc, Y, renderOf('Y', enc, Y, 'none', NOT_PASSED));
+  assert.equal(notPassed.detectorEmphasis, 'default', 'Y 셀 표면 로케이터 — 미전달 = 라이브러리 기본 그림');
+  // 'default' 를 명시로 넘겨도 같은 그림이다.
+  assert.deepEqual(cellShapeCtx('Y', enc, Y, renderOf('Y', enc, Y, 'none', 'default')), notPassed);
+  let n = 0;
+  for (const m of ['all', 'locator']) {
+    const ctx = cellShapeCtx('Y', enc, Y, renderOf('Y', enc, Y, 'none', m));
+    assert.equal(ctx.detectorEmphasis, 'locator+all', `Y ${m}: 셀 표면 로케이터는 검출 셀 팔 하나 — locator ≡ all`);
+    n += assertMeasuredOpensOtherLocks(`Y 강조 ${m}`, notPassed, ctx, R.DETECTOR_EMPHASIS);
+  }
+  assert.ok(n > 0);
+  // hex-frame · 로케이터 없음 — 셀 표면 로케이터가 없어 강조가 그림을 안 바꾼다.
+  for (const profile of ['hex-frame-v1', 'off']) {
+    const e = yEnc('H', profile);
+    for (const m of CENTRAL_N7_EMPHASIS_MODES) {
+      assert.equal(cellShapeCtx('Y', e, { ...Y, locatorProfileY: profile }, renderOf('Y', e, Y, 'none', m)).detectorEmphasis, NA, `${profile} ${m}`);
+    }
+  }
+});
+
 test('ⓐ K · Y 기본 인코딩은 ctx-incomplete 로 잠기지 않는다 — K 사괘는 «개념 없음» 이라 false, Y 는 ECC 가 정의된다', () => {
-  const k = cellShapeCtx('K', encodeK(PAYLOAD), { ...FRESH, type: 'K' }, WHITE);
+  const kEnc = encodeK(PAYLOAD);
+  const k = ctxOf('K', kEnc, { ...FRESH, type: 'K' });
   assert.equal(k.sagoae, false);
   for (const key of CELL_SHAPE_REQUIRED_CTX_KEYS.oak) assert.notEqual(k[key], undefined, 'K ' + key);
   assert.notEqual(resolveCellShapeSpec({ cellShape: 'bevel' }, k).lockReason, R.CTX_INCOMPLETE);
-  const y = cellShapeCtx('Y', encodeY(PAYLOAD, encodeOptionsForY({ tone: 3, fallback: Y_TL, locatorProfileY: 'cell-surface-v0' })), FRESH, { quietColor: 'none' });
+  const yE = encodeY(PAYLOAD, encodeOptionsForY({ tone: 3, fallback: Y_TL, locatorProfileY: 'cell-surface-v0' }));
+  const y = ctxOf('Y', yE, FRESH, 'none');
   assert.ok(ECC_NAMES.includes(y.eccLevel), `Y eccLevel ${y.eccLevel}`);
   for (const key of CELL_SHAPE_REQUIRED_CTX_KEYS.y) assert.notEqual(y[key], undefined, 'Y ' + key);
   assert.notEqual(resolveCellShapeSpec({ cellShape: 'bevel' }, y).lockReason, R.CTX_INCOMPLETE);
@@ -181,7 +340,7 @@ test('ⓑ K 사괘 «개념 없음» 의 근거: encodeK 는 sagoae:true 를 던
   const k = encodeK(PAYLOAD, { cornerMarker: true, eccLevel: 'H' });
   assert.equal(Object.prototype.hasOwnProperty.call(k, 'sagoae'), false, 'K 결과에 sagoae 키가 생겼다 — «개념 없음» 유도를 다시 볼 것');
   // 인코더가 boolean 을 주면 그 값이 늘 우선이다(K 가 사괘를 지원하게 되면 자동으로 읽힌다).
-  const kWith = cellShapeCtx('K', { ...k, sagoae: true }, { ...FRESH, type: 'K' }, WHITE);
+  const kWith = ctxOf('K', { ...k, sagoae: true }, { ...FRESH, type: 'K' });
   assert.equal(kWith.sagoae, true);
   assert.ok(rowsFor(kWith).some((row) => row.cellShape === 'bevel'), 'K 측정 문맥의 bevel 행 — 반사실(측정 구성이면 열린다)의 전제');
   assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, kWith).lockReason, R.SEAT_CONFIG);
@@ -194,23 +353,53 @@ test('ⓑ O · A 에서 표지 키가 빠지면 값 모름(ctx-incomplete) — �
     ['K', encodeK(PAYLOAD, { ...N7, cornerMarker: true, eccLevel: 'H' }), { ...FRESH, type: 'K', outerSeat: 'k-cm' }],
   ];
   for (const [type, enc, state] of cases) {
-    const full = cellShapeCtx(type, enc, state, WHITE);
+    const full = ctxOf(type, enc, state);
     assert.notEqual(resolveCellShapeSpec({ cellShape: 'bevel' }, full).lockReason, R.CTX_INCOMPLETE, type + ' 대조군');
     for (const key of ['cornerMarker', 'sagoae', 'eccLevel']) {
       if (!Object.prototype.hasOwnProperty.call(enc, key)) continue; // K 의 sagoae — 개념 없음(위 ⓑ)
       const { [key]: _drop, ...partial } = enc;
-      const ctx = cellShapeCtx(type, partial, state, WHITE);
+      const ctx = ctxOf(type, partial, state);
       assert.equal(ctx[key], undefined, `${type} ${key}`);
       assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, ctx).lockReason, R.CTX_INCOMPLETE, `${type} ${key} 빠짐`);
     }
     for (const bad of ['RESERVED', 'Q', 2, null]) {
-      const ctx = cellShapeCtx(type, { ...enc, eccLevel: bad }, state, WHITE);
+      const ctx = ctxOf(type, { ...enc, eccLevel: bad }, state);
       assert.equal(ctx.eccLevel, undefined, `${type} eccLevel ${bad}`);
       assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, ctx).lockReason, R.CTX_INCOMPLETE);
     }
     // boolean 이 아닌 코너 마커도 값 모름이다.
-    assert.equal(cellShapeCtx(type, { ...enc, cornerMarker: 'yes' }, state, WHITE).cornerMarker, undefined);
+    assert.equal(ctxOf(type, { ...enc, cornerMarker: 'yes' }, state).cornerMarker, undefined);
   }
+});
+
+test('ⓑ 실효 검출 강조 값 모름: render 에 없거나 폐쇄집합 \'+\' 목록이 아니면 undefined(ctx-incomplete) · 유도 함수는 입력을 모르면 undefined', () => {
+  const enc = encode(P12, { ...N7, eccLevel: 'H', version: 2 });
+  const state = { ...FRESH, type: 'O' };
+  const full = ctxOf('O', enc, state);
+  assert.equal(full.detectorEmphasis, 'all');
+  assert.ok(rowsFor(full).some((row) => row.cellShape === 'bevel' && row.param === CELL_SHAPE_PARAMS.bevel.default), '대조군 전제 — bevel 행');
+  assert.deepEqual(resolveCellShapeSpec({ cellShape: 'bevel' }, full).spec, { kind: 'bevel', param: CELL_SHAPE_PARAMS.bevel.default });
+  // render 에 강조가 없다(옛 호출 모양 · 측정 하네스의 quietColor 만) — 값 모름이라 잠근다(측정 구성과 «같다» 로 읽지 않는다).
+  for (const render of [{ quietColor: 'white' }, { quietColor: 'white', detectorEmphasis: undefined }]) {
+    const ctx = cellShapeCtx('O', enc, state, render);
+    assert.equal(ctx.detectorEmphasis, undefined);
+    assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, ctx).lockReason, R.CTX_INCOMPLETE);
+  }
+  for (const bad of ['', 'x', 'ALL', 'all+default', 'all+all', 'default+', '+all', null, 3, ['all'], { all: true }]) {
+    const ctx = cellShapeCtx('O', enc, state, { quietColor: 'white', detectorEmphasis: bad });
+    assert.equal(ctx.detectorEmphasis, undefined, `강조 ${JSON.stringify(bad)}`);
+    assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, ctx).lockReason, R.CTX_INCOMPLETE, `강조 ${JSON.stringify(bad)}`);
+  }
+  // 폐쇄집합 순서의 집합은 그대로 받는다.
+  for (const s of emphasisSets()) assert.equal(cellShapeCtx('O', enc, state, { quietColor: 'white', detectorEmphasis: s }).detectorEmphasis, s);
+  // 유도 함수 — 팔레트 · 인코딩을 모르거나 강조 값이 폐쇄집합 밖이면 undefined(추측하지 않는다).
+  assert.equal(detectorEmphasisEquivalents('O', enc, { finderPatternId: 'central-n7-payload' }), undefined, '팔레트 없음');
+  assert.equal(detectorEmphasisEquivalents('O', null, { palette: SLATE }), undefined, '인코딩 없음');
+  assert.equal(detectorEmphasisEquivalents('O', enc, undefined), undefined, '옵션 없음');
+  assert.equal(detectorEmphasisEquivalents('O', enc, { palette: SLATE, finderPatternId: 'central-n7-payload', centralN7Emphasis: 'max' }), undefined);
+  // 안 넘김 = 라이브러리 기본과 같은 그림.
+  assert.equal(detectorEmphasisEquivalents('O', enc, { palette: SLATE, finderPatternId: 'central-n7-payload' }),
+    detectorEmphasisEquivalents('O', enc, { palette: SLATE, finderPatternId: 'central-n7-payload', centralN7Emphasis: DEFAULT_CENTRAL_N7_EMPHASIS }));
 });
 
 // ── ⓒ 생성 표 성질 ──────────────────────────────────────────────────────────
@@ -226,6 +415,7 @@ test('ⓒ 생성 표: 행이 있는 타입마다 측정 구성 선언이 있고,
   // y 행의 표 밖 구조 잠금 키(QR 배치)는 «제품 기본 Y» 값 — cell-shape-allow-generated 와 같다.
   const yLock = { qrPosition: FRESH.qrPosition, qrWindow: false, qrSlot: false };
   let flips = 0;
+  let same = 0;
   for (const row of cellRows) {
     const t = row.table === 'y' ? 'Y' : row.type;
     const config = CELL_SHAPE_MEASURED_CONFIG[t];
@@ -234,25 +424,34 @@ test('ⓒ 생성 표: 행이 있는 타입마다 측정 구성 선언이 있고,
     if (row.table === 'y') Object.assign(ctx, yLock);
     Object.assign(ctx, config);
     const at = JSON.stringify(row);
-    assert.deepEqual(resolveRow(row, ctx), { spec: { kind: row.cellShape, param: row.param } }, `측정 구성에서 안 열린다: ${at}`);
+    const open = { spec: { kind: row.cellShape, param: row.param } };
+    assert.deepEqual(resolveRow(row, ctx), open, `측정 구성에서 안 열린다: ${at}`);
     for (const key of Object.keys(config)) {
-      const others = key === 'eccLevel' ? ECC_NAMES.filter((e) => e !== config[key]) : [!config[key]];
-      const want = CELL_SHAPE_SEAT_CONFIG_KEYS.includes(key) ? R.SEAT_CONFIG : R.ECC_LEVEL;
-      for (const v of others) {
+      const want = reasonOfKey(key);
+      for (const v of otherValues(key, config[key])) {
         assert.deepEqual(resolveRow(row, { ...ctx, [key]: v }), { spec: null, lockReason: want }, `${key}=${v}: ${at}`);
         flips += 1;
       }
     }
+    // 측정 강조를 담은 집합(해당 없음 포함)은 측정 구성과 같은 그림이다 — 열린다.
+    for (const s of emphasisSets().filter((x) => sameAsMeasured('detectorEmphasis', x, config.detectorEmphasis))) {
+      assert.deepEqual(resolveRow(row, { ...ctx, detectorEmphasis: s }), open, `강조 ${s}(측정 ${config.detectorEmphasis} 포함): ${at}`);
+      same += 1;
+    }
   }
   assert.ok(flips >= cellRows.length * 2, `뒤집기 ${flips}`);
+  assert.ok(same >= cellRows.length * 2, `같은 그림 집합 ${same}`);
 });
 
-// ── ⓓ 선언 ↔ 제품 자동 자리표 ───────────────────────────────────────────────
+// ── ⓓ 선언 ↔ 제품 기본 ──────────────────────────────────────────────────────
 
-test('ⓓ 선언 ↔ 자동 자리표(성질): 제품 자동 자리의 와이어가 선언과 같으면 열리고, 다르면 잠긴다 · O 는 하네스 규약(안쪽 없음)', (t) => {
+test('ⓓ 선언 ↔ 제품 기본(성질): 제품 자동 자리 · 제품 기본 강조의 와이어/그림이 선언과 같으면 열리고, 다르면 잠긴다 · O 는 하네스 규약(안쪽 없음)', (t) => {
   // 값의 같음을 단언하지 않는다 — 선언은 측정 사실(영수증 — ⓔ 가 묶는다)이고 제품 기본은 바뀔 수 있다. 제품 기본이 선언과
   // 달라지면 그 기본이 잠기는 것이 맞다(재측정하거나 제품 기본을 재검토할 일 — 선언을 제품 기본에 맞추면 거짓 열림이 돌아온다).
   const auto = (type) => autoSeatsFor({ type, centralFinderIsTaegeuk: false, allowBlocked: false });
+  // 제품 기본 강조 = 생성기 상태 기본(GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS). O/A/K 는 늘 넘기고(sceneOptionsForOA · K 손 조립),
+  // Y 일반 화면은 안 넘긴다(renderTypeY 의 고급 게이트 — decoration-ui 자가 제품 경로로 잰다).
+  assert.equal(FRESH.centralN7Emphasis, GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS);
   for (const type of ['A', 'K']) {
     const a = auto(type);
     const config = CELL_SHAPE_MEASURED_CONFIG[type];
@@ -261,14 +460,15 @@ test('ⓓ 선언 ↔ 자동 자리표(성질): 제품 자동 자리의 와이어
     const cm = cornerMarkerSeatActive({ type, outerSeat: a.outer, turnA: false });
     const sagoae = type === 'A' && !cm && a.deep === SEAT_SAGOAE;
     const enc = (type === 'A' ? encodeA : encodeK)(PAYLOAD, { ...N7, ...(cm ? { cornerMarker: true } : {}), ...(sagoae ? { sagoae: true } : {}), eccLevel: 'H' });
-    const ctx = cellShapeCtx(type, enc, { ...FRESH, type, outerSeat: a.outer, deepSeat: a.deep }, WHITE);
-    const same = CELL_SHAPE_SEAT_CONFIG_KEYS.every((k) => ctx[k] === config[k]);
+    const state = { ...FRESH, type, outerSeat: a.outer, deepSeat: a.deep };
+    const ctx = ctxOf(type, enc, state, 'white', FRESH.centralN7Emphasis);
+    const same = Object.keys(config).filter((k) => k !== 'eccLevel').every((k) => sameAsMeasured(k, ctx[k], config[k]));
     const rows = rowsFor(ctx);
     if (same) {
-      assert.ok(rows.length > 0, `${type}: 제품 자동 자리 = 측정 구성인데 그 문맥의 표 행이 없다 — 자가 비었다`);
+      assert.ok(rows.length > 0, `${type}: 제품 자동 자리 · 기본 강조 = 측정 구성인데 그 문맥의 표 행이 없다 — 자가 비었다`);
     } else {
-      t.diagnostic(`${type}: 제품 자동 자리(바깥 ${a.outer} · 심부 ${a.deep})의 와이어가 측정 구성과 다르다 — 제품 기본이 잠긴다. `
-        + '재측정하거나 제품 기본을 재검토할 것(선언은 영수증에서만 바꾼다)');
+      t.diagnostic(`${type}: 제품 자동 자리(바깥 ${a.outer} · 심부 ${a.deep}) · 기본 강조(${FRESH.centralN7Emphasis})가 측정 구성과 다르다 — `
+        + '제품 기본이 잠긴다. 재측정하거나 제품 기본을 재검토할 것(선언은 영수증에서만 바꾼다)');
     }
     for (const row of rows) {
       const res = resolveRow(row, ctx);
@@ -294,7 +494,7 @@ test('ⓓ 선언 ↔ 자동 자리표(성질): 제품 자동 자리의 와이어
 test('ⓔ 측정 구성 선언이 묶인 영수증 = 허용표 RECEIPT_SHA256 (표를 다시 생성하면 선언을 재유도할 것)', () => {
   assert.match(CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256, /^[0-9a-f]{64}$/);
   assert.equal(ALLOW.RECEIPT_SHA256, CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256,
-    '허용표가 다시 생성됐다 — 새 영수증의 측정 구성(자리 · 사괘 · ECC)을 확인해 CELL_SHAPE_MEASURED_CONFIG 를 재유도하고 '
+    '허용표가 다시 생성됐다 — 새 영수증의 측정 구성(자리 · 사괘 · ECC · 검출 강조)을 확인해 CELL_SHAPE_MEASURED_CONFIG 를 재유도하고 '
     + 'CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 을 갱신하라');
 });
 
@@ -315,7 +515,7 @@ function cellChoices() {
   return out;
 }
 
-test('ⓕ 사유는 참이다 — 자리 · ECC 탓은 측정 구성이면 열릴 때만, 틈 탓은 틈만 바꾸면 열릴 때만, 설계 잠금이 먼저다', () => {
+test('ⓕ 사유는 참이다 — 자리 · ECC · 강조 탓은 측정 구성이면 열릴 때만(첫 번째로 다른 축), 틈 탓은 틈만 바꾸면 열릴 때만, 설계 잠금이 먼저다', () => {
   const cellRows = ALLOW.ROWS.filter((r) => r.table === 'oak' || r.table === 'y');
   const yLock = { qrPosition: FRESH.qrPosition, qrWindow: false, qrSlot: false };
   const absent = {
@@ -337,40 +537,45 @@ test('ⓕ 사유는 참이다 — 자리 · ECC 탓은 측정 구성이면 열�
   const opens = (st, ctx) => resolveCellShapeSpec(st, ctx).spec !== null;
   for (const base of bases.values()) {
     const config = CELL_SHAPE_MEASURED_CONFIG[base.type];
-    // 측정 구성 변형: 그대로 · 자리 키 하나씩 뒤집기 · ECC 다른 레벨 · 자리 + ECC 동시.
+    // 측정 구성 변형: 그대로 · 키 하나씩 다른 값 전부 · 같은 그림 집합(측정 강조 포함 — 측정 구성과 «같다») · 두 축 동시.
     const variants = [{}];
-    for (const k of Object.keys(config)) {
-      if (k === 'eccLevel') for (const e of ECC_NAMES.filter((x) => x !== config.eccLevel)) variants.push({ eccLevel: e });
-      else variants.push({ [k]: !config[k] });
+    for (const k of Object.keys(config)) for (const v of otherValues(k, config[k])) variants.push({ [k]: v });
+    for (const s of emphasisSets().filter((x) => x !== config.detectorEmphasis && sameAsMeasured('detectorEmphasis', x, config.detectorEmphasis))) {
+      variants.push({ detectorEmphasis: s });
     }
-    const firstSeat = Object.keys(config).find((k) => k !== 'eccLevel');
-    if (firstSeat) variants.push({ [firstSeat]: !config[firstSeat], eccLevel: ECC_NAMES.find((x) => x !== config.eccLevel) });
+    const seatKey = CELL_SHAPE_SEAT_CONFIG_KEYS.find((k) => k in config);
+    const eccOther = ECC_NAMES.find((x) => x !== config.eccLevel);
+    const emphOther = otherValues('detectorEmphasis', config.detectorEmphasis)[0];
+    if (seatKey) variants.push({ [seatKey]: !config[seatKey], eccLevel: eccOther }, { [seatKey]: !config[seatKey], detectorEmphasis: emphOther });
+    variants.push({ eccLevel: eccOther, detectorEmphasis: emphOther });
     for (const v of variants) for (const gap of [null, { gapGrade: 'unknown', bgMode: 'transparent' }]) for (const move of [null, absent[base.table]]) {
       const ctx = Object.freeze({ ...base, ...config, ...v, ...(gap || {}), ...(move || {}) });
       const measured = Object.freeze({ ...ctx, ...config });
-      const mismatch = Object.keys(v).length > 0;
+      const mismatch = Object.entries(v).some(([k, val]) => !sameAsMeasured(k, val, config[k]));
+      // 첫 번째로 다른 축(자리 → ECC → 강조) — 이 자의 비교로 판정한다.
+      const firstAxis = AXIS_ORDER.find(([, keys]) => keys.some((k) => k in config && !sameAsMeasured(k, ctx[k], config[k])));
       for (const c of choices) {
         const st = Object.freeze(c);
         const res = resolveCellShapeSpec(st, ctx);
         const where = `${JSON.stringify(ctx)} ${JSON.stringify(c)} → ${res.lockReason ?? 'open'}`;
         if (res.spec) {
           assert.equal(mismatch, false, '측정 구성과 다른데 열렸다: ' + where);
-          bump('open');
+          bump(Object.keys(v).length > 0 ? 'open:equivalent' : 'open');
           continue;
         }
         const reason = res.lockReason;
         bump((mismatch ? 'mismatch:' : 'measured:') + reason);
-        if (reason === R.SEAT_CONFIG || reason === R.ECC_LEVEL) {
-          assert.ok(opens(st, measured), '자리 · ECC 탓인데 측정 구성으로 바꿔도 안 열린다: ' + where);
-          const seatDiffers = CELL_SHAPE_SEAT_CONFIG_KEYS.some((k) => k in config && ctx[k] !== config[k]);
-          assert.equal(reason === R.SEAT_CONFIG, seatDiffers, '사유가 가리키는 축이 실제로 다르지 않다: ' + where);
+        if (reason === R.SEAT_CONFIG || reason === R.ECC_LEVEL || reason === R.DETECTOR_EMPHASIS) {
+          assert.ok(opens(st, measured), '자리 · ECC · 강조 탓인데 측정 구성으로 바꿔도 안 열린다: ' + where);
+          assert.ok(firstAxis, '측정 구성과 같은데 측정 구성 사유: ' + where);
+          assert.equal(reason, firstAxis[0], '사유가 가리키는 축이 첫 번째로 다른 축이 아니다: ' + where);
         } else if (reason === R.EXPOSED_GAP) {
           assert.equal(mismatch, false, '측정 구성까지 다른데 틈 탓: ' + where);
           assert.ok(EXPOSED_CELL_SHAPES.includes(c.cellShape));
           const whiteOpens = ['white', 'transparent', 'black'].some((bg) => opens(st, { ...ctx, gapGrade: 'white', bgMode: bg }));
           assert.ok(whiteOpens, '틈 탓인데 틈만 흰색으로 바꿔도 안 열린다: ' + where);
         } else if (reason === R.UNMEASURED) {
-          assert.ok(!opens(st, measured), '측정 구성으로 바꾸면 열리는데 미확인이라 한다(자리 · ECC 탓이어야): ' + where);
+          assert.ok(!opens(st, measured), '측정 구성으로 바꾸면 열리는데 미확인이라 한다(자리 · ECC · 강조 탓이어야): ' + where);
           // 틈 탓(exposed-gap)은 노출형(gap · dot)만의 말이다 — 비노출형은 틈이 «드러나지» 않으니 틈 등급 행 차이도 미확인이다(1300dc8 규칙).
           if (EXPOSED_CELL_SHAPES.includes(c.cellShape)) {
             const whiteOpens = ['white', 'transparent', 'black'].some((bg) => opens(st, { ...ctx, gapGrade: 'white', bgMode: bg }));
@@ -384,9 +589,99 @@ test('ⓕ 사유는 참이다 — 자리 · ECC 탓은 측정 구성이면 열�
       }
     }
   }
-  // 판별력 — 각 갈래가 격자에서 실제로 난다(측정 밖 문맥에서 unmeasured · 설계 잠금이 자리 · ECC 사유에 가려지지 않았다).
-  for (const k of ['open', 'mismatch:seat-config', 'mismatch:ecc-level', 'mismatch:unmeasured', 'mismatch:bevel-raised',
-    'mismatch:bullseye-dot', 'measured:exposed-gap', 'measured:unmeasured']) {
+  // 판별력 — 각 갈래가 격자에서 실제로 난다(측정 밖 문맥에서 unmeasured · 설계 잠금이 자리 · ECC · 강조 사유에 가려지지 않았다 ·
+  // 같은 그림 집합이 실제로 열었다).
+  for (const k of ['open', 'open:equivalent', 'mismatch:seat-config', 'mismatch:ecc-level', 'mismatch:detector-emphasis',
+    'mismatch:unmeasured', 'mismatch:bevel-raised', 'mismatch:bullseye-dot', 'measured:exposed-gap', 'measured:unmeasured']) {
     assert.ok(counts[k] > 0, `갈래 ${k} 가 격자에서 안 났다 — ${JSON.stringify(counts)}`);
   }
+});
+
+// ── ⓖ 실효 검출 강조 ≡ 실제 렌더 ────────────────────────────────────────────
+
+/**
+ * 제품 조립(index.html encodeOptsFor · renderTypeO/A/K/Y)과 같은 모양으로 인코딩 + 생산자 옵션을 만든다. 넘길 강조만 바꿔 가며
+ * 옵션을 돌려주는 `opts(emphasis)` 와 그 옵션으로 장면을 짓는 `build` 를 낸다.
+ */
+function oakCase(name, type, { finder, marker = false, centerQr = false, levels = SLATE.levels, version }) {
+  const palette = paletteOf(levels);
+  const beacon = centralBeaconEncoderOptions(finder, centerQr);
+  let enc;
+  if (type === 'O') {
+    const daehan = finder === 'oak-daehan-k10' && !centerQr;
+    enc = encode(PAYLOAD, {
+      centerQr, ...beacon, ...(version === undefined ? {} : { version }), ...(daehan ? { daehanFinder: true } : {}),
+      ...(marker ? { cornerMarker: true, markerTones: true } : {}), eccLevel: 'H',
+    });
+  } else if (type === 'A') {
+    enc = encodeA(PAYLOAD, { centerQr, ...beacon, ...(marker ? { cornerMarker: true } : {}), eccLevel: 'H' });
+  } else {
+    enc = encodeK(PAYLOAD, { ...beacon, ...(marker ? { cornerMarker: true } : {}), eccLevel: 'H' });
+  }
+  const atomicDaehan = enc.daehanFinder && enc.sagoae !== true;
+  const rendered = atomicDaehan ? daehanPatternId(enc.k) : finder;
+  const fallback = centerQr ? { mode: 'center', cornerToo: false } : { mode: 'off' };
+  const opts = (emphasis) => {
+    if (type !== 'K') {
+      return sceneOptionsForOA({ centralN7Emphasis: emphasis, fallback, finderPatternId: rendered, palette, qrText: TL_READER_URL, type });
+    }
+    const o = { palette, margin: 20, finderPatternId: rendered, centralN7Emphasis: emphasis };
+    if (finder === CENTRAL_N7_FINDER_PATTERN_ID) o.centralN7Family = centralN7FamilyForType('K');
+    return o;
+  };
+  return { name, type, enc, opts, build: (o) => buildScene(enc, o) };
+}
+
+test('ⓖ 실효 검출 강조 ≡ 실제 렌더 — «q 가 넘긴 p 의 집합에 든다 ⟺ p · q 가 같은 장면» (제품 조립 격자 × 강조 3택, buildScene · buildSceneY 로 잰다)', () => {
+  const custom0 = makeCustomPalette(0, 'custom', 0).levels;
+  const mono = getPreset('mono').levels;
+  const cases = [];
+  for (const finder of ['central-n7-payload', 'central-v0', 'pinwheel-c2-2-1100-cw', 'bullseye', 'cube-bullseye', 'central-cube-3tone']) {
+    for (const marker of [false, true]) cases.push(oakCase(`O v2 ${finder}${marker ? ' o-cm' : ''}`, 'O', { finder, marker, version: 2 }));
+    for (const type of ['A', 'K']) {
+      if (finder === 'cube-bullseye' || finder === 'central-cube-3tone') continue;
+      for (const marker of [false, true]) cases.push(oakCase(`${type} ${finder}${marker ? ' cm' : ''}`, type, { finder, marker }));
+    }
+  }
+  cases.push(oakCase('O v3 daehan', 'O', { finder: 'oak-daehan-k10', version: 3 }));
+  cases.push(oakCase('O 중앙 QR', 'O', { finder: 'central-n7-payload', centerQr: true, version: 2 }));
+  cases.push(oakCase('O 중앙 QR o-cm', 'O', { finder: 'central-n7-payload', centerQr: true, marker: true, version: 2 }));
+  cases.push(oakCase('A 중앙 QR a-cm', 'A', { finder: 'central-n7-payload', centerQr: true, marker: true }));
+  cases.push(oakCase('O v2 n7 mono', 'O', { finder: 'central-n7-payload', version: 2, levels: mono }));
+  cases.push(oakCase('K 핀휠 k-cm mono', 'K', { finder: 'pinwheel-c2-2-1100-cw', marker: true, levels: mono }));
+  cases.push(oakCase('K 핀휠 k-cm custom0/sat0', 'K', { finder: 'pinwheel-c2-2-1100-cw', marker: true, levels: custom0 }));
+  for (const profile of GENERATOR_STATE_SCHEMA.locatorProfileY.options) {
+    const enc = encodeY(PAYLOAD, encodeOptionsForY({ tone: 3, fallback: Y_TL, locatorProfileY: profile }));
+    const palette = SLATE;
+    cases.push({
+      name: `Y ${profile}`, type: 'Y', enc,
+      opts: (emphasis) => ({ palette, qrText: TL_READER_URL, qrCorner: 'TL', centralN7Emphasis: emphasis }),
+      build: (o) => buildSceneY(enc, o),
+    });
+  }
+  const fills = (scene) => JSON.stringify(scene.shapes.map((s) => s.color ?? s.fill ?? null));
+  const kinds = { na: 0, detectorOnly: 0, all3: 0 };
+  for (const c of cases) {
+    const sets = {};
+    const scenes = {};
+    for (const m of CENTRAL_N7_EMPHASIS_MODES) {
+      const o = c.opts(m);
+      sets[m] = detectorEmphasisEquivalents(c.type, c.enc, o);
+      assert.equal(typeof sets[m], 'string', `${c.name} ${m}: 유도 값이 없다`);
+      scenes[m] = fills(c.build(o));
+    }
+    for (const p of CENTRAL_N7_EMPHASIS_MODES) {
+      assert.ok(sets[p].split('+').includes(p), `${c.name}: 넘긴 ${p} 가 자기 집합(${sets[p]})에 없다`);
+      for (const q of CENTRAL_N7_EMPHASIS_MODES) {
+        const sameScene = scenes[p] === scenes[q];
+        assert.equal(sets[p].split('+').includes(q), sameScene,
+          `${c.name}: 넘긴 ${p} 의 집합 ${sets[p]} — ${q} 는 ${sameScene ? '같은 장면인데 빠졌다(거짓 잠금)' : '다른 장면인데 들었다(거짓 열림)'}`);
+      }
+    }
+    if (sets.default === NA) kinds.na += 1;
+    else if (sets.all === 'locator+all') kinds.detectorOnly += 1;
+    else if (sets.all === 'all' && sets.locator === 'locator' && sets.default === 'default') kinds.all3 += 1;
+  }
+  // 판별력 — 세 구조(해당 없음 · 검출 셀 한 팔 · 중앙 두 팔)가 격자에 다 있다.
+  assert.ok(kinds.na > 0 && kinds.detectorOnly > 0 && kinds.all3 > 0, JSON.stringify(kinds));
 });

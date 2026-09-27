@@ -6,7 +6,8 @@ import {
 } from './centralMarkerN7.js';
 import { CENTRAL_N7_FINDER_PATTERN_ID } from './centralN7Schema.js';
 import {
-  CELL_SURFACE_LOCATOR_RENDER_KIND, DETECTOR_EMPHASIS_RENDER_KINDS,
+  CELL_SURFACE_LOCATOR_RENDER_KIND, CENTRAL_N7_EMPHASIS_MODES, DEFAULT_CENTRAL_N7_EMPHASIS, DETECTOR_EMPHASIS_RENDER_KINDS,
+  centralN7LevelPalettes, detectorCellLevelPalettes, isDetectorToneCell,
 } from './centralN7Emphasis.js';
 import {
   FINDER_PATTERNS, THREE_TONE_CUBE_FINDER_PATTERN_ID,
@@ -235,6 +236,64 @@ export const DETECTOR_EMPHASIS_ADVANCED_ONLY_RENDER_KINDS = Object.freeze([
 export function detectorEmphasisRequiresAdvanced(finderPatternId) {
   return DETECTOR_EMPHASIS_ADVANCED_ONLY_RENDER_KINDS
     .includes(detectorRenderKind(finderPatternId));
+}
+
+/**
+ * **실효 검출 강조** — 생산자 옵션(`sceneOpts` — buildScene · buildSceneY 에 넘기는 **그 객체**)에 실린 강조가
+ * 그 렌더에서 **어떤 강조 값들과 같은 그림인가**. 셀 꾸미기 문맥(cell-shape `cellShapeCtx` 의 render.detectorEmphasis)의
+ * 입력이다(2026-09-27 — 허용표 행은 측정 구성의 강조에서만 잰 사실이라, 렌더가 그와 다르면 잠가야 한다).
+ *
+ * 왜 «넘긴 값» 이 아니라 «같은 그림 집합» 인가(실측 2026-09-27 — 제품 경로 O/A/K 54 상태 × 3택, 장면 채움색 비교):
+ *   · 중앙 검출기가 강조 대상이 아니어도(핀휠 · 불스아이 · 중앙 QR …) **코너 마커 검출 셀**(`entry.tones`)이 있으면
+ *     'default' 와 'all' 은 다른 그림이다 — «대상 아닌 파인더 = 해당 없음» 으로 두면 거짓 열림이다(G o-cm · A a-cm ·
+ *     K k-cm 의 대상 아닌 파인더 17 상태 전부).
+ *   · 검출 셀만 소비하는 표면(바깥 셀 루프 · Y 셀 표면 로케이터)에서는 'locator' ≡ 'all' 이다 — 렌더가
+ *     `detectorCellLevelPalettes` 로 두 값을 같은 팔로 접는다. 그 둘을 가르면 같은 그림을 잠그는 거짓 잠금이다.
+ *   · 소비 표면이 하나도 없으면 세 값이 전부 같은 그림(= «해당 없음»)이다.
+ * 그래서 판정은 라벨(파인더 id)이 아니라 **렌더가 쓰는 팔레트**다: 소비 표면마다 렌더가 부르는 바로 그 팔레트 함수의 결과를
+ * 값마다 만들어 넘긴 값과 같은지 본다. 팔레트 우연(어두운 레벨이 이미 순검정 등)도 그대로 반영된다.
+ *
+ * 소비 표면(렌더 분기 — 판정 술어는 렌더와 같은 것을 부른다):
+ *   · O/A/K(scene.js) 중앙 검출기 자신 — `detectorEmphasisApplicability(sceneOpts.finderPatternId).applies`(렌더가 그린
+ *     id: 중앙 QR 이면 center-qr, daehan 원자면 daehan-kN). 팔은 `centralN7LevelPalettes` 두 팔(로케이터 · 데이터).
+ *     ⚠ 중앙 M7(central-marker-n7)은 렌더가 로케이터 팔만 써서 'locator' ≡ 'all' 인데 여기서는 두 팔로 가른다 —
+ *     보수(잠그는 쪽) 근사다. 제품 생성기의 파인더 선택지에 없어(스키마 finderPatternId) 지금은 도달하지 않는다.
+ *   · O/A/K 바깥 셀 루프 — 검출 셀(`isDetectorToneCell`)이 하나라도 있으면 `detectorCellLevelPalettes(...).locator`.
+ *   · Y(sceneY.js `yLevelTables`) — 셀 표면(`encoded.cellSurface`) 로케이터 셀(role 'locator')이 있고 그 로케이터 화법이
+ *     강조 대상이면(`detectorEmphasisApplicability(encoded.locatorProfile)`) `detectorCellLevelPalettes(...).locator`.
+ * 이 구조(어느 렌더가 어느 팔을 쓰는가)는 렌더 분기의 사실이라 여기 적었다 — `test/cell-shape-measured-config.test.js`
+ * 가 제품 상태 격자 × 3택에서 «같은 집합 ⟺ 같은 장면» 을 **실제 렌더로** 잰다(이 함수를 안 믿고).
+ *
+ * @param {'O'|'A'|'K'|'Y'} type 생성기 타입 — O/A/K 는 scene.js, Y 는 sceneY.js 가 그린다
+ * @param {object} encoded 실제 인코딩 결과
+ * @param {object} sceneOpts 생산자 옵션 — palette.levels · centralN7Emphasis(없으면 라이브러리 기본) · finderPatternId
+ * @returns {string|undefined} 넘긴 값과 같은 그림을 내는 강조 값들(`CENTRAL_N7_EMPHASIS_MODES` 순서, '+' 로 잇는다 —
+ *   예 'all' · 'locator+all' · 'default+locator+all'(= 해당 없음)). 입력을 모르면 undefined(→ 셀 모양 잠금).
+ */
+export function detectorEmphasisEquivalents(type, encoded, sceneOpts) {
+  const levels = sceneOpts && sceneOpts.palette ? sceneOpts.palette.levels : undefined;
+  if (!encoded || !encoded.cellDigits || typeof encoded.cellDigits.values !== 'function' || !Array.isArray(levels)) {
+    return undefined;
+  }
+  const passed = sceneOpts.centralN7Emphasis === undefined ? DEFAULT_CENTRAL_N7_EMPHASIS : sceneOpts.centralN7Emphasis;
+  if (!CENTRAL_N7_EMPHASIS_MODES.includes(passed)) return undefined;
+  const cells = [...encoded.cellDigits.values()];
+  let body = false;
+  let detectorCells;
+  if (type === 'Y') {
+    detectorCells = encoded.cellSurface === true
+      && detectorEmphasisApplicability(encoded.locatorProfile).applies
+      && cells.some((entry) => entry && entry.role === 'locator');
+  } else {
+    body = detectorEmphasisApplicability(sceneOpts.finderPatternId).applies;
+    detectorCells = cells.some(isDetectorToneCell);
+  }
+  const signature = (mode) => JSON.stringify([
+    body ? centralN7LevelPalettes(levels, mode) : null,
+    detectorCells ? detectorCellLevelPalettes(levels, mode).locator : null,
+  ]);
+  const want = signature(passed);
+  return CENTRAL_N7_EMPHASIS_MODES.filter((mode) => signature(mode) === want).join('+');
 }
 
 /**
