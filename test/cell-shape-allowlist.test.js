@@ -33,8 +33,9 @@ import { encodeH } from '../src/h-codec.js';
 import { getPreset, PRESETS } from '../src/luminance.js';
 import { makeCustomPalette } from '../src/palette-hue.js';
 import {
-  centralBeaconEncoderOptions, detectorEmphasisEquivalents, eccLevelsAtTableKey, encodeOptionsForY,
+  centralBeaconEncoderOptions, detectorEmphasisEquivalents, encodeOptionsForY, measuredStateAtTableKey, producerFaceGains,
 } from '../src/generator-render-config.js';
+import { faceGainsForRenderProfile } from '../src/render-profile.js';
 import {
   CELL_SHAPES, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_LOCK_REASONS,
   CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_SHAPE_PARAMS, CELL_SHAPE_STRUCTURAL_LOCK_REASONS, cellShapeAllowCtx, cellShapeCtx, cellShapeStructuralLock,
@@ -125,18 +126,23 @@ const W = { quietColor: 'white' };
  * (FRESH.centralN7Emphasis)를 생산자에 싣고 Y 일반 화면은 안 싣는다(renderTypeY 고급 게이트) — 에서 제품 유도 함수
  * (generator-render-config `detectorEmphasisEquivalents`)가 낸 값이다. 강조 축 자체는 이 자가 아니라
  * cell-shape-measured-config(유닛 · 실제 렌더 대조) · decoration-ui(제품 경로)가 잰다 — 여기서는 문맥을 완전하게 채운다.
- * `source`({fn, opts} — 인코더와 eccLevel 뺀 옵션)를 주면 ECC 사유의 실현 조건(보조 필드 eccLevelsAtTableKey)도 제품 유도 함수
- * (generator-render-config `eccLevelsAtTableKey`)로 싣는다 — ECC 가 측정(H)과 다른 문맥은 그것이 있어야 사유가 ecc-level 이다
- * (2026-09-28, DESIGN_002 §4.4: 같은 표 키에서 H 로 안 들어가면 unmeasured). ECC 가 H 인 문맥은 그 필드가 판정에 안 쓰인다.
+ * 면 게인(Y)도 제품 유도 함수(`producerFaceGains` — 생산자 옵션의 팔레트 게인, 없으면 sceneY 기본)로 싣는다(`render.faceGains` 로 덮을 수 있다).
+ * `source`({fn, opts, text?} — 인코더와 eccLevel 뺀 옵션 · 페이로드(기본 PAYLOAD))를 주면 측정 상태(보조 필드 measuredStateAtTableKey —
+ * 와이어 축 사유의 실현 조건 · 측정 밴드)도 제품 유도 함수(generator-render-config `measuredStateAtTableKey`)로 싣는다 — 자리 · ECC 가
+ * 측정과 다른 문맥은 그것이 참이어야 사유가 seat-config · ecc-level 이다(2026-09-28, DESIGN_002 §4.4 + 착지 검토). 없으면 unmeasured.
  */
 function productCtx(type, enc, state, render, source) {
   const sceneOpts = { palette: SLATE, finderPatternId: state.finderPatternId };
   if (type !== 'Y') sceneOpts.centralN7Emphasis = state.centralN7Emphasis;
-  const ecc = source
-    ? { eccLevelsAtTableKey: eccLevelsAtTableKey({ type, state, encodeFn: source.fn, text: PAYLOAD, encodeOpts: source.opts, encoded: enc }) }
+  const measured = source
+    ? { measuredStateAtTableKey: measuredStateAtTableKey({ type, state, encodeFn: source.fn, text: source.text ?? PAYLOAD, encodeOpts: source.opts, encoded: enc }) }
     : {};
-  return cellShapeCtx(type, enc, state, { ...render, detectorEmphasis: detectorEmphasisEquivalents(type, enc, sceneOpts), ...ecc });
+  return cellShapeCtx(type, enc, state, {
+    detectorEmphasis: detectorEmphasisEquivalents(type, enc, sceneOpts), faceGains: producerFaceGains(type, sceneOpts), ...measured, ...render,
+  });
 }
+/** 16 B — O 자동 H V2 밴드(15–31) 안이면서 O 사괘도 자동 V2(V2 사괘 H ≤ 18 B)에 머무는 길이(같은 표 키에서 자리만 다르다). */
+const P16 = 'https://tl.estre';
 const yOpts = (locatorProfileY) => encodeOptionsForY({ tone: 3, fallback: { mode: 'corner', corner: 'TL' }, locatorProfileY });
 /**
  * 이름 → {ctx, expect, config?}. expect = 설계 잠금 기대(설계 §3.1 · §3.2 1차 잠금 목록 — 선택 → 사유|null),
@@ -162,15 +168,22 @@ const CTXS = {
   'Y 윈도 β': { ctx: productCtx('Y', yEnc('off', 3, { mode: 'window' }, 'M'), { ...FRESH, bgMode: 'white', qrPosition: 'inner' }, { quietColor: 'none' }), expect: () => 'y-two-tone' },
   // ── 측정 밖 구성(2026-09-27) — 표 키는 측정 구성과 같아 행으로 열리던 거짓 열림. 모든 모양이 잠긴다 ──
   //    (돌출 bevel · 불스아이 dot 같은 영구 설계 잠금은 그 사유가 먼저다 — 자리 · ECC 를 되돌려도 안 열린다.)
-  'A n7 바깥 없음': { ctx: productCtx('A', encodeA(PAYLOAD, { ...N7_OPTS, ...H }), { ...FRESH, type: 'A' }, W), expect: () => null, config: 'seat-config' },
-  'K pinwheel 바깥 없음': { ctx: productCtx('K', encodeK(PAYLOAD, H), { ...FRESH, type: 'K', finderPatternId: PINWHEEL }, { quietColor: 'black' }), expect: () => null, config: 'seat-config' },
-  'O n7 사괘': { ctx: productCtx('O', encode(PAYLOAD, { ...N7_OPTS, sagoae: true, ...H }), { ...FRESH, deepSeat: 'sagoae' }, W), expect: () => null, config: 'seat-config' },
+  //    자리 사유는 실현 조건(측정 자리로 같은 표 키에 측정 상태)이 참일 때만이라 측정 상태를 제품 유도 함수로 싣는다(2026-09-28).
+  'A n7 바깥 없음': { ctx: productCtx('A', encodeA(PAYLOAD, { ...N7_OPTS, ...H }), { ...FRESH, type: 'A' }, W, { fn: encodeA, opts: N7_OPTS }), expect: () => null, config: 'seat-config' },
+  'K pinwheel 바깥 없음': { ctx: productCtx('K', encodeK(PAYLOAD, H), { ...FRESH, type: 'K', finderPatternId: PINWHEEL }, { quietColor: 'black' }, { fn: encodeK, opts: {} }), expect: () => null, config: 'seat-config' },
+  // 사괘는 16 B — 19 B 는 사괘면 V3 로 올라가 측정 자리(사괘 없음)의 자동 V2 와 표 키가 갈린다(표 키 고정 반사실 밖 → unmeasured).
+  'O n7 사괘': { ctx: productCtx('O', encode(P16, { ...N7_OPTS, sagoae: true, ...H }), { ...FRESH, deepSeat: 'sagoae' }, W, { fn: encode, opts: { ...N7_OPTS, sagoae: true }, text: P16 }), expect: () => null, config: 'seat-config' },
+  'O n7 사괘 19 B(측정 자리면 다른 표 키)': { ctx: productCtx('O', encode(PAYLOAD, { ...N7_OPTS, sagoae: true, ...H }), { ...FRESH, deepSeat: 'sagoae' }, W, { fn: encode, opts: { ...N7_OPTS, sagoae: true } }), expect: () => null, config: 'unmeasured' },
   // ECC M — 19 B 는 같은 버전에서 H 로도 들어간다(실현 조건 참 — 제품 유도 함수로 싣는다). 실현 불가(auto-M 길이)는
   // cell-shape-measured-config ⓗ · decoration-ui 가 잰다.
   'O n7 ECC M': { ctx: productCtx('O', encode(PAYLOAD, { ...N7_OPTS, eccLevel: 'M' }), FRESH, W, { fn: encode, opts: N7_OPTS }), expect: () => null, config: 'ecc-level' },
   'O 불스아이 ECC M': { ctx: productCtx('O', encode(PAYLOAD, { eccLevel: 'M' }), { ...FRESH, finderPatternId: 'bullseye' }, W, { fn: encode, opts: {} }), expect: (k) => (k === 'dot' ? 'bullseye-dot' : null), config: 'ecc-level' },
   'Y v0 3톤 ECC M': { ctx: productCtx('Y', yEnc('cell-surface-v0', 3, undefined, 'M'), { ...FRESH, bgMode: 'white' }, { quietColor: 'none' }, { fn: encodeY, opts: yOpts('cell-surface-v0') }), expect: () => null, config: 'ecc-level' },
-  'Y hex-frame 3톤 ECC M': { ctx: productCtx('Y', yEnc('hex-frame-v1', 3, undefined, 'M'), { ...FRESH, bgMode: 'white', locatorProfileY: 'hex-frame-v1' }, { quietColor: 'none' }, { fn: encodeY, opts: yOpts('hex-frame-v1') }), expect: (k) => (k === 'gap' || k === 'dot' ? 'y-hex-frame-gap-dot' : null), config: 'ecc-level' },
+  // hex-frame(시험판 로케이터)은 제품 자동 사다리가 고르지 않아 측정 상태가 그 표 키에 없다 — ECC 사유는 따를 수 없어 unmeasured,
+  // 설계 잠금(gap · dot)이 먼저다.
+  'Y hex-frame 3톤 ECC M': { ctx: productCtx('Y', yEnc('hex-frame-v1', 3, undefined, 'M'), { ...FRESH, bgMode: 'white', locatorProfileY: 'hex-frame-v1' }, { quietColor: 'none' }, { fn: encodeY, opts: yOpts('hex-frame-v1') }), expect: (k) => (k === 'gap' || k === 'dot' ? 'y-hex-frame-gap-dot' : null), config: 'unmeasured' },
+  // 면 게인(2026-09-28) — Y 는 큐브 입체감 게인으로 그리고 행은 화면용 게인에서 잰 사실이다. 출력물용(1/1/1)이면 잠긴다.
+  'Y v0 3톤 입체감 출력물용': { ctx: productCtx('Y', yEnc('cell-surface-v0', 3), { ...FRESH, bgMode: 'white' }, { quietColor: 'none', faceGains: faceGainsForRenderProfile('print') }), expect: () => null, config: 'face-gain' },
   // 실효 검출 강조(2026-09-27) — 제품 상태의 강조만 바꾼다. 중앙 TL · 코너 마커 검출 셀은 'default' 가 측정('all')과 다른 그림이라
   // 잠기고(대상 아닌 핀휠이라도 k-cm 검출 셀이 있으면 강조가 그림을 바꾼다), 대상 아닌 중앙 · 검출 셀 없음(불스아이)은 «해당 없음»
   // 이라 강조로는 안 잠긴다(설계 잠금 dot 만).
@@ -348,7 +361,8 @@ test('③ 구조 잠금: 그 행을 넣은 표로도 잠긴다 · 기대 사유�
         assert.deepEqual(res, { spec: { kind: c.cellShape, param: def ? c[def.key] : null } }, `${where}: 행이 있는데 안 열렸다`);
       } else {
         assert.deepEqual(res, { spec: null, lockReason: want }, `${where}: 구조 잠금이 아니다`);
-        hit.add(want);
+        // unmeasured 는 구조 잠금 사유가 아니다(측정 상태가 반사실을 거둔 문맥) — 구조 잠금 사유 전부가 났는지만 모은다.
+        if (CELL_SHAPE_STRUCTURAL_LOCK_REASONS.includes(want)) hit.add(want);
       }
     }
   }

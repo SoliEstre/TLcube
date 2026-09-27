@@ -14,8 +14,12 @@ import {
 } from './finder-patterns.js';
 import { finderRenderKindOf } from './finder-render-kind.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
-import { ECC_NAME_BY_VALUE } from './formatinfo.js';
-import { cellShapeAllowCtx, cellShapeCtx } from './cell-shape.js';
+import {
+  CELL_SHAPE_MEASURED_CONFIG, CELL_SHAPE_SEAT_CONFIG_KEYS, CELL_SHAPE_WIRE_CONFIG_KEYS, cellShapeAllowCtx, cellShapeCtx,
+} from './cell-shape.js';
+import { payloadByteLength } from './header.js';
+import { DEFAULT_RENDER_PROFILE, faceGainsForRenderProfile } from './render-profile.js';
+import { resolveAutoY } from './generator-auto-y.js';
 import {
   CELL_SURFACE_FINAL_V0,
   CELL_SURFACE_FINAL_V0T,
@@ -302,50 +306,92 @@ export function detectorEmphasisEquivalents(type, encoded, sceneOpts) {
   return CENTRAL_N7_EMPHASIS_MODES.filter((mode) => signature(mode) === want).join('+');
 }
 
-/** ECC 레벨 이름(RESERVED 제외) — formatinfo `ECC_NAME_BY_VALUE` 에서 유도(손 목록 아님). */
-const ECC_LEVEL_NAMES = Object.freeze(Object.values(ECC_NAME_BY_VALUE));
 /** 표 키 비교용 렌더 값 — 판 색은 두 인코딩에 같은 값이면 되고(표 키 gapGrade 가 같은 입력에서 나온다), 강조는 표 키가 아니다. */
 const TABLE_KEY_PROBE_RENDER = Object.freeze({ quietColor: 'white' });
+/**
+ * Y 자동 사다리 탐침의 폴백 — `encodeOptionsForY` 는 폴백을 «윈도(안쪽 QR)면 Y2 · 2톤 강제» 에만 쓴다. 윈도는 셀 꾸미기 설계 잠금
+ * (y-inner-qr)이라 이 값이 판정에 닿지 않는다 — 그래서 탐침은 강제 없는 모양 하나로 부른다.
+ */
+const AUTO_Y_PROBE_FALLBACK = Object.freeze({ mode: 'off' });
 
 /**
- * **ECC 반사실의 실현 조건** — 이 인코딩과 **같은 표 키**(셀 꾸미기 허용표 키: 버전 · Y 는 n · 레이아웃 …)에서 이 페이로드를
- * 인코딩할 수 있는 ECC 레벨 목록(2026-09-28, DESIGN_002 §4.4). 셀 꾸미기 문맥(cell-shape `cellShapeCtx` 의
- * render.eccLevelsAtTableKey)의 입력이고, resolver 는 측정 ECC 가 이 목록에 있을 때만 사유 ecc-level 을 낸다.
+ * **측정 상태가 이 표 키에 있는가** — 셀 꾸미기 문맥 보조 필드(cell-shape `cellShapeCtx` 의 render.measuredStateAtTableKey)의 유도
+ * (2026-09-28, DESIGN_002 §4.4 의 ECC 실현 조건을 착지 검토 major 두 건으로 넓혔다).
  *
- * 왜: 제품 auto 는 H 가 안 들어가는 길이에서 M 을 고른다(G 77–94 · A 79–96 · K 107–132 · Y n25 v0tr 114 B …). 그 버전의 표 키가
- * H 행과 같으면 hit 가 나는데, 그 버전에 H 로는 그 페이로드가 안 들어가니 «ECC 를 H 로» 는 따를 수 없는 안내다.
+ * 뜻: 제품의 **자동 경로**(자동 버전 · Y 는 자동 사다리 `resolveAutoY`)가 그 타입의 **측정 와이어 구성**(cell-shape
+ * `CELL_SHAPE_MEASURED_CONFIG` 의 자리 · ECC — `CELL_SHAPE_WIRE_CONFIG_KEYS`)으로 이 페이로드를 인코딩하면 지금 인코딩과 **같은 표 키**에
+ * 닿고, 그 인코딩이 측정 와이어 구성을 실제로 실현했다. 허용표 행은 정확히 그 상태(측정 구성 · 자동 버전 밴드)에서 잰 사실이다.
+ * 거짓이 되는 경우(모두 제품 경로에서 닿는다):
+ *   ① ECC — auto 가 M 으로 내려간 길이(A 79–96 · Y n25 v0tr 114–117 B 등): 측정 ECC(H)로는 그 표 키에 안 들어간다.
+ *   ② 자리 — A 바깥 «없음» 79–80 B(v2 H): 코너 마커(측정 자리)를 켜면 v2 H 에 안 들어간다(자동이 M 으로 내려간다).
+ *      자동이 다른 버전으로 가는 길이(A 바깥 없음 22–25 · 47–50 B → 코너 마커면 v1 · v2)도 거짓이다 — 반사실은 표 키 고정(머리말 ④).
+ *   ③ 길이 밴드 — 버전 고정(고급 화면 versionO · versionA · versionK · versionY) · Y 로케이터 직접 선택으로 그 표 키의 자동 밴드보다
+ *      짧은 페이로드가 그 키에 닿았다(잰 적 없는 영 패딩 — header frame 의 패딩은 0 바이트). 측정 구성으로 바꿔도 자동은 더 작은 키를 고른다.
+ * resolver 는 와이어 축 사유(자리 · ECC)를 이 값이 참일 때만 내고, 거짓이면 구성이 측정과 같아도 잠근다(사유 unmeasured).
  *
- * 유도: 용량표를 옮겨 적지 않는다 — **제품 인코더 자신**(`encodeFn` — 렌더가 쓴 바로 그 인코더 · 옵션)을 버전을 이 인코딩의 것으로
- * 고정하고 레벨만 바꿔 다시 부른다. 인코더의 용량 판정(provider.capacity · frame)이 넘치면 던지고, 던지면 «안 들어간다» 다(이유가
- * 용량이 아니어도 — 그 표 키에서 그 레벨로 못 만든다는 사실은 같다). 성공해도 표 키(`cellShapeAllowCtx(cellShapeCtx(...))`)가 이
- * 인코딩과 다르면 «같은 표 키» 가 아니라 뺀다(Y 레이아웃 · n 이 버전 고정만으로 안 묶이는 경로 대비). 이 인코딩 자신의 레벨은
- * 인코딩이 이미 있으니 다시 부르지 않는다. 비용: 렌더마다 인코딩 최대 두 번 더(레벨 셋 − 1).
+ * 유도: 용량표나 매퍼를 옮겨 적지 않는다 — **렌더가 쓴 그 인코더**(`encodeFn`)를 다시 부른다.
+ *   oak: 렌더 옵션(`encodeOpts` — index.html encodeOptsFor 의 opts)에서 버전 고정을 빼고, 자리 키(코너 마커 · 사괘 — 인코더 옵션 이름이
+ *        문맥 키와 같다)를 측정 값으로 바꾸고(코너 마커가 측정 밖이면 마커 톤도 뺀다 — encode 계약상 톤은 자리와 함께만), 측정 ECC 로
+ *        부른다. 인코더의 배타(예 daehan × 코너 마커)가 던지면 거짓이다 — 그 표 키에서 측정 구성을 못 만든다는 사실은 같다.
+ *   y:   제품 자동 사다리(`resolveAutoY` — 측정 ECC)가 고르는 (버전 · 로케이터)를 `encodeOptionsForY` 로 옵션으로 만들어 부른다.
+ * 그다음 그 인코딩의 표 키(`cellShapeAllowCtx(cellShapeCtx(...))`)가 지금과 같고 와이어 구성 키가 측정 값과 같아야 참이다.
+ * 비용: 렌더마다 인코딩 한 번 더.
  *
  * @param {{type: 'O'|'A'|'K'|'Y', state: object, encodeFn: (text: string, opts: object) => object, text: string,
- *          encodeOpts?: object, encoded: object}} input 생성기 타입 · 상태 · 렌더가 쓴 인코더와 페이로드 · 옵션(eccLevel 제외 —
+ *          encodeOpts: object, encoded: object}} input 생성기 타입 · 상태 · 렌더가 쓴 인코더와 페이로드 · 옵션(eccLevel 제외 —
  *          index.html encodeOptsFor 의 opts) · 실제 인코딩 결과
- * @returns {readonly ('L'|'M'|'H')[]|undefined} 레벨 이름 순서(formatinfo)의 동결 배열 — 입력을 모르면 undefined(→ ecc-level 사유 안 냄)
+ * @returns {boolean|undefined} 입력을 모르거나 그 타입의 측정 구성 선언이 없으면 undefined(→ 와이어 축 사유 안 냄 · 밴드 판정 안 함)
  */
-export function eccLevelsAtTableKey({ type, state, encodeFn, text, encodeOpts, encoded } = {}) {
+export function measuredStateAtTableKey({ type, state, encodeFn, text, encodeOpts, encoded } = {}) {
   if (typeof encodeFn !== 'function' || typeof text !== 'string' || !encoded || typeof encoded !== 'object'
-    || !state || typeof state !== 'object' || !ECC_LEVEL_NAMES.includes(encoded.eccLevel)) return undefined;
-  const keyOf = (enc) => {
-    const ctx = cellShapeCtx(type, enc, state, TABLE_KEY_PROBE_RENDER);
-    return ctx ? JSON.stringify(cellShapeAllowCtx(ctx)) : null;
-  };
-  const key = keyOf(encoded);
-  if (key === null) return undefined;
-  const pinned = { ...(encodeOpts || {}), version: encoded.version };
-  return Object.freeze(ECC_LEVEL_NAMES.filter((level) => {
-    if (level === encoded.eccLevel) return true;
-    let other;
-    try {
-      other = encodeFn(text, { ...pinned, eccLevel: level });
-    } catch {
-      return false;
+    || !encodeOpts || typeof encodeOpts !== 'object' || !state || typeof state !== 'object') return undefined;
+  const ctxOf = (enc) => cellShapeCtx(type, enc, state, TABLE_KEY_PROBE_RENDER);
+  const here = ctxOf(encoded);
+  if (!here) return undefined;
+  const config = CELL_SHAPE_MEASURED_CONFIG[here.table === 'y' ? 'Y' : here.type];
+  if (!config) return undefined;
+  let opts;
+  if (here.table === 'y') {
+    const auto = resolveAutoY({ payloadBytes: payloadByteLength(text), tones: encoded.tones, eccLevel: config.eccLevel });
+    if (!auto.fits) return false;
+    opts = encodeOptionsForY({
+      tone: encoded.tones, versionY: auto.version, fallback: AUTO_Y_PROBE_FALLBACK, locatorProfileY: auto.locatorProfileY,
+    });
+  } else {
+    opts = { ...encodeOpts };
+    delete opts.version;
+    for (const k of CELL_SHAPE_SEAT_CONFIG_KEYS) {
+      if (config[k] === true) opts[k] = true;
+      else delete opts[k];
     }
-    return keyOf(other) === key;
-  }));
+    if (config.cornerMarker !== true) delete opts.markerTones;
+  }
+  let other;
+  try {
+    other = encodeFn(text, { ...opts, eccLevel: config.eccLevel });
+  } catch {
+    return false;
+  }
+  const there = ctxOf(other);
+  if (!there || JSON.stringify(cellShapeAllowCtx(there)) !== JSON.stringify(cellShapeAllowCtx(here))) return false;
+  return CELL_SHAPE_WIRE_CONFIG_KEYS
+    .filter((k) => Object.prototype.hasOwnProperty.call(config, k))
+    .every((k) => there[k] === config[k]);
+}
+
+/**
+ * 생산자가 쓸 **면 게인** — 셀 꾸미기 문맥 보조 필드(cell-shape `cellShapeCtx` 의 render.faceGains)의 유도(2026-09-28 착지 검토 major —
+ * Y 의 입체감 게인이 측정 밖인데 문맥에 없어 열렸다). Y 생산자(sceneY `buildSceneY`)만 면 게인을 읽는다: 넘길 옵션의 팔레트 게인,
+ * 없으면 sceneY 기본(`DEFAULT_FACE_GAINS` = 렌더 프로파일 기본의 게인 — 같은 정의를 render-profile 에서 읽는다).
+ * O/A/K 생산자(scene.js)는 게인을 읽지 않는다 → undefined(판정 안 함 — test/cell-shape-measured-config.test.js 가 장면으로 잰다).
+ * @param {'O'|'A'|'K'|'Y'} type 생성기 타입
+ * @param {object} sceneOpts 생산자에 넘길 옵션
+ * @returns {{T: number, L: number, R: number}|undefined}
+ */
+export function producerFaceGains(type, sceneOpts) {
+  if (type !== 'Y') return undefined;
+  const gains = sceneOpts && sceneOpts.palette ? sceneOpts.palette.faceGains : undefined;
+  return gains === undefined ? faceGainsForRenderProfile(DEFAULT_RENDER_PROFILE) : gains;
 }
 
 /**

@@ -12,12 +12,19 @@
 //   ③ Y 행의 하한 문맥(n)은 내보내기 경로의 모양(버전 — index.html `minRoundtripPpu({type, version, cellSurfaceLayout})`)과 같은 키다.
 //   ④ 판정 함수의 판별력 — 심은 결함 표(하한 하나 올림 · 키 하나 빠짐 · 행 없는 키 · 모르는 실효 타입 행)마다 그 결함이 **각각** 잡힌다.
 // 못 재는 것: 디더 하한(L6 격자가 비디더 점만 잰다 — 이름 붙인 축) · MEASURED_FLOORS 값 자체가 참인가(private 영수증 · gen-allow 의 몫).
+//   · 내보내기 **호출부의 문맥 모양** — 이 자는 표를 제품 함수(export-options minRoundtripPpu)와 맞대고, index.html 의 호출
+//     (exportPlanFor · syncExportPpiHint 의 minRoundtripPpu({type: current.type, version, cellSurfaceLayout}))은 읽지 않는다. 호출 모양이
+//     바뀌면(예 실효 타입을 넘김) 이 자는 초록인 채 제품 하한 키가 어긋날 수 있다 — ③ 은 Y 의 n ↔ 버전 키만 잰다(2026-09-28 착지 검토).
+//   · 고정 크기(192 · 512 px) · 커스텀 크기 내보내기 — minPpu 를 안 써(export-options resolveExportSize) 잰 하한 아래 ppu 로 나갈 수
+//     있다(cell-shape allowRowFloorCtx 주석). 기본(자동 맞춤)만 이 자가 지킨다.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as ALLOW from '../src/cell-shape-allow.js';
-import { CELL_SHAPE_GENERATOR_TYPE_OF, allowRowFloorCtx, cellShapeTypeOf } from '../src/cell-shape.js';
+import {
+  CELL_SHAPE_GENERATOR_TYPE_COLLISIONS, CELL_SHAPE_GENERATOR_TYPE_OF, allowRowFloorCtx, cellShapeTypeOf,
+} from '../src/cell-shape.js';
 import { minRoundtripPpu, minRoundtripPpuKey } from '../src/export-options.js';
 import { versionForFinalN } from '../src/cellSurfaceFinal.js';
 import { GENERATOR_TYPES } from '../src/generator-types.js';
@@ -75,6 +82,9 @@ test('① qr 행은 하한 키가 없고, 하한 대상 행은 늘 문맥이 있
     if (row.table === 'qr') assert.equal(ctx, null, 'qr 행에 하한 문맥이 생겼다');
     else assert.ok(ctx && typeof ctx.type === 'string', `하한 문맥 없음: ${JSON.stringify(row)}`);
   }
+  // 역 사상은 충돌이 없다 — 충돌하면 그 실효 타입은 모호(null)로 남고 모듈은 던지지 않는다(번들 로드를 볼모로 잡지 않게 — 2026-09-28
+  // 착지 검토 minor). 이 단언과 ① 의 no-floor-ctx 가 대신 빨개진다.
+  assert.deepEqual([...CELL_SHAPE_GENERATOR_TYPE_COLLISIONS], [], '실효 타입 → 생성기 타입 유도가 충돌한다');
   // 역 사상의 성질: 생성기 타입은 GENERATOR_TYPES 안이고, 그 생성기 타입에서 cellShapeTypeOf 가 그 실효 타입을 낼 수 있다(유도 입력으로).
   const probes = [[{}, {}], [{ notchC: true }, {}], [{}, { innerSeat: 'o-cm' }], [{}, { turnA: true }]];
   for (const [eff, gen] of Object.entries(CELL_SHAPE_GENERATOR_TYPE_OF)) {

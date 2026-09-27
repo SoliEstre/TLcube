@@ -12,6 +12,9 @@
  *      표 키가 같아도 전부 잠기고, 매퍼가 사괘를 떨군 조합은 열린 채다(2026-09-27). 사유는 반사실이다 — 측정 구성에서
  *      열리던 카드만 «자리 · ECC 탓»(seat-config g1209 · ecc-level g1210), 측정 구성에서도 잠기던 카드는 그 사유 그대로.
  *      ECC 탓은 실현 조건까지 참일 때만이다(2026-09-28) — auto 가 M 으로 내려간 길이(같은 표 키에 H 가 안 들어감)는 g1162.
+ *      자리 탓도 같다(2026-09-28 착지 검토) — A 바깥 «없음» 79–80 B 는 코너 마커면 v2 H 에 안 들어가 g1162. 표 키의 측정 밴드 밖
+ *      (버전 고정 · Y 로케이터 직접 선택의 짧은 페이로드)은 구성이 측정과 같아도 잠긴다(g1162). Y 면 게인(큐브 입체감)이 측정(화면용)과
+ *      다르면 face-gain(g1212)으로 잠긴다 — 게인은 index.html 실물 함수(currentFaceGains)로 만든다(옛 하네스의 박제 게인 .57 은 걷었다).
  *      실효 검출 강조(2026-09-27)도 같은 규칙이다 — 생산자에 넘어간 강조가 측정(O/A/K 'all' · Y 미전달)과 다른 그림이면
  *      잠기고(detector-emphasis g1211), 강조를 소비하는 표면이 없으면 무엇을 골라도 강조로는 안 잠긴다. Y 는 고급 화면에서만 넘긴다.
  *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats) · 강조 'all'. O 는 안쪽 «없음»(실효 타입 O 의
@@ -66,8 +69,10 @@ import {
 } from '../src/generator-h-qr.js';
 import {
   sceneOptionsForOA, centralN7FamilyForType, centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced,
-  centralBeaconEncoderOptions, encodeOptionsForY, detectorEmphasisEquivalents, eccLevelsAtTableKey,
+  centralBeaconEncoderOptions, encodeOptionsForY, detectorEmphasisEquivalents, measuredStateAtTableKey, producerFaceGains,
 } from '../src/generator-render-config.js';
+import { faceGainsForRenderProfile } from '../src/render-profile.js';
+import { EXPORT_DITHER_AUTO, EXPORT_PPI_PRINT, resolveRenderProfile } from '../src/export-options.js';
 import { daehanPatternId, isDaehanFinderPatternId } from '../src/finder-daehan.js';
 import { CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId } from '../src/finder-selection.js';
 import { isCentralMarkerN7FinderPatternId, centralMarkerN7FamilyForType } from '../src/centralMarkerN7.js';
@@ -83,7 +88,7 @@ import { TL_READER_URL, tlReaderUrlWithHint } from '../src/qr.js';
 import { payloadByteLength } from '../src/header.js';
 import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
 import { autoSeatsFor } from '../src/generator-seat-auto.js';
-import { resolveAutoY } from '../src/generator-auto-y.js';
+import { resolveAutoY, resolveVersionForLayout } from '../src/generator-auto-y.js';
 import { LOCATOR_PROFILE_CELL_SURFACE_V0TR } from '../src/locatorY.js';
 
 const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -193,7 +198,9 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
     hPreviewOptions: (state, options = {}) => hPreviewOptions(state, { allow: c.decorationAllow(), ...options }),
     hMaskLuminance, encode, encodeA, encodeK, encodeY, encodeH, decodeH, sceneOptionsForOA, centralN7FamilyForType,
     centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced, centralBeaconEncoderOptions, encodeOptionsForY,
-    detectorEmphasisEquivalents, eccLevelsAtTableKey,
+    detectorEmphasisEquivalents, measuredStateAtTableKey, producerFaceGains,
+    // 면 게인 — index.html 의 실물 함수(exportDitherBits · resolvedRenderProfile · profileFaceGains · currentFaceGains)를 아래에서 꽂는다.
+    resolveRenderProfile, faceGainsForRenderProfile, EXPORT_PPI_PRINT, EXPORT_DITHER_AUTO,
     daehanPatternId, isDaehanFinderPatternId, CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId,
     isCentralMarkerN7FinderPatternId, centralMarkerN7FamilyForType, CENTRAL_N7_FINDER_PATTERN_ID,
     LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_CELL_SURFACE_V0, isCellSurfaceLocatorProfileY, hasCenterQrSlot,
@@ -214,8 +221,7 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
     withShading: (scene) => scene, outlinedYScene: (scene) => scene,
     rasterize: () => ({}), verifyRaster: () => ({ total: 0, minDelta: 0, mismatches: [] }),
     verifyRasterY: () => ({ total: 0, minDeltaY: 0, logMargin: 0, mismatches: [], erasures: [] }),
-    selfCheckMarkup: () => '', deltaMinFor: () => 0.2, profileFaceGains: () => ({ T: 1, L: 0.72, R: 0.57 }),
-    currentFaceGains: () => ({ T: 1, L: 0.72, R: 0.57 }), resolvedRenderProfile: () => 'screen',
+    selfCheckMarkup: () => '', deltaMinFor: () => 0.2,
     BG_MODE_COLORS: { transparent: null, white: { r: 255, g: 255, b: 255 }, black: { r: 0, g: 0, b: 0 } },
     typeCGeneratorActive: (s = generatorState) => s.type === 'O' && s.versionO === 'ultra',
     normalPayloadText: () => payload, effectiveVersionYForEncode: () => undefined,
@@ -228,7 +234,9 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
     'syncTypeYCellEditorUi', 'emitProductGenerate', 'emitGeneratorFail', 'emitLabGen', 'applyPreviewFit',
     'paintY3dPreview', 'updateGauge', 'updateOverflowHighlight', 'syncCubeMakeUi']) c[name] = () => {};
   vm.createContext(c);
-  for (const name of ['resolveFallback', 'resolvedQrText', 'buildConfig', 'encodeOptsFor', 'encodeWithEcc',
+  // 면 게인은 제품 함수 그대로(옛 하네스는 {1, .72, .57} 을 박아 두었다 — 제품 기본(화면용 .62)과 달라 Y 셀 꾸미기가 측정 게인 밖이었다).
+  for (const name of ['exportDitherBits', 'resolvedRenderProfile', 'profileFaceGains', 'currentFaceGains',
+    'resolveFallback', 'resolvedQrText', 'buildConfig', 'encodeOptsFor', 'encodeWithEcc',
     'isCapacityError', 'eccTierLabel', 'paletteOf', 'sceneOptsForOA', 'renderTypeO', 'renderTypeA', 'renderTypeK',
     'renderTypeY', 'renderTypeH', 'hSceneOptions', 'maybeRerenderForQuietAuto', 'render']) {
     vm.runInContext(fnSource(source, name), c);
@@ -256,6 +264,8 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
 }
 
 const lastOf = (list) => list[list.length - 1];
+/** O V2 자동 H 밴드(15–31 B) 안의 16 B — 버전 V2 고정 대조군이 측정 밴드 안이게(하네스 기본 13 B 는 O 자동 V1). */
+const O2_PAYLOAD = 'decoration-ui-o2';
 
 /** 렌더된 문맥에서 **모든** 모양 · 강도를 여는 fixture 행(제품이 유도한 문맥으로 키를 만든다 — 배선 증명용). */
 function openAllCellRows(ctx) {
@@ -406,8 +416,11 @@ test('② 빈 허용표(스텁 주입)에서 보이는 모든 꾸미기 카드�
 
 test('② «흰색으로 두면 열릴 수 있어요» 권유(g1164)는 따르면 실제로 열리는 카드에만 붙는다', () => {
   const state = { ...TYPE_STATES.Y, bgMode: 'transparent', cellShape: 'round' };
+  // Y 는 제품 기본 «자동» 로케이터로 그린다(autoLocatorY) — 스키마 기본 'off' 는 제품 화면이 아니고, 측정 상태(제품 자동 사다리가 고르는
+  // 표 키)도 아니라 fixture 행이 있어도 잠긴다(2026-09-28 측정 밴드).
+  const Y_AUTO = { autoLocatorY: true };
   // 빈 표(스텁 주입) — 흰 틈 형제 행이 없으니 «틈 탓» 이 아니다: 미확인(g1162)이고 틈 문구는 둘 다 안 보인다.
-  const stub = harness({ state, quietColor: 'none', allow: STUB });
+  const stub = harness({ state, quietColor: 'none', allow: STUB, ...Y_AUTO });
   stub.render();
   assert.equal(stub.card('cellShape', 'round').dataset.lockReason, 'unmeasured', '형제 행 없는 표에서 «틈 탓» 사유가 나왔다');
   const plainKey = stub.run('DECORATION_EXPOSED_GAP_PLAIN_KEY');
@@ -415,19 +428,19 @@ test('② «흰색으로 두면 열릴 수 있어요» 권유(g1164)는 따르�
   for (const k of [plainKey, 'g1164']) assert.ok(!stub.$('cellShapeLockHint').textContent.includes(k), `스텁 표인데 틈 문구 ${k} 가 보인다`);
   // 흰 틈 형제 행이 **흰 바탕에만** 있는 fixture — 틈이 가르는 축이라 exposed-gap 이지만, 안전영역만 흰색으로 두면
   // (투명 바탕 그대로) 열리지 않으므로 권유 없는 문구다.
-  const white = harness({ state, quietColor: 'white' });
+  const white = harness({ state, quietColor: 'white', ...Y_AUTO });
   white.render();
   const bgWhiteRows = openAllCellRows({ ...white.c.current.deco.ctx, bgMode: 'white' });
-  const plain = harness({ state, quietColor: 'none', allow: { ROWS: bgWhiteRows } });
+  const plain = harness({ state, quietColor: 'none', allow: { ROWS: bgWhiteRows }, ...Y_AUTO });
   plain.render();
   assert.equal(plain.card('cellShape', 'round').dataset.lockReason, 'exposed-gap', '흰 틈 형제 행이 있는데 틈 사유가 아니다');
   assert.equal(plain.card('cellShape', 'round').dataset.lockKey, plainKey);
   assert.ok(plain.$('cellShapeLockHint').textContent.includes(plainKey));
   assert.ok(!plain.$('cellShapeLockHint').textContent.includes('g1164'), '안전영역 흰색으로는 안 열리는데 권유 문구가 보인다');
   // 흰 판 문맥에서 열리는 fixture — 권유가 참이 되고, 따르면(안전영역 흰색) 정말 열린다.
-  const probe = harness({ state, quietColor: 'white' });
+  const probe = harness({ state, quietColor: 'white', ...Y_AUTO });
   probe.render();
-  const h = harness({ state, quietColor: 'none', allow: { ROWS: openAllCellRows(probe.c.current.deco.ctx) } });
+  const h = harness({ state, quietColor: 'none', allow: { ROWS: openAllCellRows(probe.c.current.deco.ctx) }, ...Y_AUTO });
   h.render();
   const advised = h.cards('cellShape').filter((el) => el.dataset.lockKey === 'g1164');
   assert.ok(advised.some((el) => el.dataset.decoValue === 'round'), 'fixture 가 흰 판에서 round 를 여는데 권유가 없다');
@@ -565,7 +578,8 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
   // 대조군에서도 잠긴 카드 → 대조군과 같은 사유(돌출 bevel · 행 없음은 자리 · ECC 를 되돌려도 안 열린다 — «자리 탓» 은 틀린 안내).
   const nonDefault = (h) => h.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT);
   const reasons = (h) => nonDefault(h).map((el) => el.dataset.lockReason);
-  // O 는 버전을 V2 로 고정한다 — 표 행이 있는 버전이고, 사괘 · ECC 를 바꿔도 같은 버전에 머물러 표 키가 같다(대조군).
+  // O 는 버전을 V2 로 고정한다 — 표 행이 있는 버전이고, 사괘 · ECC 를 바꿔도 같은 버전에 머물러 표 키가 같다(대조군). 페이로드는
+  // O V2 자동 H 밴드 안(O2_PAYLOAD 16 B) — 하네스 기본 13 B 는 O 자동이 V1 이라 V2 고정이 측정 밴드 밖(잰 적 없는 영 패딩)이다.
   const O2 = { ...TYPE_STATES.O, versionO: 2 };
   // 표 행이 없는 버전 — 측정 구성이어도 잠기니 «자리 탓» 이 아니라 미확인 · 설계 잠금이어야 한다. 2026-09-28 길이 축 표부터 A v1 ·
   // v2 에 행이 생겨(옛 «A v1 은 행 없음» 은 틀려졌다) K v1 로 옮겼다 — 그 전제는 아래에서 표로 확인한다(행이 생기면 다른 버전으로).
@@ -579,8 +593,8 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     // [이름, 측정 구성 상태, 한 축만 바꾼 상태, 그 축의 사유, 사전 키]
     ['A 바깥 없음', TYPE_STATES.A, { ...TYPE_STATES.A, outerSeat: 'none' }, 'seat-config', 'g1209'],
     ['K 바깥 없음', TYPE_STATES.K, { ...TYPE_STATES.K, outerSeat: 'none' }, 'seat-config', 'g1209'],
-    ['O2 사괘(수동)', O2, { ...O2, deepSeat: 'sagoae' }, 'seat-config', 'g1209'],
-    ['O2 ECC M', O2, { ...O2, eccLevel: 'M' }, 'ecc-level', 'g1210'],
+    ['O2 사괘(수동)', O2, { ...O2, deepSeat: 'sagoae' }, 'seat-config', 'g1209', O2_PAYLOAD],
+    ['O2 ECC M', O2, { ...O2, eccLevel: 'M' }, 'ecc-level', 'g1210', O2_PAYLOAD],
     ['G2(O 자동) 사괘(수동)', G2, { ...G2, deepSeat: 'sagoae' }, 'seat-config', 'g1209'],
     ['G2(O 자동) ECC M', G2, { ...G2, eccLevel: 'M' }, 'ecc-level', 'g1210'],
     ['G2(O 자동) ECC L', G2, { ...G2, eccLevel: 'L' }, 'ecc-level', 'g1210'],
@@ -591,10 +605,10 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
   ];
   const seen = { axis: 0, kept: 0, keptUnmeasured: 0 };
   const axisBy = {};
-  for (const [name, baseState, state, reason, key] of pairs) {
-    const base = harness({ state: { ...baseState, cellShape: 'bevel' } });
+  for (const [name, baseState, state, reason, key, payload] of pairs) {
+    const base = harness({ state: { ...baseState, cellShape: 'bevel' }, payload });
     base.render();
-    const h = harness({ state: { ...state, cellShape: 'bevel' } });
+    const h = harness({ state: { ...state, cellShape: 'bevel' }, payload });
     h.render();
     // 같은 표 키 — 측정 구성 문맥의 행이 그대로 이 문맥을 «허가» 하던 자리다(거짓 열림의 전제).
     assert.deepEqual(cellShapeAllowCtx(h.c.current.deco.ctx), cellShapeAllowCtx(base.c.current.deco.ctx), name + ': 표 키가 달라졌다 — 대조군이 아니다');
@@ -624,21 +638,22 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     assert.ok(axisBy[name] > 0, `${name}: 측정 구성(G2)에서 열린 카드가 없다 — 사유 문구를 재지 못한다 ${JSON.stringify(axisBy)}`);
   }
   // 측정 구성 쪽은 열린다(위 쌍의 대조군이 비지 않았다) — A · K · O · G 기본에서 bevel 이 생산자까지 간다.
-  for (const [name, state] of [['A', TYPE_STATES.A], ['K', TYPE_STATES.K], ['O2', O2], ['G2(O 자동)', G2]]) {
-    const h = harness({ state: { ...state, cellShape: 'bevel' } });
+  for (const [name, state, payload] of [['A', TYPE_STATES.A], ['K', TYPE_STATES.K], ['O2', O2, O2_PAYLOAD], ['G2(O 자동)', G2]]) {
+    const h = harness({ state: { ...state, cellShape: 'bevel' }, payload });
     h.render();
     assert.equal(lastOf(h.calls.buildScene).cellShape && lastOf(h.calls.buildScene).cellShape.kind, 'bevel', name + ': 측정 구성인데 bevel 이 안 갔다');
   }
   // 매퍼가 사괘를 떨구는 조합은 와이어가 측정 구성과 같다 — 상태 표지(deepSeat)로 잠그면 거짓 잠금이다.
   // 두 쌍 다 표 행이 있는 버전에서 잰다(O daehan 은 V3 — daehan 행은 V3 에만 있다). 행이 없는 버전이면 두 팔이 모두
   // 미확인으로 잠겨 «열린 채» 를 못 잰다(2026-09-27 검토 — 옛 쌍은 하네스 페이로드의 자동 V2 에서 둘 다 잠겨 있었다).
-  for (const [name, state] of [
+  for (const [name, state, payload] of [
     ['A 자동 a-cm + 사괘 선택', { ...TYPE_STATES.A, deepSeat: 'sagoae', cellShape: 'bevel' }],
-    ['O3 daehan + 사괘 선택', { ...TYPE_STATES.O, versionO: 3, finderPatternId: 'oak-daehan-k10', deepSeat: 'sagoae', cellShape: 'bevel' }],
+    // O daehan 은 제품 기본 URL(19 B — daehan V3 자동 H 밴드 19–32 B 안). 하네스 기본 13 B 는 daehan 자동 V2 라 V3 고정은 측정 밴드 밖이다.
+    ['O3 daehan + 사괘 선택', { ...TYPE_STATES.O, versionO: 3, finderPatternId: 'oak-daehan-k10', deepSeat: 'sagoae', cellShape: 'bevel' }, PRODUCT_DEFAULT_PAYLOAD],
   ]) {
-    const without = harness({ state: { ...state, deepSeat: 'none' } });
+    const without = harness({ state: { ...state, deepSeat: 'none' }, payload });
     without.render();
-    const h = harness({ state });
+    const h = harness({ state, payload });
     h.render();
     assert.equal(h.c.current.encoded.sagoae, false, name + ': 매퍼가 사괘를 떨구지 않았다 — 대조의 전제가 깨졌다');
     assert.deepEqual(reasons(h), reasons(without), name + ': 사괘 선택만 더했는데 카드 잠금이 달라졌다');
@@ -651,8 +666,8 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
 
 test('② ECC 사유의 실현 조건(제품 경로 · auto 사다리): auto 가 M 으로 내려간 길이(G 80 · A 85 · K 120 · Y 114 B)는 «ECC 탓»(g1210)이 아니라 미확인(g1162) · 같은 버전에서 H 로도 들어가는 길이의 수동 M 은 g1210', (t) => {
   // 왜(DESIGN_002 §4.4): auto-M 길이는 그 버전의 표 키가 H 행과 같아 hit 가 나지만 그 버전에 H 로는 안 들어간다 — «ECC 를 H 로» 는
-  // 따를 수 없는 안내다. 사유는 index.html 렌더(cellShapeDecoFor)가 렌더에 쓴 인코더 · 페이로드 · 옵션으로 유도한 실현 조건
-  // (generator-render-config eccLevelsAtTableKey)에서 나온다. ECC 는 제품 auto 사다리(encodeWithEcc 실물)가 고른다.
+  // 따를 수 없는 안내다. 사유는 index.html 렌더(cellShapeDecoFor)가 렌더에 쓴 인코더 · 페이로드 · 옵션으로 유도한 측정 상태
+  // (generator-render-config measuredStateAtTableKey)에서 나온다. ECC 는 제품 auto 사다리(encodeWithEcc 실물)가 고른다.
   const nonDefault = (h) => h.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT);
   const lenText = (L) => 'https://tl.estre.so/' + 'x'.repeat(L - 20);
   // Y 는 제품 auto 가 로케이터 · 버전을 사다리(generator-auto-y resolveAutoY — 제품 함수)로 고른다. 하네스는 버전 유도를 스텁하므로
@@ -666,8 +681,9 @@ test('② ECC 사유의 실현 조건(제품 경로 · auto 사다리): auto 가
     h.render();
     return h;
   };
-  /** 카드가 «측정 구성(H · 같은 표 키)이면 열리는가» — 반사실 문맥(렌더 문맥의 ECC 만 H). */
-  const opensAtH = (h, value) => resolveCellShapeSpec({ ...h.state, cellShape: value }, { ...h.c.current.deco.ctx, eccLevel: 'H' }).spec !== null;
+  /** 카드가 «측정 구성(H · 같은 표 키)이면 열리는가» — 반사실 문맥(렌더 문맥의 ECC 만 H · 그 표 키의 측정 상태 — 표 키 hit 인가만 본다). */
+  const opensAtH = (h, value) => resolveCellShapeSpec({ ...h.state, cellShape: value },
+    { ...h.c.current.deco.ctx, eccLevel: 'H', measuredStateAtTableKey: true }).spec !== null;
   let hitAutoM = 0;
   for (const [name, state, L, isY] of [
     ['G 80 B(O 자동 = G)', O_AUTO_STATE, 80, false], ['A 85 B', TYPE_STATES.A, 85, false], ['K 120 B', TYPE_STATES.K, 120, false],
@@ -676,8 +692,7 @@ test('② ECC 사유의 실현 조건(제품 경로 · auto 사다리): auto 가
     const h = make(state, L, isY);
     const { encoded, deco } = h.c.current;
     assert.equal(encoded.eccLevel, 'M', `${name}: 제품 auto 가 M 을 고르지 않았다 — auto-M 길이가 아니다`);
-    assert.ok(Array.isArray(deco.ctx.eccLevelsAtTableKey) && !deco.ctx.eccLevelsAtTableKey.includes('H'),
-      `${name}: 같은 표 키에서 H 가 들어간다고 한다 ${JSON.stringify(deco.ctx.eccLevelsAtTableKey)}`);
+    assert.equal(deco.ctx.measuredStateAtTableKey, false, `${name}: 같은 표 키에 측정 상태(H)가 있다고 한다`);
     let hits = 0;
     for (const el of nonDefault(h)) {
       assert.notEqual(el.dataset.lockReason, 'ecc-level', `${name} ${el.dataset.decoValue}: 따를 수 없는 «ECC 탓» 안내`);
@@ -704,7 +719,7 @@ test('② ECC 사유의 실현 조건(제품 경로 · auto 사다리): auto 가
     assert.equal(base.c.current.encoded.eccLevel, 'H', `${name}: 대조군이 H 가 아니다`);
     assert.equal(h.c.current.encoded.eccLevel, 'M');
     assert.deepEqual(cellShapeAllowCtx(h.c.current.deco.ctx), cellShapeAllowCtx(base.c.current.deco.ctx), `${name}: 표 키가 달라졌다 — 대조군이 아니다`);
-    assert.ok(h.c.current.deco.ctx.eccLevelsAtTableKey.includes('H'), `${name}: 같은 표 키에서 H 가 안 들어간다고 한다`);
+    assert.equal(h.c.current.deco.ctx.measuredStateAtTableKey, true, `${name}: 같은 표 키에 측정 상태(H)가 없다고 한다`);
     const baseCards = nonDefault(base);
     let caseAxis = 0;
     nonDefault(h).forEach((el, i) => {
@@ -718,6 +733,149 @@ test('② ECC 사유의 실현 조건(제품 경로 · auto 사다리): auto 가
     assert.ok(h.$('cellShapeLockHint').textContent.includes('g1210'), `${name}: 사유 줄에 g1210 이 없다`);
   }
   assert.ok(axis > 0, '수동 M 대조에서 «ECC 탓» 카드가 없다 — 대조군이 비었다');
+});
+
+test('② 자리 사유의 실현 조건(제품 경로): A 바깥 «없음» 79 · 80 B(v2 H — 코너 마커를 켜면 v2 H 에 안 들어감)는 «자리 탓»(g1209)이 아니라 미확인(g1162) · 따르면(a-cm) 정말 안 열린다', (t) => {
+  // 왜(2026-09-28 착지 검토 major): 새 A v2 행으로 A 바깥 없음 79–80 B 가 표 키 hit 인데, 코너 마커(측정 자리)를 켜면 auto 가 v2 M 으로
+  // 내려가 «자리 탓» 을 따라도 열리지 않았다. 사유는 index.html 렌더가 유도한 측정 상태(measuredStateAtTableKey)에서 나온다.
+  const nonDefault = (h) => h.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT);
+  const lenText = (L) => 'https://tl.estre.so/' + 'x'.repeat(L - 20);
+  let hits = 0;
+  for (const L of [79, 80]) {
+    const none = harness({ state: { ...TYPE_STATES.A, outerSeat: 'none', cellShape: 'bevel' }, payload: lenText(L) });
+    none.render();
+    const { encoded, deco } = none.c.current;
+    assert.deepEqual([encoded.version, encoded.eccLevel, encoded.cornerMarker], [2, 'H', false], `A 바깥 없음 ${L} B: v2 H 가 아니다 — 전제를 다시 볼 것`);
+    assert.equal(deco.ctx.measuredStateAtTableKey, false, `A 바깥 없음 ${L} B: 측정 자리로 같은 표 키에 측정 상태가 있다고 한다`);
+    for (const el of nonDefault(none)) {
+      assert.notEqual(el.dataset.lockReason, 'seat-config', `${L} B ${el.dataset.decoValue}: 따를 수 없는 «자리 탓» 안내`);
+      // 표 키 hit(같은 표 키에서 측정 자리 · 측정 상태면 열린다)인 카드는 미확인 문구다.
+      const atMeasured = resolveCellShapeSpec({ ...none.state, cellShape: el.dataset.decoValue },
+        { ...deco.ctx, cornerMarker: true, measuredStateAtTableKey: true }).spec !== null;
+      if (atMeasured) {
+        hits += 1;
+        assert.equal(el.dataset.lockReason, 'unmeasured', `${L} B ${el.dataset.decoValue}`);
+        assert.equal(el.dataset.lockKey, 'g1162');
+      }
+    }
+    assert.equal(none.$('cellShapeLockHint').textContent.includes('g1209'), false, `${L} B: 사유 줄에 g1209`);
+    // 따르면(바깥 a-cm) — 제품 auto 가 v2 M 으로 내려가 여전히 잠긴다(안내가 거짓이 아니었음을 확인하는 대조가 아니라, 옛 안내가 거짓이었다는 확인).
+    const follow = harness({ state: { ...TYPE_STATES.A, cellShape: 'bevel' }, payload: lenText(L) });
+    follow.render();
+    assert.equal(follow.c.current.encoded.eccLevel, 'M', `${L} B a-cm: auto 가 M 이 아니다`);
+    assert.ok(nonDefault(follow).every((el) => el.getAttribute('aria-disabled') === 'true'), `${L} B a-cm: 따랐더니 열렸다 — 이 자의 전제가 틀렸다`);
+  }
+  t.diagnostic(`A 바깥 없음 79–80 B 표 키 hit 카드 ${hits}`);
+  assert.ok(hits > 0, '표 키 hit 카드가 없다 — 판별력 없음(A v2 행이 없어졌다면 다른 길이를 볼 것)');
+});
+
+test('② 측정 밴드(제품 경로): 버전 고정 · Y 로케이터 직접 선택의 짧은 페이로드는 표 키가 같아도 전부 잠기고(g1162), 같은 표 키의 밴드 안 페이로드는 열린다', (t) => {
+  // 왜(2026-09-28 착지 검토 major): 표 키에는 길이가 없다 — 행은 그 표 키의 자동 H 밴드(제품 auto 가 그 키를 고르는 길이)에서 잰 사실이라,
+  // 고급 화면 버전 고정(versionO/A · versionY)이나 Y 로케이터 직접 선택으로 더 짧은 페이로드가 그 키에 닿으면 잰 적 없는 영 패딩이다.
+  const open = (h) => h.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT && el.getAttribute('aria-disabled') === 'false');
+  const lenText = (L) => (L >= 20 ? 'https://tl.estre.so/' + 'x'.repeat(L - 20) : 'x'.repeat(L));
+  // [이름, 상태, 밴드 안 길이, 밴드 밖 길이, Y?]
+  const cases = [
+    ['O2 고정', { ...TYPE_STATES.O, versionO: 2 }, 16, 13, false],
+    ['G3 고정(O 자동 = G)', { ...O_AUTO_STATE, versionO: 3 }, 40, 13, false],
+    ['A2 고정', { ...TYPE_STATES.A, versionA: 2 }, 60, 13, false],
+    ['A1 고정', { ...TYPE_STATES.A, versionA: 1 }, 30, 13, false],
+    ['Y v0tr 직접 선택', { ...TYPE_STATES.Y, locatorProfileY: 'cell-surface-v0tr' }, 30, 13, true],
+  ];
+  const tally = {};
+  for (const [name, state, inL, outL, isY] of cases) {
+    const make = (L) => {
+      const h = harness({ state: { ...state, cellShape: 'bevel' }, payload: lenText(L), quietColor: isY ? 'none' : 'white' });
+      // Y 로케이터 직접 선택 — 제품은 그 레이아웃 안에서 최소 해상도를 고른다(index.html effectiveVersionYForEncode →
+      // resolveVersionForLayoutSafe — 실물 함수를 꽂는다. 하네스 기본 스텁은 버전 유도를 undefined 로 둔다).
+      if (isY) {
+        h.c.resolveVersionForLayout = resolveVersionForLayout;
+        vm.runInContext(fnSource(INDEX, 'resolveVersionForLayoutSafe'), h.c);
+        h.c.effectiveVersionYForEncode = () => h.run('resolveVersionForLayoutSafe()');
+      }
+      h.render();
+      return h;
+    };
+    const inside = make(inL);
+    const outside = make(outL);
+    const ctxIn = inside.c.current.deco.ctx;
+    const ctxOut = outside.c.current.deco.ctx;
+    assert.deepEqual(cellShapeAllowCtx(ctxOut), cellShapeAllowCtx(ctxIn), `${name}: 표 키가 달라졌다 — 대조군이 아니다`);
+    assert.equal(ctxIn.measuredStateAtTableKey, true, `${name} ${inL} B: 밴드 안인데 측정 상태가 아니다`);
+    assert.equal(ctxOut.measuredStateAtTableKey, false, `${name} ${outL} B: 밴드 밖인데 측정 상태라 한다`);
+    const opened = open(inside);
+    assert.ok(opened.length > 0, `${name} ${inL} B: 밴드 안에서 열린 카드가 없다 — 대조군이 비었다`);
+    assert.equal(open(outside).length, 0, `${name} ${outL} B: 밴드 밖인데 열린 카드가 있다`);
+    for (const el of opened) {
+      const out = outside.card('cellShape', el.dataset.decoValue);
+      assert.equal(out.dataset.lockReason, 'unmeasured', `${name} ${outL} B ${el.dataset.decoValue}`);
+      assert.equal(out.dataset.lockKey, 'g1162');
+    }
+    assert.equal('cellShape' in lastOf(isY ? outside.calls.buildSceneY : outside.calls.buildScene), false, `${name}: 밴드 밖인데 모양이 생산자에 갔다`);
+    tally[name] = { version: outside.c.current.encoded.version, opened: opened.length };
+  }
+  t.diagnostic(`측정 밴드 대조 ${JSON.stringify(tally)}`);
+});
+
+test('② 면 게인(Y 제품 경로): 큐브 입체감이 측정(화면용)과 다른 게인이면 열리던 카드가 face-gain(g1212)으로 잠기고, 화면용으로 되돌리면 열린다 · O/A/K 는 게인으로 안 잠긴다', (t) => {
+  // 왜(2026-09-28 착지 검토 major): Y 생산자는 면 게인으로 그리는데 셀 꾸미기 문맥에 게인이 없어, 잰 적 없는 «약» · «출력물용» 게인
+  // (입체감 카드 · 일반 화면 인쇄용 갈래 · 디더 2 · 고급 슬라이더)에서도 y 행이 열렸다. 게인은 index.html 실물 함수(currentFaceGains)가
+  // 만들고 렌더(cellShapeDecoFor)가 넘길 옵션에서 읽는다(producerFaceGains).
+  const nonDefault = (h) => h.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT);
+  const view = (h) => nonDefault(h).map((el) => `${el.dataset.decoValue}:${el.getAttribute('aria-disabled')}:${el.dataset.lockReason}`);
+  const Y = { ...TYPE_STATES.Y, cellShape: 'bevel' };
+  const make = (extra) => {
+    const h = harness({ state: { ...Y, ...extra }, quietColor: 'none', autoLocatorY: true });
+    h.render();
+    return h;
+  };
+  const base = make({});
+  const gains = base.c.current.deco.ctx.faceGains;
+  assert.ok(gains, '제품 Y 문맥에 면 게인이 없다 — 렌더가 게인을 안 실었다(판정 안 함 = 거짓 열림)');
+  assert.deepEqual({ ...gains }, { ...lastOf(base.calls.buildSceneY).palette.faceGains }, '문맥의 게인 ≠ 생산자에 넘긴 게인');
+  const baseOpen = nonDefault(base).filter((el) => el.getAttribute('aria-disabled') === 'false');
+  assert.ok(baseOpen.length > 0, 'Y 제품 기본에서 열린 카드가 없다 — 대조군이 비었다');
+  assert.equal(lastOf(base.calls.buildSceneY).cellShape && lastOf(base.calls.buildSceneY).cellShape.kind, 'bevel');
+  // 측정 밖 게인 — 입체감 카드(약 · 출력물용) · 인쇄용 갈래(자동 → 약) · 디더 2(자동 → 출력물용) · 고급 슬라이더(보간 41).
+  const variants = [
+    ['입체감 약', { renderProfile: 'soft' }], ['입체감 출력물용', { renderProfile: 'print' }],
+    ['인쇄용 갈래(자동)', { exportPpi: EXPORT_PPI_PRINT }], ['디더 2(자동)', { exportDither: 2 }], ['슬라이더 41', { faceGain: 41 }],
+  ];
+  let locked = 0;
+  for (const [name, extra] of variants) {
+    const h = make(extra);
+    assert.deepEqual(cellShapeAllowCtx(h.c.current.deco.ctx), cellShapeAllowCtx(base.c.current.deco.ctx), `${name}: 표 키가 달라졌다`);
+    const g = h.c.current.deco.ctx.faceGains;
+    assert.notDeepEqual({ ...g }, { ...gains }, `${name}: 게인이 안 바뀌었다 — 이 변형의 전제를 다시 볼 것`);
+    nonDefault(h).forEach((el, i) => {
+      const b = nonDefault(base)[i];
+      assert.equal(el.getAttribute('aria-disabled'), 'true', `${name} ${el.dataset.decoValue}: 측정 밖 게인인데 열렸다`);
+      if (b.getAttribute('aria-disabled') === 'false') {
+        assert.equal(el.dataset.lockReason, 'face-gain', `${name} ${el.dataset.decoValue}`);
+        assert.equal(el.dataset.lockKey, 'g1212');
+        locked += 1;
+      } else {
+        assert.equal(el.dataset.lockReason, b.dataset.lockReason === 'exposed-gap' ? 'unmeasured' : b.dataset.lockReason, `${name} ${el.dataset.decoValue}: 대조군 사유`);
+      }
+    });
+    assert.ok(h.$('cellShapeLockHint').textContent.includes('g1212'), `${name}: 사유 줄에 g1212 가 없다`);
+    assert.equal('cellShape' in lastOf(h.calls.buildSceneY), false, `${name}: 잠겼는데 모양이 생산자에 갔다`);
+    assert.equal(h.state.cellShape, 'bevel', `${name}: 잠금이 상태를 고쳤다`);
+  }
+  // 화면용을 명시로 고르면(인쇄용 갈래라도 입체감 카드가 이긴다) 측정 게인이라 다시 열린다.
+  const back = make({ exportPpi: EXPORT_PPI_PRINT, renderProfile: 'screen' });
+  assert.deepEqual(view(back), view(base), '입체감 화면용으로 되돌렸는데 카드가 안 돌아왔다');
+  // O/A/K 는 생산자가 게인을 안 읽는다 — 입체감이 무엇이든 카드가 같다(게인으로 잠그지 않는다).
+  for (const [name, state] of [['A', TYPE_STATES.A], ['K', TYPE_STATES.K], ['O 자동', O_AUTO_STATE]]) {
+    const ref = harness({ state: { ...state, cellShape: 'bevel' } });
+    ref.render();
+    const print = harness({ state: { ...state, cellShape: 'bevel', renderProfile: 'print' } });
+    print.render();
+    assert.equal('faceGains' in print.c.current.deco.ctx, false, `${name}: O/A/K 문맥에 게인이 실렸다`);
+    assert.deepEqual(view(print), view(ref), `${name}: 입체감 출력물용에서 카드가 달라졌다`);
+  }
+  t.diagnostic(`면 게인 잠금 카드 ${locked}`);
+  assert.ok(locked > 0);
 });
 
 /**
@@ -749,15 +907,15 @@ test('② 실효 검출 강조(O · G · A · K 제품 경로): 측정(\'all\')�
   let axis = 0;
   let gAxis = 0;
   // (a) 중앙 TL(강조 대상) + A · K 는 코너 마커 검출 셀 — 'locator' · 'default' 는 측정 구성('all')과 다른 그림이다.
-  for (const [name, state] of [['O2', O2], ['G2(O 자동)', G2], ['A 자동', TYPE_STATES.A], ['K 자동', TYPE_STATES.K]]) {
-    const base = harness({ state: { ...state, centralN7Emphasis: 'all', cellShape: 'bevel' } });
+  for (const [name, state, payload] of [['O2', O2, O2_PAYLOAD], ['G2(O 자동)', G2], ['A 자동', TYPE_STATES.A], ['K 자동', TYPE_STATES.K]]) {
+    const base = harness({ state: { ...state, centralN7Emphasis: 'all', cellShape: 'bevel' }, payload });
     base.render();
     const baseOpts = lastOf(base.calls.buildScene);
     assert.equal(baseOpts.centralN7Emphasis, 'all', name + ': 대조군 생산자 입력');
     assert.equal(base.c.current.deco.ctx.detectorEmphasis, 'all', name + ': 중앙 TL 은 세 값이 다른 그림');
     assert.equal(baseOpts.cellShape && baseOpts.cellShape.kind, 'bevel', name + ': 측정 구성(강조 all)인데 bevel 이 생산자에 안 갔다');
     for (const mode of ['locator', 'default']) {
-      const h = harness({ state: { ...state, centralN7Emphasis: mode, cellShape: 'bevel' } });
+      const h = harness({ state: { ...state, centralN7Emphasis: mode, cellShape: 'bevel' }, payload });
       h.render();
       const opts = lastOf(h.calls.buildScene);
       assert.equal(opts.centralN7Emphasis, mode, `${name} ${mode}: 생산자에 넘어간 강조`);
@@ -779,13 +937,13 @@ test('② 실효 검출 강조(O · G · A · K 제품 경로): 측정(\'all\')�
   //     같아 «해당 없음» 이고, 카드 잠금 · 사유 · 생산자에 간 모양이 'all' 과 같다(거짓 잠금 없음).
   let opened = 0;
   for (const finder of ['pinwheel-c2-2-1100-cw', 'bullseye']) {
-    const ref = harness({ state: { ...O2, finderPatternId: finder, centralN7Emphasis: 'all', cellShape: 'bevel' } });
+    const ref = harness({ state: { ...O2, finderPatternId: finder, centralN7Emphasis: 'all', cellShape: 'bevel' }, payload: O2_PAYLOAD });
     ref.render();
     assert.equal(ref.c.current.deco.ctx.detectorEmphasis, CELL_SHAPE_DETECTOR_EMPHASIS_NOT_APPLICABLE, finder + ': 해당 없음이 아니다');
     const view = (x) => x.cards('cellShape').map((el) => `${el.dataset.decoValue}:${el.getAttribute('aria-disabled')}:${el.dataset.lockReason}`);
     opened += ref.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT && el.getAttribute('aria-disabled') === 'false').length;
     for (const mode of ['locator', 'default']) {
-      const h = harness({ state: { ...O2, finderPatternId: finder, centralN7Emphasis: mode, cellShape: 'bevel' } });
+      const h = harness({ state: { ...O2, finderPatternId: finder, centralN7Emphasis: mode, cellShape: 'bevel' }, payload: O2_PAYLOAD });
       h.render();
       assert.equal(lastOf(h.calls.buildScene).centralN7Emphasis, mode, `${finder} ${mode}: 생산자 입력`);
       assert.deepEqual(view(h), view(ref), `${finder} ${mode}: 소비 표면이 없는데 카드가 강조에 따라 달라졌다`);
@@ -873,18 +1031,21 @@ test('③ 기본 상태에서는 어떤 타입도 생산자에 꾸미기 키를 
 // ── ④ fixture → 카드 열림 → 생산자 도달 → 끔 복귀 ─────────────────────────────
 
 function openShapeHarness(type) {
-  const probe = harness({ state: TYPE_STATES[type] });
+  // Y 는 제품 기본 «자동» 로케이터 — 스키마 기본 'off' 는 제품 화면이 아니고 측정 상태도 아니라 fixture 행으로도 안 열린다.
+  const autoLocatorY = type === 'Y';
+  const probe = harness({ state: TYPE_STATES[type], autoLocatorY });
   probe.render();
   const ctx = probe.c.current.deco.ctx;
   assert.ok(ctx, type + ': 렌더가 셀 모양 문맥을 current 에 안 남겼다');
-  return harness({ state: TYPE_STATES[type], allow: { ROWS: openAllCellRows(ctx) } });
+  return harness({ state: TYPE_STATES[type], allow: { ROWS: openAllCellRows(ctx) }, autoLocatorY });
 }
 
 /** K 는 손 조립 경로다 — 카드 클릭이 buildScene 옵션까지 가는가(값 하나로 판정, 심은 결함 비교용). */
 function shapeReachesProducer(type, source) {
-  const probe = harness({ state: TYPE_STATES[type], source });
+  const autoLocatorY = type === 'Y';
+  const probe = harness({ state: TYPE_STATES[type], source, autoLocatorY });
   probe.render();
-  const h = harness({ state: TYPE_STATES[type], source, allow: { ROWS: openAllCellRows(probe.c.current.deco.ctx) } });
+  const h = harness({ state: TYPE_STATES[type], source, allow: { ROWS: openAllCellRows(probe.c.current.deco.ctx) }, autoLocatorY });
   h.render();
   h.click('cellShape', 'round');
   const opts = lastOf(type === 'Y' ? h.calls.buildSceneY : h.calls.buildScene);
