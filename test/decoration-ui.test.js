@@ -11,6 +11,7 @@
  *      자리 · ECC 가 측정 구성(cell-shape CELL_SHAPE_MEASURED_CONFIG — A · K · G 자동 코너 마커 · 사괘 없음 · ECC H)과 다르면
  *      표 키가 같아도 전부 잠기고, 매퍼가 사괘를 떨군 조합은 열린 채다(2026-09-27). 사유는 반사실이다 — 측정 구성에서
  *      열리던 카드만 «자리 · ECC 탓»(seat-config g1209 · ecc-level g1210), 측정 구성에서도 잠기던 카드는 그 사유 그대로.
+ *      ECC 탓은 실현 조건까지 참일 때만이다(2026-09-28) — auto 가 M 으로 내려간 길이(같은 표 키에 H 가 안 들어감)는 g1162.
  *      실효 검출 강조(2026-09-27)도 같은 규칙이다 — 생산자에 넘어간 강조가 측정(O/A/K 'all' · Y 미전달)과 다른 그림이면
  *      잠기고(detector-emphasis g1211), 강조를 소비하는 표면이 없으면 무엇을 골라도 강조로는 안 잠긴다. Y 는 고급 화면에서만 넘긴다.
  *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats) · 강조 'all'. O 는 안쪽 «없음»(실효 타입 O 의
@@ -65,7 +66,7 @@ import {
 } from '../src/generator-h-qr.js';
 import {
   sceneOptionsForOA, centralN7FamilyForType, centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced,
-  centralBeaconEncoderOptions, encodeOptionsForY, detectorEmphasisEquivalents,
+  centralBeaconEncoderOptions, encodeOptionsForY, detectorEmphasisEquivalents, eccLevelsAtTableKey,
 } from '../src/generator-render-config.js';
 import { daehanPatternId, isDaehanFinderPatternId } from '../src/finder-daehan.js';
 import { CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId } from '../src/finder-selection.js';
@@ -192,7 +193,7 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
     hPreviewOptions: (state, options = {}) => hPreviewOptions(state, { allow: c.decorationAllow(), ...options }),
     hMaskLuminance, encode, encodeA, encodeK, encodeY, encodeH, decodeH, sceneOptionsForOA, centralN7FamilyForType,
     centralN7EmphasisAppliesTo, detectorEmphasisRequiresAdvanced, centralBeaconEncoderOptions, encodeOptionsForY,
-    detectorEmphasisEquivalents,
+    detectorEmphasisEquivalents, eccLevelsAtTableKey,
     daehanPatternId, isDaehanFinderPatternId, CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId,
     isCentralMarkerN7FinderPatternId, centralMarkerN7FamilyForType, CENTRAL_N7_FINDER_PATTERN_ID,
     LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_CELL_SURFACE_V0, isCellSurfaceLocatorProfileY, hasCenterQrSlot,
@@ -566,8 +567,11 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
   const reasons = (h) => nonDefault(h).map((el) => el.dataset.lockReason);
   // O 는 버전을 V2 로 고정한다 — 표 행이 있는 버전이고, 사괘 · ECC 를 바꿔도 같은 버전에 머물러 표 키가 같다(대조군).
   const O2 = { ...TYPE_STATES.O, versionO: 2 };
-  // A v1 은 표 행이 없는 버전이다(행은 A v0 뿐) — 측정 구성이어도 잠기니 «자리 탓» 이 아니라 미확인 · 설계 잠금이어야 한다.
-  const A1 = { ...TYPE_STATES.A, versionA: 1, cellBevel: 1.4 };
+  // 표 행이 없는 버전 — 측정 구성이어도 잠기니 «자리 탓» 이 아니라 미확인 · 설계 잠금이어야 한다. 2026-09-28 길이 축 표부터 A v1 ·
+  // v2 에 행이 생겨(옛 «A v1 은 행 없음» 은 틀려졌다) K v1 로 옮겼다 — 그 전제는 아래에서 표로 확인한다(행이 생기면 다른 버전으로).
+  const K1 = { ...TYPE_STATES.K, versionK: 1, cellBevel: 1.4 };
+  assert.equal(DEFAULT_ALLOW.ROWS.filter((r) => r.table === 'oak' && r.type === 'K' && r.version === 1).length, 0,
+    'K v1 에 행이 생겼다 — «행 없는 버전» 대조군을 행이 없는 다른 버전으로 옮길 것');
   // 제품 기본 O(자동 안쪽 o-cm → 실효 타입 G)도 V2 로 고정한다 — 제품 첫 화면의 표면이라 사유 문구의 참/거짓을 UI 경로로 잰다
   // (2026-09-27 검토 minor). 자동 버전에서는 사괘 · ECC 가 재인코딩으로 버전을 바꿔 표 키가 달라질 수 있다(대조군이 아니다).
   const G2 = { ...O_AUTO_STATE, versionO: 2 };
@@ -582,10 +586,10 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     ['G2(O 자동) ECC L', G2, { ...G2, eccLevel: 'L' }, 'ecc-level', 'g1210'],
     ['A ECC L', TYPE_STATES.A, { ...TYPE_STATES.A, eccLevel: 'L' }, 'ecc-level', 'g1210'],
     ['K ECC M', TYPE_STATES.K, { ...TYPE_STATES.K, eccLevel: 'M' }, 'ecc-level', 'g1210'],
-    ['A1 바깥 없음 · 돌출 bevel(행 없는 버전)', A1, { ...A1, outerSeat: 'none' }, 'seat-config', 'g1209'],
+    ['K1 바깥 없음 · 돌출 bevel(행 없는 버전)', K1, { ...K1, outerSeat: 'none' }, 'seat-config', 'g1209'],
     ['K 바깥 없음 · 돌출 bevel', { ...TYPE_STATES.K, cellBevel: 1.4 }, { ...TYPE_STATES.K, cellBevel: 1.4, outerSeat: 'none' }, 'seat-config', 'g1209'],
   ];
-  const seen = { axis: 0, kept: 0 };
+  const seen = { axis: 0, kept: 0, keptUnmeasured: 0 };
   const axisBy = {};
   for (const [name, baseState, state, reason, key] of pairs) {
     const base = harness({ state: { ...baseState, cellShape: 'bevel' } });
@@ -605,7 +609,7 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
       // 흰 판(하네스 기본)이라 대조군의 exposed-gap 은 없다 — 있으면 측정 구성까지 달라진 쪽은 미확인이어야 한다.
       const want = baseOpen ? reason : (b.dataset.lockReason === 'exposed-gap' ? 'unmeasured' : b.dataset.lockReason);
       assert.equal(el.dataset.lockReason, want, `${name} ${el.dataset.decoValue}: 대조군 ${baseOpen ? '열림' : b.dataset.lockReason}`);
-      if (baseOpen) { axis += 1; seen.axis += 1; } else seen.kept += 1;
+      if (baseOpen) { axis += 1; seen.axis += 1; } else { seen.kept += 1; if (el.dataset.lockReason === 'unmeasured') seen.keptUnmeasured += 1; }
     });
     assert.equal(h.$('cellShapeLockHint').textContent.includes(key), axis > 0, `${name}: 사유 줄의 ${key} 는 측정 구성에서 열린 카드가 있을 때만`);
     assert.equal('cellShape' in lastOf(h.calls.buildScene), false, name + ': 잠겼는데 모양이 생산자에 갔다');
@@ -613,7 +617,8 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     axisBy[name] = axis;
   }
   // 판별력: 두 갈래가 모두 났다 — «축 사유» 카드와 «대조군 사유 유지» 카드(돌출 bevel · 행 없는 버전).
-  assert.ok(seen.axis > 0 && seen.kept > 0, JSON.stringify(seen));
+  // «대조군 사유 유지» 에 행 없는 버전의 미확인이 실제로 있다(돌출 bevel 설계 잠금만으로 초록이 되지 않게).
+  assert.ok(seen.axis > 0 && seen.kept > 0 && seen.keptUnmeasured > 0, JSON.stringify(seen));
   // G(제품 기본 O) 쌍은 축 사유 카드가 실제로 났다 — 대조군이 전부 잠긴 쌍이면 사유 문구를 재지 못한다.
   for (const name of Object.keys(axisBy).filter((n) => n.startsWith('G2'))) {
     assert.ok(axisBy[name] > 0, `${name}: 측정 구성(G2)에서 열린 카드가 없다 — 사유 문구를 재지 못한다 ${JSON.stringify(axisBy)}`);
@@ -642,6 +647,77 @@ test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전�
     assert.ok(open.length > 0, name + ': 열린 카드가 없다 — «열린 채» 를 재지 못한다(표 행이 있는 문맥이 아니다)');
     assert.equal(lastOf(h.calls.buildScene).cellShape && lastOf(h.calls.buildScene).cellShape.kind, 'bevel', name + ': 열린 bevel 이 생산자까지 안 갔다');
   }
+});
+
+test('② ECC 사유의 실현 조건(제품 경로 · auto 사다리): auto 가 M 으로 내려간 길이(G 80 · A 85 · K 120 · Y 114 B)는 «ECC 탓»(g1210)이 아니라 미확인(g1162) · 같은 버전에서 H 로도 들어가는 길이의 수동 M 은 g1210', (t) => {
+  // 왜(DESIGN_002 §4.4): auto-M 길이는 그 버전의 표 키가 H 행과 같아 hit 가 나지만 그 버전에 H 로는 안 들어간다 — «ECC 를 H 로» 는
+  // 따를 수 없는 안내다. 사유는 index.html 렌더(cellShapeDecoFor)가 렌더에 쓴 인코더 · 페이로드 · 옵션으로 유도한 실현 조건
+  // (generator-render-config eccLevelsAtTableKey)에서 나온다. ECC 는 제품 auto 사다리(encodeWithEcc 실물)가 고른다.
+  const nonDefault = (h) => h.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT);
+  const lenText = (L) => 'https://tl.estre.so/' + 'x'.repeat(L - 20);
+  // Y 는 제품 auto 가 로케이터 · 버전을 사다리(generator-auto-y resolveAutoY — 제품 함수)로 고른다. 하네스는 버전 유도를 스텁하므로
+  // 그 사다리 값을 넣는다(바깥 QR 에서는 index.html effectiveVersionYForEncode 의 두 갈래가 같은 답이다 — 그 주석).
+  const yAuto = (L) => resolveAutoY({ payloadBytes: L, tones: 3, eccLevel: 'auto' });
+  const yState = (L) => ({ ...TYPE_STATES.Y, locatorProfileY: yAuto(L).locatorProfileY });
+  // Y 는 제품 기본(투명 · 판 없음 — 실효 틈 unknown)으로 그린다: 그 문맥에 n25 행이 있다(흰 틈 행은 흰 평탄화에서 잰 문맥이다).
+  const make = (state, L, isY) => {
+    const h = harness({ state: { ...state, cellShape: 'bevel' }, payload: lenText(L), quietColor: isY ? 'none' : 'white' });
+    if (isY) h.c.effectiveVersionYForEncode = () => yAuto(L).version;
+    h.render();
+    return h;
+  };
+  /** 카드가 «측정 구성(H · 같은 표 키)이면 열리는가» — 반사실 문맥(렌더 문맥의 ECC 만 H). */
+  const opensAtH = (h, value) => resolveCellShapeSpec({ ...h.state, cellShape: value }, { ...h.c.current.deco.ctx, eccLevel: 'H' }).spec !== null;
+  let hitAutoM = 0;
+  for (const [name, state, L, isY] of [
+    ['G 80 B(O 자동 = G)', O_AUTO_STATE, 80, false], ['A 85 B', TYPE_STATES.A, 85, false], ['K 120 B', TYPE_STATES.K, 120, false],
+    ['Y 114 B', yState(114), 114, true],
+  ]) {
+    const h = make(state, L, isY);
+    const { encoded, deco } = h.c.current;
+    assert.equal(encoded.eccLevel, 'M', `${name}: 제품 auto 가 M 을 고르지 않았다 — auto-M 길이가 아니다`);
+    assert.ok(Array.isArray(deco.ctx.eccLevelsAtTableKey) && !deco.ctx.eccLevelsAtTableKey.includes('H'),
+      `${name}: 같은 표 키에서 H 가 들어간다고 한다 ${JSON.stringify(deco.ctx.eccLevelsAtTableKey)}`);
+    let hits = 0;
+    for (const el of nonDefault(h)) {
+      assert.notEqual(el.dataset.lockReason, 'ecc-level', `${name} ${el.dataset.decoValue}: 따를 수 없는 «ECC 탓» 안내`);
+      if (opensAtH(h, el.dataset.decoValue)) {
+        hits += 1;
+        assert.equal(el.dataset.lockReason, 'unmeasured', `${name} ${el.dataset.decoValue}: 표 키 hit 인데 미확인이 아니다`);
+        assert.equal(el.dataset.lockKey, 'g1162');
+      }
+    }
+    assert.equal(h.$('cellShapeLockHint').textContent.includes('g1210'), false, `${name}: 사유 줄에 g1210`);
+    t.diagnostic(`${name}: v${encoded.version}${isY ? ' n' + encoded.n : ''} M · 표 키 hit 카드 ${hits}${hits ? '' : '(행 없음 — 이 길이는 판별력 없음)'}`);
+    hitAutoM += hits;
+  }
+  // 판별력 — auto-M 길이 중 표 키 hit(측정 구성이면 열리는 카드)가 실제로 있다(A v2 · Y n25 — 조건 줄을 지우면 여기가 g1210 으로 빨개진다).
+  assert.ok(hitAutoM > 0, 'auto-M 길이에서 표 키 hit 카드가 없다 — 실현 조건을 재지 못한다');
+
+  // 대조 — 같은 버전에서 H 로도 들어가는 길이(밴드 최대)의 수동 M: 측정 구성(auto = H)에서 열린 카드는 g1210 이 참이다.
+  let axis = 0;
+  for (const [name, baseState, L, isY] of [
+    ['A 78 B(A v2)', { ...TYPE_STATES.A, versionA: 2 }, 78, false], ['Y 93 B(n25 v0tr)', yState(93), 93, true],
+  ]) {
+    const base = make(baseState, L, isY);
+    const h = make({ ...baseState, eccLevel: 'M' }, L, isY);
+    assert.equal(base.c.current.encoded.eccLevel, 'H', `${name}: 대조군이 H 가 아니다`);
+    assert.equal(h.c.current.encoded.eccLevel, 'M');
+    assert.deepEqual(cellShapeAllowCtx(h.c.current.deco.ctx), cellShapeAllowCtx(base.c.current.deco.ctx), `${name}: 표 키가 달라졌다 — 대조군이 아니다`);
+    assert.ok(h.c.current.deco.ctx.eccLevelsAtTableKey.includes('H'), `${name}: 같은 표 키에서 H 가 안 들어간다고 한다`);
+    const baseCards = nonDefault(base);
+    let caseAxis = 0;
+    nonDefault(h).forEach((el, i) => {
+      const b = baseCards[i];
+      if (b.getAttribute('aria-disabled') !== 'false') return;
+      assert.equal(el.dataset.lockReason, 'ecc-level', `${name} ${el.dataset.decoValue}: 측정 구성에서 열리는데 «ECC 탓» 이 아니다`);
+      caseAxis += 1;
+    });
+    assert.ok(caseAxis > 0, `${name}: 측정 구성(auto = H)에서 열린 카드가 없다 — 대조군이 비었다`);
+    axis += caseAxis;
+    assert.ok(h.$('cellShapeLockHint').textContent.includes('g1210'), `${name}: 사유 줄에 g1210 이 없다`);
+  }
+  assert.ok(axis > 0, '수동 M 대조에서 «ECC 탓» 카드가 없다 — 대조군이 비었다');
 });
 
 /**

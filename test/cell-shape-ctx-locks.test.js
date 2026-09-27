@@ -22,6 +22,9 @@
 //      타입은 측정 구성 값이 선언과 같고(강조는 «선언 값이 같은 그림 집합에 드는가») (3) 하네스 구조 잠금 판정(lib-ctx
 //      cellShapeProductLock)이 키 드리프트 없이 제품 cellShapeStructuralLock 과 같은 답을 낸다. 선언은 «그 하네스가 잰 구성» 의
 //      주장이라 주석 · git diff 가 아니라 하네스 조립으로 잰다(선언 · 하네스 한쪽만 바뀌면 빨강).
+//      2026-09-28(DESIGN_002 §4.3 · §6 과제 7): 격자에 하네스가 이 트리에서 유도한 **길이 격자**(tl-decode --grid l6 --l6-lengths
+//      --dry 의 lenGrid.cases — 손 목록 아님)와 표의 O v3(daehan) 계열을 더하고, 판별력 단언 «허용표 셀 행의 (타입 · 버전) · Y
+//      (레이아웃 · n) 마다 선언과 대조한 케이스 ≥ 1» 을 둔다 — 새 버전 행의 선언 대조가 19 B 한 점뿐이던 공백.
 //   ⑧ (TL_L0_DIR) 하네스의 **실제** 처치 주입 경로 — tl-decode 를 처치 팔 하나로 하위 프로세스 실행해, 처치 행이 render-error 없이
 //      allowShape 또는 allowWithheld 를 받는지 본다. ⑥ 은 --treatments none 이라 이 경로를 안 지난다. 왜 따로 재나(2026-09-27
 //      실측): 하네스가 제품 문맥에 측정 구성 키(detectorEmphasis)를 안 실으면 lib-ctx 가 «키 드리프트» 로 던지는데, tl-decode
@@ -50,6 +53,7 @@ import { buildSceneY, Y_SEAM_ADJACENT_MODES } from '../src/sceneY.js';
 import { detectorEmphasisEquivalents, encodeOptionsForY } from '../src/generator-render-config.js';
 import { makeCustomPalette } from '../src/palette-hue.js';
 import * as CELL_SHAPE_MODULE from '../src/cell-shape.js';
+import * as ALLOW from '../src/cell-shape-allow.js';
 import {
   CELL_GAP_GRADES, CELL_GAP_QUIET_COLORS, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_MEASURED_CONFIG,
   CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_SHAPE_REQUIRED_CTX_KEYS, Y_SEAM_ADJACENT_PRODUCT,
@@ -232,6 +236,7 @@ const FAM = {
   'a-n7': { type: 'A' },
   'k-n7': { type: 'K' },
   'g-n7': { type: 'G' }, // L6g — 제품 기본 O(자동 안쪽 o-cm = 실효 타입 G) · 생성기 기본 파인더(중앙 n7)
+  'o-daehan': { type: 'O', finder: 'oak-daehan-k10' }, // L6 rest — 표의 O v3 행(daehan 은 19 B 에서 V3). ⑦ 표 덮음 자가 요구한다
 };
 const GRADE = { white: {}, black: { bgMode: 'black' }, unknown: { quietMode: 'none' } };
 /** 하네스 L6_GRADES.overY — Y 는 안전영역 판이 없어 «흰» 등급을 흰 평탄화로 조립한다. */
@@ -289,11 +294,31 @@ function runHarness(args) {
   return new Promise((resolveP) => {
     const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let err = '';
+    let out = '';
     child.stderr.on('data', (d) => { err += d; });
-    child.stdout.on('data', () => {});
-    child.on('close', (code) => resolveP({ code, err }));
+    child.stdout.on('data', (d) => { out += d; });
+    child.on('close', (code) => resolveP({ code, err, out }));
   });
 }
+
+/**
+ * ⑦ 의 길이 케이스 — 하네스가 **이 트리에서 스스로 유도한** slate 길이 격자(tl-decode `--grid l6 --l6-lengths --dry` 의 lenGrid.cases).
+ * 손 목록이 아니다: 계열 · 밴드(제품 인코더 탐침) · 길이 · 본문 · 조립 명세 c 가 모두 하네스에서 온다(DESIGN_002 §4.3 — 새 버전 행의
+ * 선언 ↔ 하네스 조립 대조가 19 B 한 점뿐이던 공백). 하네스의 계획 단언(구성 4 키 — check.ok)도 같이 받아 둔다.
+ */
+async function l0LenCases() {
+  const r = await runHarness([join(L0, 'tl-decode.mjs'), '--tree', ROOT, '--grid', 'l6', '--l6-lengths', '--dry']);
+  assert.equal(r.code, 0, `하네스 길이 격자 --dry 가 실패했다(exit ${r.code}): ${r.err.slice(-400)}`);
+  const plan = JSON.parse(r.out.trim().split('\n').pop());
+  assert.ok(plan.lenGrid && Array.isArray(plan.lenGrid.cases) && plan.lenGrid.cases.length > 0, '하네스 --dry 에 lenGrid.cases 가 없다');
+  assert.equal(plan.lenGrid.planOk, true, `하네스 계획 단언(구성 4 키 · 기대 밴드)이 이 트리에서 어긋났다: ${JSON.stringify(plan.lenGrid.planMiss).slice(0, 400)}`);
+  return plan.lenGrid.cases.map((cs) => {
+    assert.ok(cs.c && typeof cs.c.payload === 'string' && cs.c.payload.length === cs.len, `${cs.id}: 조립 명세(c · 본문)가 없다`);
+    return { id: cs.id, c: cs.c };
+  });
+}
+/** 표 덮음 키 — (타입 · 버전) · Y 는 (레이아웃 · n). 표 행과 ⑦ 문맥에 같은 규칙. */
+const coverKeyOf = (x) => (x.table === 'y' ? `Y:${x.cellSurfaceLayout}:n${x.nBand}` : `${x.type}:v${x.version}`);
 
 test('⑥ L0 하네스 allowCtx 유도 ≡ 제품 cellShapeCtx (대표 케이스 격자, 표 키마다)', { timeout: 115_000 }, async (t) => {
   if (!L0) { t.skip(SKIP_REASON); return; }
@@ -373,9 +398,9 @@ const measuredSame = (k, ctxValue, declared) => (k === 'detectorEmphasis'
   ? typeof ctxValue === 'string' && ctxValue.split('+').includes(declared)
   : ctxValue === declared);
 
-test('⑦ 측정 구성 선언 ≡ L0 하네스 조립 — 조립 sceneOpts 로 유도한 문맥이 완전하고 선언과 같으며, 하네스 구조 잠금 판정이 키 드리프트 없이 답한다', async (t) => {
+test('⑦ 측정 구성 선언 ≡ L0 하네스 조립 — 조립 sceneOpts 로 유도한 문맥이 완전하고 선언과 같으며, 하네스 구조 잠금 판정이 키 드리프트 없이 답한다 · 길이 격자 포함 · 표의 (타입 · 버전/n) 마다 케이스', { timeout: 115_000 }, async (t) => {
   if (!L0) { t.skip(SKIP_REASON); return; }
-  for (const f of ['lib-assemble.mjs', 'lib-tree.mjs', 'lib-ctx.mjs', 'lib-color-samples.mjs']) {
+  for (const f of ['lib-assemble.mjs', 'lib-tree.mjs', 'lib-ctx.mjs', 'lib-color-samples.mjs', 'tl-decode.mjs']) {
     assert.ok(existsSync(join(L0, f)), `TL_L0_DIR 이 설정됐는데 하네스 파일이 없다(skip 아님 — 경로 오류): ${f}`);
   }
   const { loadModules, assemble } = await import(pathToFileURL(join(L0, 'lib-assemble.mjs')).href);
@@ -385,8 +410,14 @@ test('⑦ 측정 구성 선언 ≡ L0 하네스 조립 — 조립 sceneOpts 로 
   const declaredSeen = new Set();
   const undeclaredSeen = new Set();
   const structural = {};
-  for (const id of await l0CaseIds()) {
-    const c = caseSpec(id);
+  const covered = new Set();
+  // 격자 = ⑥ 대표 케이스(19 B) + 표의 O v3(daehan) 계열 + 하네스가 유도한 길이 격자(2026-09-28 — DESIGN_002 §4.3 · §6 과제 7).
+  const grid = [
+    ...(await l0CaseIds()).map((id) => ({ id, c: caseSpec(id) })),
+    { id: 'o-daehan', c: caseSpec('o-daehan') },
+    ...(await l0LenCases()),
+  ];
+  for (const { id, c } of grid) {
     const a = assemble(M, c);
     const base = OAK_BASE[c.type];
     // 하네스가 제품 문맥에 실어야 하는 렌더 값 — 안전영역 판 색 + 조립 sceneOpts(생산자에 실제로 넘긴 옵션)의 실효 검출 강조.
@@ -408,10 +439,17 @@ test('⑦ 측정 구성 선언 ≡ L0 하네스 조립 — 조립 sceneOpts 로 
     const lock = cellShapeProductLock(CELL_SHAPE_MODULE, { table: ctx.table, ctx: cellShapeAllowCtx(ctx), resolverCtx: ctx, kind: 'round', param: 0.7 });
     assert.equal(lock, cellShapeStructuralLock(ctx.table, 'round', 0.7, ctx), `${id}: 하네스 구조 잠금 판정 ≠ 제품 구조 잠금`);
     if (lock) structural[lock] = (structural[lock] ?? 0) + 1;
+    if (declared && lock === null) covered.add(coverKeyOf(ctx));
   }
   // 판별력 — 선언이 있는 타입 전부가 격자에 있다(선언을 더하면 그 타입 케이스도 격자에 더할 것).
   assert.deepEqual([...declaredSeen].sort(), Object.keys(CELL_SHAPE_MEASURED_CONFIG).sort(), '격자가 측정 구성 선언 타입을 다 덮는다');
-  t.diagnostic(`선언 대조 ${[...declaredSeen].join(',')} · 선언 없음 ${[...undeclaredSeen].join(',') || '-'} · 구조 잠금 ${JSON.stringify(structural)}`);
+  // 판별력 — 허용표 셀 행의 (타입 · 버전) · Y (레이아웃 · n) 마다 선언과 대조한 케이스가 하나 이상(측정 구성 선언 · 구조 잠금 없음).
+  // 새 버전 · n 의 행이 생겼는데 이 격자가 그 버전을 조립하지 않으면 선언이 그 행을 잰 구성이라는 주장을 이 자가 못 잰다.
+  const tableKeys = new Set(ALLOW.ROWS.filter((r) => r.table === 'oak' || r.table === 'y').map(coverKeyOf));
+  const missing = [...tableKeys].filter((k) => !covered.has(k)).sort();
+  assert.deepEqual(missing, [], `표 행이 있는 (타입 · 버전/n) 중 ⑦ 케이스가 없는 것 — 격자(하네스 길이 격자 · 계열)를 넓혀라. 덮음 ${[...covered].sort().join(',')}`);
+  t.diagnostic(`선언 대조 ${[...declaredSeen].join(',')} · 선언 없음 ${[...undeclaredSeen].join(',') || '-'} · 구조 잠금 ${JSON.stringify(structural)} · `
+    + `케이스 ${grid.length} · 표 키 덮음 ${[...tableKeys].sort().join(',')}`);
 });
 
 // ── ⑧ 하네스 실제 처치 주입 경로 (TL_L0_DIR) ──────────────────────────────

@@ -8881,7 +8881,7 @@ import {
 } from './src/finder-zone-ui.js';
 import {
   centralN7EmphasisAppliesTo, centralN7FamilyForType, detectorEmphasisEquivalents, detectorEmphasisRequiresAdvanced,
-  encodeOptionsForY,
+  eccLevelsAtTableKey, encodeOptionsForY,
   sceneOptionsForOA, centralBeaconEncoderOptions,
 } from './src/generator-render-config.js';
 import {
@@ -8996,7 +8996,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-27.01';
+const GENERATOR_BUILD = '2026-09-28.01';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -10902,20 +10902,29 @@ function basePaletteOf(name) {
 /**
  * 셀 모양 spec — O/A/K(+C/G/V) · Y 렌더가 **인코딩 뒤 · 생산자 옵션 조립 뒤에** 부른다(문맥이 실제 인코딩과 생산자에 넘길
  * 옵션에서 유도된다 — cellShapeCtx). 호출자는 받은 spec 을 그 옵션 객체에 `cellShape` 로 싣는다(null 이면 키 없음).
- * 렌더 값 두 개:
+ * 렌더 값 세 개:
  *   quietColor — 안전영역 결정(quietChoice — 이 렌더의 withQuietZone 이 같은 값을 굽는다) → 실효 틈 등급.
  *   detectorEmphasis — 실효 검출 강조: **생산자에 넘기는 그 옵션**(sceneOpts)의 강조 · 파인더 · 팔레트에서
  *     generator-render-config `detectorEmphasisEquivalents` 가 유도한다(규칙을 여기 다시 적지 않는다). 허용표 행은 측정 구성의
  *     강조(O/A/K 'all' · Y 미전달)에서 잰 사실이라 그림이 다르면 잠긴다(사유 detector-emphasis — 반사실일 때만).
+ *   eccLevelsAtTableKey — ECC 사유의 실현 조건: 같은 표 키에서 이 페이로드가 들어가는 ECC 레벨. **렌더가 쓴 그 인코더 · 페이로드 ·
+ *     옵션**(`source` = {fn, text, opts} — encodeOptsFor · cfg.text)으로 generator-render-config `eccLevelsAtTableKey` 가 유도한다.
+ *     측정 ECC(H)가 없으면 «ECC 탓» 은 따를 수 없는 안내라 사유가 unmeasured 로 떨어진다(DESIGN_002 §4.4 — auto-M 길이).
  * bevel 띠 클램프용 `avoid` 에는 안전영역 판 색을 넣는다(scene 배경은 생산자가 스스로 더한다 — scene.js).
- * `render` 는 syncDecorationUi 의 흰 판 반사실 문맥이 같은 렌더 값(강조)을 다시 쓰려고 돌려준다.
+ * `render` 는 syncDecorationUi 의 흰 판 반사실 문맥이 같은 렌더 값(강조 · ECC 실현 조건)을 다시 쓰려고 돌려준다.
+ * @param {object} encoded 실제 인코딩 결과
+ * @param {object} sceneOpts 생산자에 넘길 옵션
+ * @param {{fn: Function, text: string, opts: object}} source 이 렌더가 쓴 인코더 · 페이로드 · 옵션(encodeWithEcc 의 입력)
  * @returns {{ctx: object|null, spec: object|null, lockReason: string|null, render: object}}
  */
-function cellShapeDecoFor(encoded, sceneOpts) {
+function cellShapeDecoFor(encoded, sceneOpts, source) {
   const choice = quietChoice();
   const render = {
     quietColor: choice.color,
     detectorEmphasis: detectorEmphasisEquivalents(generatorState.type, encoded, sceneOpts),
+    eccLevelsAtTableKey: eccLevelsAtTableKey({
+      type: generatorState.type, state: generatorState, encodeFn: source.fn, text: source.text, encodeOpts: source.opts, encoded,
+    }),
   };
   const ctx = cellShapeCtx(generatorState.type, encoded, generatorState, render);
   const resolved = ctx ? resolveCellShapeSpec(generatorState, ctx, decorationAllow()) : { spec: null };
@@ -17008,7 +17017,7 @@ function renderTypeO(cfg) {
   // buildScene 에 넘기는 **이 옵션 객체**에서 유도된다(cellShapeDecoFor). spec 은 sceneOptionsForOA 와 같은 규칙(null 이면
   // 키 없음)으로 그 객체에 싣는다 — 옵션 조립은 sceneOptionsForOA 한 번이고 cellShape 는 거기서도 마지막 키다.
   const sceneOpts = sceneOptsForOA(sceneCfg, centerQr, null);
-  const deco = cellShapeDecoFor(encoded, sceneOpts);
+  const deco = cellShapeDecoFor(encoded, sceneOpts, { fn, text: cfg.text, opts });
   if (deco.spec) sceneOpts.cellShape = deco.spec;
   const scene = buildScene(encoded, sceneOpts);
 
@@ -17053,7 +17062,7 @@ function renderTypeA(cfg) {
   // renderTypeO 와 같은 이유로 scene 옵션을 붙잡는다 (내보내기 «여백 없음» 재생성용).
   // 셀 모양은 **인코딩 · 생산자 옵션 조립 뒤에** 푼다 — renderTypeO 와 같다(실효 검출 강조를 이 옵션 객체에서 읽는다).
   const sceneOpts = sceneOptsForOA(sceneCfg, centerQr, null);
-  const deco = cellShapeDecoFor(encoded, sceneOpts);
+  const deco = cellShapeDecoFor(encoded, sceneOpts, { fn, text: cfg.text, opts });
   if (deco.spec) sceneOpts.cellShape = deco.spec;
   const scene = buildScene(encoded, sceneOpts);
 
@@ -17136,7 +17145,7 @@ function renderTypeK(cfg) {
   //    손 조립에 싣는다. 이 자리는 finderPatternId 를 빠뜨린 전례가 있는 손 조립이라, 빠지면 «K 에서만 카드가
   //    켜지는데 안 먹는» 상태가 된다 — test/decoration-ui.test.js 가 K 경로의 buildScene 옵션을 가로채 잰다.
   //    실효 검출 강조는 위에서 조립을 끝낸 **이 옵션 객체**(강조 · 그린 파인더 · 팔레트)에서 읽는다(cellShapeDecoFor).
-  const deco = cellShapeDecoFor(encoded, sceneOpts);
+  const deco = cellShapeDecoFor(encoded, sceneOpts, { fn, text: cfg.text, opts });
   if (deco.spec) sceneOpts.cellShape = deco.spec;
   const scene = buildScene(encoded, sceneOpts);
 
@@ -17219,7 +17228,7 @@ function renderTypeY(cfg) {
   // (Y_SEAM_ADJACENT_PRODUCT)이라 spec 에 싣지 않는다. 윈도 β · 슬롯 · 2톤은 resolver 구조 잠금이 막는다.
   // 실효 검출 강조는 위 게이트를 지난 **이 옵션 객체**에서 읽는다 — 일반 화면은 강조를 안 실어(라이브러리 기본) 측정과 같고,
   // 고급 · 시험판에서 실은 값이 측정과 다른 그림이면 잠긴다.
-  const deco = cellShapeDecoFor(encoded, sceneOpts);
+  const deco = cellShapeDecoFor(encoded, sceneOpts, { fn, text: cfg.text, opts });
   if (deco.spec) sceneOpts.cellShape = deco.spec;
   const scene = buildSceneY(encoded, sceneOpts);
 

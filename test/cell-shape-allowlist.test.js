@@ -32,7 +32,9 @@ import { encodeY } from '../src/encodeY.js';
 import { encodeH } from '../src/h-codec.js';
 import { getPreset, PRESETS } from '../src/luminance.js';
 import { makeCustomPalette } from '../src/palette-hue.js';
-import { centralBeaconEncoderOptions, detectorEmphasisEquivalents, encodeOptionsForY } from '../src/generator-render-config.js';
+import {
+  centralBeaconEncoderOptions, detectorEmphasisEquivalents, eccLevelsAtTableKey, encodeOptionsForY,
+} from '../src/generator-render-config.js';
 import {
   CELL_SHAPES, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_LOCK_REASONS,
   CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_SHAPE_PARAMS, CELL_SHAPE_STRUCTURAL_LOCK_REASONS, cellShapeAllowCtx, cellShapeCtx, cellShapeStructuralLock,
@@ -123,12 +125,19 @@ const W = { quietColor: 'white' };
  * (FRESH.centralN7Emphasis)를 생산자에 싣고 Y 일반 화면은 안 싣는다(renderTypeY 고급 게이트) — 에서 제품 유도 함수
  * (generator-render-config `detectorEmphasisEquivalents`)가 낸 값이다. 강조 축 자체는 이 자가 아니라
  * cell-shape-measured-config(유닛 · 실제 렌더 대조) · decoration-ui(제품 경로)가 잰다 — 여기서는 문맥을 완전하게 채운다.
+ * `source`({fn, opts} — 인코더와 eccLevel 뺀 옵션)를 주면 ECC 사유의 실현 조건(보조 필드 eccLevelsAtTableKey)도 제품 유도 함수
+ * (generator-render-config `eccLevelsAtTableKey`)로 싣는다 — ECC 가 측정(H)과 다른 문맥은 그것이 있어야 사유가 ecc-level 이다
+ * (2026-09-28, DESIGN_002 §4.4: 같은 표 키에서 H 로 안 들어가면 unmeasured). ECC 가 H 인 문맥은 그 필드가 판정에 안 쓰인다.
  */
-function productCtx(type, enc, state, render) {
+function productCtx(type, enc, state, render, source) {
   const sceneOpts = { palette: SLATE, finderPatternId: state.finderPatternId };
   if (type !== 'Y') sceneOpts.centralN7Emphasis = state.centralN7Emphasis;
-  return cellShapeCtx(type, enc, state, { ...render, detectorEmphasis: detectorEmphasisEquivalents(type, enc, sceneOpts) });
+  const ecc = source
+    ? { eccLevelsAtTableKey: eccLevelsAtTableKey({ type, state, encodeFn: source.fn, text: PAYLOAD, encodeOpts: source.opts, encoded: enc }) }
+    : {};
+  return cellShapeCtx(type, enc, state, { ...render, detectorEmphasis: detectorEmphasisEquivalents(type, enc, sceneOpts), ...ecc });
 }
+const yOpts = (locatorProfileY) => encodeOptionsForY({ tone: 3, fallback: { mode: 'corner', corner: 'TL' }, locatorProfileY });
 /**
  * 이름 → {ctx, expect, config?}. expect = 설계 잠금 기대(설계 §3.1 · §3.2 1차 잠금 목록 — 선택 → 사유|null),
  * config = 측정 구성 불일치 사유(모든 모양 — 단 설계 잠금이 먼저다: 영구 잠금을 «자리 · ECC 탓» 으로 안내하지 않는다).
@@ -156,10 +165,12 @@ const CTXS = {
   'A n7 바깥 없음': { ctx: productCtx('A', encodeA(PAYLOAD, { ...N7_OPTS, ...H }), { ...FRESH, type: 'A' }, W), expect: () => null, config: 'seat-config' },
   'K pinwheel 바깥 없음': { ctx: productCtx('K', encodeK(PAYLOAD, H), { ...FRESH, type: 'K', finderPatternId: PINWHEEL }, { quietColor: 'black' }), expect: () => null, config: 'seat-config' },
   'O n7 사괘': { ctx: productCtx('O', encode(PAYLOAD, { ...N7_OPTS, sagoae: true, ...H }), { ...FRESH, deepSeat: 'sagoae' }, W), expect: () => null, config: 'seat-config' },
-  'O n7 ECC M': { ctx: productCtx('O', encode(PAYLOAD, { ...N7_OPTS, eccLevel: 'M' }), FRESH, W), expect: () => null, config: 'ecc-level' },
-  'O 불스아이 ECC M': { ctx: productCtx('O', encode(PAYLOAD, { eccLevel: 'M' }), { ...FRESH, finderPatternId: 'bullseye' }, W), expect: (k) => (k === 'dot' ? 'bullseye-dot' : null), config: 'ecc-level' },
-  'Y v0 3톤 ECC M': { ctx: productCtx('Y', yEnc('cell-surface-v0', 3, undefined, 'M'), { ...FRESH, bgMode: 'white' }, { quietColor: 'none' }), expect: () => null, config: 'ecc-level' },
-  'Y hex-frame 3톤 ECC M': { ctx: productCtx('Y', yEnc('hex-frame-v1', 3, undefined, 'M'), { ...FRESH, bgMode: 'white', locatorProfileY: 'hex-frame-v1' }, { quietColor: 'none' }), expect: (k) => (k === 'gap' || k === 'dot' ? 'y-hex-frame-gap-dot' : null), config: 'ecc-level' },
+  // ECC M — 19 B 는 같은 버전에서 H 로도 들어간다(실현 조건 참 — 제품 유도 함수로 싣는다). 실현 불가(auto-M 길이)는
+  // cell-shape-measured-config ⓗ · decoration-ui 가 잰다.
+  'O n7 ECC M': { ctx: productCtx('O', encode(PAYLOAD, { ...N7_OPTS, eccLevel: 'M' }), FRESH, W, { fn: encode, opts: N7_OPTS }), expect: () => null, config: 'ecc-level' },
+  'O 불스아이 ECC M': { ctx: productCtx('O', encode(PAYLOAD, { eccLevel: 'M' }), { ...FRESH, finderPatternId: 'bullseye' }, W, { fn: encode, opts: {} }), expect: (k) => (k === 'dot' ? 'bullseye-dot' : null), config: 'ecc-level' },
+  'Y v0 3톤 ECC M': { ctx: productCtx('Y', yEnc('cell-surface-v0', 3, undefined, 'M'), { ...FRESH, bgMode: 'white' }, { quietColor: 'none' }, { fn: encodeY, opts: yOpts('cell-surface-v0') }), expect: () => null, config: 'ecc-level' },
+  'Y hex-frame 3톤 ECC M': { ctx: productCtx('Y', yEnc('hex-frame-v1', 3, undefined, 'M'), { ...FRESH, bgMode: 'white', locatorProfileY: 'hex-frame-v1' }, { quietColor: 'none' }, { fn: encodeY, opts: yOpts('hex-frame-v1') }), expect: (k) => (k === 'gap' || k === 'dot' ? 'y-hex-frame-gap-dot' : null), config: 'ecc-level' },
   // 실효 검출 강조(2026-09-27) — 제품 상태의 강조만 바꾼다. 중앙 TL · 코너 마커 검출 셀은 'default' 가 측정('all')과 다른 그림이라
   // 잠기고(대상 아닌 핀휠이라도 k-cm 검출 셀이 있으면 강조가 그림을 바꾼다), 대상 아닌 중앙 · 검출 셀 없음(불스아이)은 «해당 없음»
   // 이라 강조로는 안 잠긴다(설계 잠금 dot 만).

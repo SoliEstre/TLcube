@@ -14,6 +14,8 @@ import {
 } from './finder-patterns.js';
 import { finderRenderKindOf } from './finder-render-kind.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
+import { ECC_NAME_BY_VALUE } from './formatinfo.js';
+import { cellShapeAllowCtx, cellShapeCtx } from './cell-shape.js';
 import {
   CELL_SURFACE_FINAL_V0,
   CELL_SURFACE_FINAL_V0T,
@@ -298,6 +300,52 @@ export function detectorEmphasisEquivalents(type, encoded, sceneOpts) {
   ]);
   const want = signature(passed);
   return CENTRAL_N7_EMPHASIS_MODES.filter((mode) => signature(mode) === want).join('+');
+}
+
+/** ECC 레벨 이름(RESERVED 제외) — formatinfo `ECC_NAME_BY_VALUE` 에서 유도(손 목록 아님). */
+const ECC_LEVEL_NAMES = Object.freeze(Object.values(ECC_NAME_BY_VALUE));
+/** 표 키 비교용 렌더 값 — 판 색은 두 인코딩에 같은 값이면 되고(표 키 gapGrade 가 같은 입력에서 나온다), 강조는 표 키가 아니다. */
+const TABLE_KEY_PROBE_RENDER = Object.freeze({ quietColor: 'white' });
+
+/**
+ * **ECC 반사실의 실현 조건** — 이 인코딩과 **같은 표 키**(셀 꾸미기 허용표 키: 버전 · Y 는 n · 레이아웃 …)에서 이 페이로드를
+ * 인코딩할 수 있는 ECC 레벨 목록(2026-09-28, DESIGN_002 §4.4). 셀 꾸미기 문맥(cell-shape `cellShapeCtx` 의
+ * render.eccLevelsAtTableKey)의 입력이고, resolver 는 측정 ECC 가 이 목록에 있을 때만 사유 ecc-level 을 낸다.
+ *
+ * 왜: 제품 auto 는 H 가 안 들어가는 길이에서 M 을 고른다(G 77–94 · A 79–96 · K 107–132 · Y n25 v0tr 114 B …). 그 버전의 표 키가
+ * H 행과 같으면 hit 가 나는데, 그 버전에 H 로는 그 페이로드가 안 들어가니 «ECC 를 H 로» 는 따를 수 없는 안내다.
+ *
+ * 유도: 용량표를 옮겨 적지 않는다 — **제품 인코더 자신**(`encodeFn` — 렌더가 쓴 바로 그 인코더 · 옵션)을 버전을 이 인코딩의 것으로
+ * 고정하고 레벨만 바꿔 다시 부른다. 인코더의 용량 판정(provider.capacity · frame)이 넘치면 던지고, 던지면 «안 들어간다» 다(이유가
+ * 용량이 아니어도 — 그 표 키에서 그 레벨로 못 만든다는 사실은 같다). 성공해도 표 키(`cellShapeAllowCtx(cellShapeCtx(...))`)가 이
+ * 인코딩과 다르면 «같은 표 키» 가 아니라 뺀다(Y 레이아웃 · n 이 버전 고정만으로 안 묶이는 경로 대비). 이 인코딩 자신의 레벨은
+ * 인코딩이 이미 있으니 다시 부르지 않는다. 비용: 렌더마다 인코딩 최대 두 번 더(레벨 셋 − 1).
+ *
+ * @param {{type: 'O'|'A'|'K'|'Y', state: object, encodeFn: (text: string, opts: object) => object, text: string,
+ *          encodeOpts?: object, encoded: object}} input 생성기 타입 · 상태 · 렌더가 쓴 인코더와 페이로드 · 옵션(eccLevel 제외 —
+ *          index.html encodeOptsFor 의 opts) · 실제 인코딩 결과
+ * @returns {readonly ('L'|'M'|'H')[]|undefined} 레벨 이름 순서(formatinfo)의 동결 배열 — 입력을 모르면 undefined(→ ecc-level 사유 안 냄)
+ */
+export function eccLevelsAtTableKey({ type, state, encodeFn, text, encodeOpts, encoded } = {}) {
+  if (typeof encodeFn !== 'function' || typeof text !== 'string' || !encoded || typeof encoded !== 'object'
+    || !state || typeof state !== 'object' || !ECC_LEVEL_NAMES.includes(encoded.eccLevel)) return undefined;
+  const keyOf = (enc) => {
+    const ctx = cellShapeCtx(type, enc, state, TABLE_KEY_PROBE_RENDER);
+    return ctx ? JSON.stringify(cellShapeAllowCtx(ctx)) : null;
+  };
+  const key = keyOf(encoded);
+  if (key === null) return undefined;
+  const pinned = { ...(encodeOpts || {}), version: encoded.version };
+  return Object.freeze(ECC_LEVEL_NAMES.filter((level) => {
+    if (level === encoded.eccLevel) return true;
+    let other;
+    try {
+      other = encodeFn(text, { ...pinned, eccLevel: level });
+    } catch {
+      return false;
+    }
+    return keyOf(other) === key;
+  }));
 }
 
 /**

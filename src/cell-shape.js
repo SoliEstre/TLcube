@@ -36,8 +36,9 @@
  * (√6+√2)/4 …)로 만든다 — 같은 입력이면 어느 엔진에서나 같은 비트가 나온다.
  *
  * 의존은 `luminance.js`(면 게인의 sRGB↔선형 · 팔레트 등급) · `cell-shape-allow.js`(허용표) ·
- * `finder-patterns.js`(불스아이 계열 id) · `locatorY.js`(hex-frame id) · `formatinfo.js`(ECC 레벨 이름)
- * 뿐이다 — 다섯 다 `tools/build-single.mjs` 와 `tools/build-finder-editor.mjs` 의 MODULE_ORDER 에서 이
+ * `finder-patterns.js`(불스아이 계열 id) · `locatorY.js`(hex-frame id) · `formatinfo.js`(ECC 레벨 이름) ·
+ * `generator-types.js`(생성기 타입 목록 — 잰 하한 문맥의 실효 → 생성기 타입 유도)
+ * 뿐이다 — 여섯 다 `tools/build-single.mjs` 와 `tools/build-finder-editor.mjs` 의 MODULE_ORDER 에서 이
  * 모듈보다 앞이다. ⛔ `cellSurfaceFinal.js`(슬롯 레이아웃 목록)는 build-single 에서 **뒤**라 import 할 수
  * 없다 — 슬롯 판정은 인코딩 결과의 `role:'slot'` 셀(코드 자체)에서 읽는다(`cellShapeCtx`).
  * ⛔ `generator-seat-auto.js`(자동 자리표)도 import 하지 않는다 — build-finder-editor 번들에 없다. 측정 구성
@@ -60,6 +61,7 @@ import * as DEFAULT_ALLOW from './cell-shape-allow.js';
 import { FINDER_PATTERNS, LEGACY_FINDER_PATTERN_ID } from './finder-patterns.js';
 import { LOCATOR_PROFILE_HEX_FRAME_V1 } from './locatorY.js';
 import { ECC_NAME_BY_VALUE } from './formatinfo.js';
+import { GENERATOR_TYPES } from './generator-types.js';
 
 // ── 닫힌 형태 상수 ─────────────────────────────────────────────────────────────
 
@@ -670,17 +672,24 @@ function measuredValueMatches(key, ctxValue, measured) {
 /**
  * 측정 구성 — 허용표 행을 **잰** 렌더 구성. 키 = 실효 타입(oak 행의 `type`) · Y(y 표). 한 번만 선언한다.
  *
- * 출처: L6 · L6g 측정 하네스 규약(동결 하네스 `lib-assemble.mjs` assembleOak — 두 측정이 같은 조립 코드 · 같은 측정 트리
- * 0d2e67b) — 계열 상태의 자리는 그때의 제품 자동 자리표(`autoSeatsFor`, 비-taegeuk · 막힌 칸 불허)로 채운 뒤
+ * 출처: L6 · L6g · L7len(길이 축) 측정 하네스 규약(동결 하네스 `lib-assemble.mjs` assembleOak · assembleY — 세 측정 모두 측정 트리
+ * 0d2e67b. L7len 판은 길이 본문 · 밴드 탐침 · 조립 가드(G × daehan/사괘 불허)를 더했고, 길이 케이스마다 조립 결과의 구성 4 키 —
+ * 버전 밴드 · ECC · 자리 · 강조 — 를 이 선언의 하네스 사본과 단언했다) — 계열 상태의 자리는 그때의 제품 자동 자리표(`autoSeatsFor`,
+ * 비-taegeuk · 막힌 칸 불허)로 채운 뒤
  * **O · C 는 안쪽을 «없음»** 으로, **V 는 turnA + 바깥 «없음»** 으로 내렸고, **G 는 자동 자리 그대로**(안쪽 o-cm — 코너 마커 +
  * 마커 톤, 제품 기본 O 가 실효 타입 G 다. L6g 계열 g-n7 · g-pinwheel)다. C · V 는 지금 행이 0 이라 선언이 없다. 사괘는 전
- * 계열 없음(O · G 자동 심부도 «없음»), ECC 는 전 영수증 H(짧은 페이로드 · auto). 검출 강조(detectorEmphasis — 생산자에 넘어간
+ * 계열 없음(O · G 자동 심부도 «없음»), ECC 는 전 영수증 H(19 B 기본은 auto 가 H · 길이 축은 제품 auto 의 **H 밴드**만 잰다 —
+ * auto 가 M · L 로 내려가는 길이는 잠금 유지). 검출 강조(detectorEmphasis — 생산자에 넘어간
  * 값)는 O · A · K · G 가 'all' — 조립이 `createGeneratorState` 기본(GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS, 0d2e67b 에서도 'all')을
  * sceneOptionsForOA(O · A · G) · 손 조립(K)으로 늘 실었다 — 이고, Y 는 'default' — assembleY 가 강조 옵션을 안 실어 라이브러리
- * 기본(DEFAULT_CENTRAL_N7_EMPHASIS)으로 그렸다(0d2e67b → a886347 사이 scene · sceneY · centralN7Emphasis · generator-render-config ·
- * generator-state 변경 없음 — 2026-09-27 git diff 확인. 이 착지는 generator-render-config 에 유도 함수만 더했다).
+ * 기본(DEFAULT_CENTRAL_N7_EMPHASIS)으로 그렸다. 잰 트리(0d2e67b) ↔ 착지 base(0c70b43)의 동등은 착지 동등 자(land-equiv)가 쟀다 —
+ * 영수증 sha256 41594b54dac363fbecc02a4840677ce2ff61f767f2d9d9ca1954d13666330493: PASS — 복호 폐포 103 파일(src/decoder 밖 75)
+ * 동일 · 렌더 목록 3 파일 · 영수증 격자 장면 6524/6524 동일 · 하한 ≥ · 영수증 결속 7/7(qr 2 제외). 그 위의 이 착지는 잠금 사유(ECC
+ * 실현 조건) · 하한 문맥 유도만 더했다(생산자 옵션 · 와이어 불변).
  * G 의 'all' 은 렌더에서 계열마다 다른 «같은 그림 집합» 에 든다 — 중앙 n7 은 'all' 하나(중앙 두 팔), 핀휠은 'locator+all'(안쪽
- * 코너 마커 검출 셀 한 팔). 2026-09-27 동결 하네스 조립(0d2e67b · 이 트리 둘 다 와이어 · 생산자 옵션 동일)으로 재유도했다.
+ * 코너 마커 검출 셀 한 팔). 2026-09-27 동결 하네스 조립(0d2e67b · 이 트리 둘 다 와이어 · 생산자 옵션 동일)으로 재유도했고,
+ * 2026-09-28 길이 격자로 넓힌 대조(`test/cell-shape-ctx-locks.test.js` ⑦ — 하네스가 유도한 길이 케이스 · 표의 (타입 · 버전/n) 전부)로
+ * 다시 재유도했다 — 값 불변.
  * 허용표 행 키에는 이 값들이 없다 — 영수증 code «A k=6 v=0» 로는 A 와 A-CM 을
  * 못 가른다. 그래서 여기 적고, `test/cell-shape-measured-config.test.js` 가 (1) 선언이 묶인 영수증 sha
  * (`CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256`)와 허용표 RECEIPT_SHA256 이 같은지(표를 다시 생성하면 빨개진다 — 재유도할 것)
@@ -700,10 +709,10 @@ function measuredValueMatches(key, ctxValue, measured) {
  *   treatmentErrors 에도 안 잡힌다) 처치 행을 treatment-invalid 로 세어 판정 PASS · exit 0 으로 끝난다(영수증에 allowShape 를
  *   받은 처치 행이 0 개다). ⑧ 이 그 경로의 자다(느슨하게 하지 말 것). ⑥ 은 --treatments none 이라 이 경로를 안 지나고, ⑦ 은
  *   호출 모양이 완전한 문맥 · 선언과 같은 값을 내는지 잰다.
- *   ② (남음 — 다음 재측정 **전에**) 생성기(gen-allow) probe 의 resolver 문맥({type, allowCtxLock, 행 키})에 측정 구성 키가 없다 —
- *   측정 구성 잠금이 들어온 0b94f0b 이후 트리로 재생성하면 셀 행이 전부 ctx-incomplete 라 E_RESOLVER_REJECTS 로 멈춘다(크게
- *   실패한다. L6g 재생성은 측정 트리 0d2e67b — 잠금 전 — 에서 돌아 해당 없었다). 행 타입의 이 선언으로 채우거나, 생성기가 이
- *   구성을 허용표 머리로 내보내도록 옮기고 이 상수는 표에서 읽게 바꿀 것.
+ *   ② (남음 — 측정 구성 잠금 이후 트리에서 재생성하기 **전에**) 생성기(gen-allow) probe 의 resolver 문맥({type, allowCtxLock, 행 키})에
+ *   측정 구성 키가 없다 — 측정 구성 잠금이 들어온 0b94f0b 이후 트리로 재생성하면 셀 행이 전부 ctx-incomplete 라 E_RESOLVER_REJECTS 로
+ *   멈춘다(크게 실패한다. L6g · L7len 재생성은 측정 트리 0d2e67b — 잠금 전 — 에서 돌아 해당 없었다). 행 타입의 이 선언으로 채우거나,
+ *   생성기가 이 구성을 허용표 머리로 내보내도록 옮기고 이 상수는 표에서 읽게 바꿀 것(DESIGN_002 Phase B 의 키 승격이 구조로 푼다).
  */
 export const CELL_SHAPE_MEASURED_CONFIG = Object.freeze({
   O: Object.freeze({ cornerMarker: false, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),
@@ -716,8 +725,10 @@ export const CELL_SHAPE_MEASURED_CONFIG = Object.freeze({
 /**
  * 위 선언을 읽어 낸 허용표 영수증(`cell-shape-allow.js` RECEIPT_SHA256). 표가 바뀌면 선언을 재유도하고 이 값을 갱신한다.
  * 2026-09-27 L6g — 영수증 7 개(L6 5 + L6g 2)의 묶음. O · A · K · Y 는 L6 과 같은 하네스 규약이라 그대로, G 를 더했다.
+ * 2026-09-28 L7len(길이 축) — 영수증 9 개(L6 5 + L6g 2 + 길이 slate · 팔레트 2)의 묶음. 같은 하네스 규약(하네스가 케이스마다 구성
+ * 4 키를 단언)이라 선언 값은 그대로다 — 길이 격자로 넓힌 ⑦ 로 재유도해 확인했다(위 선언 주석).
  */
-export const CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 = '9c4c86a69b5d439990cb44c6617ae16f2bc17681aa97bdc27a2f60ba14bc5bb8';
+export const CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 = 'eb9ae46341182c168ce87b01f7f2192b84128eacaca18c8ab57f82594135694d';
 
 /**
  * 설계 잠금이 읽는 **표 밖** 문맥 키(허용표 행에는 없다 — 표로 가를 수 없어서 따로 둔다).
@@ -786,7 +797,9 @@ export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
   //   구성으로 바꾸면 표 행이 열리는 경우(그 축이 실제로 가른다). 행이 없거나 설계 잠금이면 그 사유(unmeasured ·
   //   bevel-raised …)가 나간다. 아래 «측정 구성이면 열린다» 는 모두 표 키(버전 포함) 고정 반사실이다(머리말 ④).
   SEAT_CONFIG: 'seat-config', // 자리(코너 마커 · 사괘) 구성이 그 타입의 측정 구성과 다르고, 측정 구성이면 열린다
-  ECC_LEVEL: 'ecc-level', // 인코딩 ECC 레벨이 측정 구성과 다르고, 측정 구성이면 열린다(같은 기하라도 정정 여유가 다르다)
+  // 인코딩 ECC 레벨이 측정 구성과 다르고, 측정 구성이면 열린다(같은 기하라도 정정 여유가 다르다). 단 **실현 조건**이 붙는다 —
+  // 같은 표 키에서 측정 ECC 로 이 페이로드를 인코딩할 수 있을 때만(`eccLevelsAtTableKey` — DESIGN_002 §4.4). 아니면 unmeasured.
+  ECC_LEVEL: 'ecc-level',
   // 실효 검출 강조가 측정 구성과 다르고(측정 값이 «같은 그림 집합» 에 없다), 측정 구성이면 열린다(같은 기하라도 채움색이 다르다).
   // 강조를 소비하는 표면이 없는 렌더(«해당 없음»)에서는 나지 않는다 — 무엇을 넘겨도 측정 때와 같은 그림이다.
   DETECTOR_EMPHASIS: 'detector-emphasis',
@@ -868,6 +881,20 @@ function measuredConfigLock(table, ctx) {
 }
 
 /**
+ * ECC 반사실의 실현 조건(DESIGN_002 §4.4 — 2026-09-28) — 같은 표 키(버전 · n · 레이아웃 고정 — 머리말 ④)에서 그 타입의 측정 ECC 로
+ * 이 페이로드를 인코딩할 수 있는가. 문맥 보조 필드 `eccLevelsAtTableKey`(표 키도 필수 키도 아니다 — `cellShapeCtx` 가 렌더 값에서
+ * 싣는다: 제품 인코더로 유도한 «같은 표 키에서 들어가는 ECC 레벨» 목록, generator-render-config `eccLevelsAtTableKey`)에서만 읽는다.
+ * 필드가 없거나 측정 ECC 가 목록에 없으면 거짓 — 그때 «ECC 탓» 은 따를 수 없는 안내라 사유는 unmeasured 로 떨어진다(잠금 여부는 같다).
+ * 왜 필요한가: 제품 auto 는 H 가 안 들어가는 길이에서 M 을 고르고(G 77–94 · A 79–96 · K 107–132 · Y n25 114 B 이상) 그 버전의 표
+ * 키는 H 행과 같아 hit 가 난다 — 그 버전에 H 로는 그 페이로드가 안 들어가므로 «ECC 를 H 로» 는 참이 아니다.
+ */
+function measuredEccRealizable(table, ctx) {
+  const config = CELL_SHAPE_MEASURED_CONFIG[table === 'y' ? 'Y' : ctx.type];
+  const levels = ctx.eccLevelsAtTableKey;
+  return Boolean(config) && Array.isArray(levels) && levels.includes(config.eccLevel);
+}
+
+/**
  * 설계 잠금 — 문맥 전체를 막는 것(C · Y 2톤 · 안쪽 QR · 슬롯) → 모양별(불스아이 dot · hex-frame gap/dot · 돌출 bevel).
  * 측정 구성을 무엇으로 바꿔도 열리지 않는 **영구** 잠금이라, 측정 구성 불일치보다 사유가 앞선다(그 반대면 «자리를 되돌리면
  * 열릴 것» 처럼 읽혀 틀린 안내가 된다 — 2026-09-27 검토). 표 키 · 설계 잠금 문맥 키만 읽는다(측정 구성 키 없이도 판정).
@@ -921,6 +948,8 @@ export function cellShapeStructuralLock(table, kind, param, ctx) {
  *   param 은 null(고정 조합).
  * - 사유는 참이어야 한다(반사실): seat-config · ecc-level · detector-emphasis 는 «같은 표 키에서 측정 구성 키만 바꾸면 이 행이
  *   열린다» 일 때만, exposed-gap 은 «틈만 흰색으로 바꾸면 열린다»(측정 구성 일치 ∧ 흰 틈 형제 행) 일 때만. 그 밖은 unmeasured.
+ *   ecc-level 은 그 반사실이 **실현 가능**할 때만 — 같은 표 키에서 측정 ECC 로 이 페이로드가 들어간다(문맥 보조 필드
+ *   `eccLevelsAtTableKey`, `measuredEccRealizable`). 안 들어가거나 모르면 unmeasured(2026-09-28, DESIGN_002 §4.4).
  *   반사실은 표 키를 고정한다 — 제품 자동 버전에서 구성을 바꾸면 재인코딩으로 버전이 바뀌어 안 열릴 수 있다(모듈 머리말 ④).
  * - 그 밖은 `{spec:null, lockReason}`. **상태는 읽기만 한다**(동결 객체로도 동작).
  * 강도 키가 없으면 그 모양의 기본값으로 읽는다(«키 없음 ≡ 명시적 기본값», §7.1 (a)).
@@ -969,7 +998,12 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
   // 곧 «같은 표 키에서 측정 구성 키만 바꾼 반사실 문맥에서 이 행이 연다» 이다 — 그때만 자리 · ECC · 강조 사유가 참이다
   // (표 키 고정 반사실 — 자동 버전의 재인코딩은 표 키를 바꿀 수 있어 «되돌리면 열린다» 까지는 말하지 않는다).
   const config = measuredConfigLock(table, ctx);
-  if (hit) return config === null ? { spec: { kind, param } } : { spec: null, lockReason: config };
+  if (hit) {
+    if (config === null) return { spec: { kind, param } };
+    // ECC 탓은 실현 조건까지 참일 때만(`measuredEccRealizable`) — 같은 표 키에서 측정 ECC 로 안 들어가면 unmeasured.
+    if (config === R.ECC_LEVEL && !measuredEccRealizable(table, ctx)) return { spec: null, lockReason: R.UNMEASURED };
+    return { spec: null, lockReason: config };
+  }
 
   // 사유도 표에서 유도한다. exposed-gap = 노출형 × 비흰 틈 × **흰 틈 형제 행이 있다**(틈 · 바탕만 다르고
   // 나머지 표 키 · 모양 · 강도가 같은 행 — 측정 격자에서 틈 등급과 bgMode 는 짝지어 움직인다). 틈이 실제로
@@ -1084,6 +1118,16 @@ function measuredConfigCtx(effType, encoded, render) {
   };
 }
 
+/**
+ * `render.eccLevelsAtTableKey` → 문맥 보조 값. ECC 레벨 이름(`ECC_LEVEL_NAMES`)의 배열이고 중복이 없으면 그 집합을 이름 순서로
+ * 동결해 돌려준다. 아니면 undefined(값 모름 — 문맥에 싣지 않는다: resolver 는 ecc-level 사유를 내지 않는다). 추측으로 채우지 않는다.
+ */
+function eccLevelsCtxValue(value) {
+  if (!Array.isArray(value) || new Set(value).size !== value.length
+    || !value.every((v) => ECC_LEVEL_NAMES.includes(v))) return undefined;
+  return Object.freeze(ECC_LEVEL_NAMES.filter((name) => value.includes(name)));
+}
+
 function hasSlotCells(encoded) {
   const cells = encoded && encoded.cellDigits;
   if (!cells || typeof cells.values !== 'function') return undefined;
@@ -1104,13 +1148,17 @@ function hasSlotCells(encoded) {
  *       설계 잠금 키 qrPosition(상태) · qrWindow(인코딩 window) · qrSlot(인코딩 role 'slot' 셀 유무) ·
  *       측정 구성 키 eccLevel(인코딩) · detectorEmphasis(렌더 값).
  * 값을 모르면 그 키는 undefined 로 남는다 — resolver 가 `ctx-incomplete` 로 잠근다(추측으로 채우지 않는다).
+ * 보조 필드(표 키도 필수 키도 아니다): eccLevelsAtTableKey — 렌더 값이 주면 그 목록(`eccLevelsCtxValue` 로 거른 동결 배열)을
+ *       싣고, 없거나 모양이 틀리면 **키를 만들지 않는다**(잠그지 않는다 — resolver 는 그때 ecc-level 사유만 내지 않는다).
  *
  * @param {'O'|'A'|'K'|'Y'} type 생성기 타입(`generatorState.type`)
  * @param {object} encoded 실제 인코딩 결과(자동 버전 · 레이아웃 해석 뒤)
  * @param {object} state 생성기 상태
- * @param {{quietColor?: 'white'|'black'|'none'|'surface', detectorEmphasis?: string}} [render] 렌더 뒤에야 아는 값 —
- *   quietColor = `resolveQuietZoneChoice(...).color`(없으면 gapGrade 가 undefined — 잠금) · detectorEmphasis = 생산자 옵션에서
- *   유도한 실효 검출 강조(generator-render-config `detectorEmphasisEquivalents(type, encoded, sceneOpts)` — 없으면 undefined, 잠금).
+ * @param {{quietColor?: 'white'|'black'|'none'|'surface', detectorEmphasis?: string, eccLevelsAtTableKey?: string[]}} [render]
+ *   렌더 뒤에야 아는 값 — quietColor = `resolveQuietZoneChoice(...).color`(없으면 gapGrade 가 undefined — 잠금) ·
+ *   detectorEmphasis = 생산자 옵션에서 유도한 실효 검출 강조(generator-render-config `detectorEmphasisEquivalents(type, encoded,
+ *   sceneOpts)` — 없으면 undefined, 잠금) · eccLevelsAtTableKey = 같은 표 키에서 이 페이로드가 들어가는 ECC 레벨(generator-render-config
+ *   `eccLevelsAtTableKey` — 제품 인코더로 유도, ECC 사유의 실현 조건 · 없으면 ecc-level 사유를 안 낸다).
  * @returns {object|null} 문맥, 또는 마름모 셀이 아닌 타입(H 등) · 입력 없음이면 null
  */
 export function cellShapeCtx(type, encoded, state, render) {
@@ -1124,12 +1172,14 @@ export function cellShapeCtx(type, encoded, state, render) {
     paletteGrade: paletteGradeOf(state),
   };
   const config = measuredConfigCtx(effType, encoded, render);
+  const eccLevels = eccLevelsCtxValue(render ? render.eccLevelsAtTableKey : undefined);
+  const aux = eccLevels === undefined ? {} : { eccLevelsAtTableKey: eccLevels };
   if (effType !== 'Y') {
     return {
       table: 'oak', type: effType, version: encoded.version, finderPatternId: state.finderPatternId,
       qrPosition: state.qrPosition, ...common,
       cornerMarker: config.cornerMarker, sagoae: config.sagoae, eccLevel: config.eccLevel,
-      detectorEmphasis: config.detectorEmphasis,
+      detectorEmphasis: config.detectorEmphasis, ...aux,
     };
   }
   return {
@@ -1145,6 +1195,7 @@ export function cellShapeCtx(type, encoded, state, render) {
     qrSlot: hasSlotCells(encoded),
     eccLevel: config.eccLevel,
     detectorEmphasis: config.detectorEmphasis,
+    ...aux,
   };
 }
 
@@ -1158,4 +1209,54 @@ export function cellShapeAllowCtx(ctx) {
   const out = { table: ctx.table };
   for (const k of keys) out[k] = ctx[k];
   return out;
+}
+
+// ── 잰 하한 문맥 (DESIGN_002 §4.5 — 2026-09-28) ──────────────────────────────────
+
+/**
+ * 실효 타입 → 생성기 타입(`generatorState.type` — 내보내기 하한이 받는 `current.type` 과 같은 축). `cellShapeTypeOf` 를 **훑어**
+ * 유도한다(손 표 아님): 생성기 타입(`GENERATOR_TYPES`)마다 실효 타입을 가르는 입력(코드 notchC · 상태 innerSeat 'o-cm' · turnA)을
+ * 넣어 나온 실효 타입을 모은다. 한 실효 타입이 두 생성기 타입에서 나오면 로드 때 던진다. 실효 타입이 이 입력 밖의 새 축으로
+ * 갈리면 여기 없어 `allowRowFloorCtx` 가 null 을 내고, 잰 하한 자(test/cell-shape-measured-floors.test.js)가 빨개진다(fail-closed).
+ */
+export const CELL_SHAPE_GENERATOR_TYPE_OF = (() => {
+  const probes = [[{}, {}], [{ notchC: true }, {}], [{}, { innerSeat: 'o-cm' }], [{}, { turnA: true }]];
+  const out = {};
+  for (const gen of GENERATOR_TYPES) {
+    for (const [encoded, state] of probes) {
+      const eff = cellShapeTypeOf(gen, encoded, state);
+      if (eff === null) continue;
+      if (out[eff] !== undefined && out[eff] !== gen) {
+        throw new Error(`cell-shape: 실효 타입 ${eff} 가 생성기 타입 ${out[eff]} · ${gen} 둘에서 나온다`);
+      }
+      out[eff] = gen;
+    }
+  }
+  return Object.freeze(out);
+})();
+
+/**
+ * 허용표 행 → 제품 하한 문맥(export-options `minRoundtripPpuKey` · `minRoundtripPpu` 의 입력 — 내보내기 경로와 같은 축:
+ * 생성기 타입 · 버전, Y 는 n · 셀 표면 레이아웃). 잰 하한(허용표 `MEASURED_FLOORS`)과 제품 하한을 같은 키로 맞대는 **한 벌**의 유도다.
+ *   oak → {type: 생성기 타입(`CELL_SHAPE_GENERATOR_TYPE_OF` — 실효 G · C → O, V → A), version}
+ *   y   → {type: 'Y', n: Number(nBand), cellSurfaceLayout}(레이아웃 'none' 은 null — 그때 제품 키는 버전이 필요한데 행에 없어
+ *         키가 어긋나 자가 빨개진다: 셀 표면 밖 Y 행이 생기면 이 유도를 먼저 넓힐 것)
+ *   h   → {type: 'H', version}
+ *   qr · 모르는 표 · 모르는 실효 타입 → null(qr 은 px/모듈이라 하한 키가 없다).
+ * 디더 비트는 싣지 않는다(비디더 — 잰 하한이 비디더 점만 센다).
+ * @param {object} row 허용표 행
+ * @returns {{type: string, version?: number, n?: number|null, cellSurfaceLayout?: string|null}|null}
+ */
+export function allowRowFloorCtx(row) {
+  if (!row || typeof row !== 'object') return null;
+  if (row.table === 'oak') {
+    const type = CELL_SHAPE_GENERATOR_TYPE_OF[row.type];
+    return type === undefined ? null : { type, version: row.version };
+  }
+  if (row.table === 'y') {
+    const n = Number(row.nBand);
+    return { type: 'Y', n: Number.isInteger(n) ? n : null, cellSurfaceLayout: row.cellSurfaceLayout === 'none' ? null : row.cellSurfaceLayout };
+  }
+  if (row.table === 'h') return { type: 'H', version: row.version };
+  return null;
 }
