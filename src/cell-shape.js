@@ -19,6 +19,8 @@
  *      떨어뜨리지 않는다 — 잠금은 사유와 함께 보인다, wiring M10).
  *      **구조 잠금**(설계 1차 잠금 — 통합자 결정 2, 2026-09-26)은 허용표보다 먼저 건다: 표에
  *      행이 있어도 잠긴다(`cellShapeStructuralLock` · `CELL_SHAPE_STRUCTURAL_LOCK_REASONS`).
+ *      **측정 구성 불일치**(2026-09-27)도 구조 잠금이다 — 표 행은 표 키 밖 축(코너 마커 · 사괘 · ECC)의 한 값
+ *      (`CELL_SHAPE_MEASURED_CONFIG`)에서만 잰 사실이라, 렌더 구성이 그와 다르면 표 키가 같아도 잠근다.
  *   ⑤ 문맥 — `cellShapeCtx(type, encoded, state, render)`: 제품이 resolver 에 넘길 문맥을
  *      **한 벌만** 유도한다(통합자 결정 1 — 하네스도 이 함수를 import 한다, H 의
  *      `generator-h.hCellStyleCtx` 가 선례). `cellShapeAllowCtx(ctx)` 는 그 문맥을 허용표 행
@@ -29,10 +31,12 @@
  * (√6+√2)/4 …)로 만든다 — 같은 입력이면 어느 엔진에서나 같은 비트가 나온다.
  *
  * 의존은 `luminance.js`(면 게인의 sRGB↔선형 · 팔레트 등급) · `cell-shape-allow.js`(허용표) ·
- * `finder-patterns.js`(불스아이 계열 id) · `locatorY.js`(hex-frame id) 뿐이다 — 넷 다
- * `tools/build-single.mjs` 와 `tools/build-finder-editor.mjs` 의 MODULE_ORDER 에서 이 모듈보다
- * 앞이다. ⛔ `cellSurfaceFinal.js`(슬롯 레이아웃 목록)는 build-single 에서 **뒤**라 import 할 수
+ * `finder-patterns.js`(불스아이 계열 id) · `locatorY.js`(hex-frame id) · `formatinfo.js`(ECC 레벨 이름)
+ * 뿐이다 — 다섯 다 `tools/build-single.mjs` 와 `tools/build-finder-editor.mjs` 의 MODULE_ORDER 에서 이
+ * 모듈보다 앞이다. ⛔ `cellSurfaceFinal.js`(슬롯 레이아웃 목록)는 build-single 에서 **뒤**라 import 할 수
  * 없다 — 슬롯 판정은 인코딩 결과의 `role:'slot'` 셀(코드 자체)에서 읽는다(`cellShapeCtx`).
+ * ⛔ `generator-seat-auto.js`(자동 자리표)도 import 하지 않는다 — build-finder-editor 번들에 없다. 측정 구성
+ * 선언(`CELL_SHAPE_MEASURED_CONFIG`)과 자동 자리표의 대조는 `test/cell-shape-measured-config.test.js` 가 한다.
  * ⛔ **`sceneY.js` 를 import 하지 않는다**(wiring B1 — scene.js 가 이 모듈을 import 하면
  * sceneY 를 끌어와 번들 위상이 꼬인다). `sceneY.applyFaceGain` 과 같은 계산을
  * `faceGainColor` 로 다시 구현하고, 비트 동일은 `test/cell-shape-geometry.test.js` 가 잠근다.
@@ -50,6 +54,7 @@ import {
 import * as DEFAULT_ALLOW from './cell-shape-allow.js';
 import { FINDER_PATTERNS, LEGACY_FINDER_PATTERN_ID } from './finder-patterns.js';
 import { LOCATOR_PROFILE_HEX_FRAME_V1 } from './locatorY.js';
+import { ECC_NAME_BY_VALUE } from './formatinfo.js';
 
 // ── 닫힌 형태 상수 ─────────────────────────────────────────────────────────────
 
@@ -600,16 +605,69 @@ export const CELL_SHAPE_ALLOW_KEYS = Object.freeze({
 });
 
 /**
+ * 측정 구성 키 — 표 키 밖에서 셀 역할 · 판독 여유를 바꾸는 축(2026-09-27 자리 레인). 허용표 행은 이 축의 **한 값**
+ * (측정 구성)에서만 잰 사실이라, 렌더 구성이 그 값과 다르면 행이 있어도 잠근다(`cellShapeStructuralLock`).
+ *   cornerMarker — 코너 마커 자리(O 안쪽 o-cm → 타입 G 로 갈린다 · A 바깥 a-cm · K 바깥 k-cm). 같은 버전 · 같은 표 키에서
+ *     셀 역할이 달라진다(기본 URL 19 B 실측: A 25셀 · K 37셀) — A · K 바깥 «없음» 이 a-cm/k-cm 에서 잰 행으로 열리던 거짓 열림.
+ *   sagoae — 심부 자리 사괘(합성 고리). 같은 버전에서 data 셀이 예약으로 빠진다(12 B 실측: O v2 40셀 · A v0 20셀).
+ *     finderPatternId 는 사괘 합성을 못 가른다(원자 daehan 과 daehanFinder 가 같다 — 광학 구분은 인코딩 `sagoae`).
+ *   eccLevel — 인코딩이 실제로 쓴 ECC 레벨(auto 해석 뒤). 기하는 같아도 정정 한도(nsym)와 렌더 숫자가 다르다.
+ * 값은 **인코딩 결과**에서 유도한다(`cellShapeCtx`) — 상태 표지(outerSeat · deepSeat)가 아니다: 매퍼가 사괘를 떨구는
+ * 조합(A a-cm + 사괘 선택 · O daehan + 사괘 선택)은 와이어가 측정 구성과 같아 열려야 맞다.
+ */
+export const CELL_SHAPE_MEASURED_CONFIG_KEYS = Object.freeze({
+  oak: Object.freeze(['cornerMarker', 'sagoae', 'eccLevel']),
+  y: Object.freeze(['eccLevel']),
+});
+
+/** 측정 구성 키 중 «자리» 축(사유 `seat-config`). 나머지(eccLevel)는 사유 `ecc-level` — 뜻이 달라 사유를 나눈다. */
+export const CELL_SHAPE_SEAT_CONFIG_KEYS = Object.freeze(['cornerMarker', 'sagoae']);
+
+/**
+ * 측정 구성 — 허용표 행을 **잰** 렌더 구성. 키 = 실효 타입(oak 행의 `type`) · Y(y 표). 한 번만 선언한다.
+ *
+ * 출처: L6 측정 하네스 규약(자동 자리, O 는 안쪽 없음) — 계열 상태의 자리는 제품 자동 자리표(`autoSeatsFor`, 비-taegeuk ·
+ * 막힌 칸 불허)로 채웠고 O 만 안쪽을 «없음» 으로 내렸다(안쪽 코너 마커 O 는 타입 G 로 따로 갈린다). 사괘는 전 계열 없음,
+ * ECC 는 전 영수증 H(짧은 페이로드 · auto). 허용표 행 키에는 이 값이 없다 — 영수증 code «A k=6 v=0» 로는 A 와 A-CM 을
+ * 못 가른다. 그래서 여기 적고, `test/cell-shape-measured-config.test.js` 가 (1) 선언이 묶인 영수증 sha
+ * (`CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256`)와 허용표 RECEIPT_SHA256 이 같은지(표를 다시 생성하면 빨개진다 — 재유도할 것)
+ * (2) A · K 의 코너 마커 · 사괘 값이 제품 자동 자리표와 같은지 (3) 표에 행이 있는 타입마다 선언이 있는지 잰다.
+ * 제품 자동 자리표에서 **유도하지 않는다** — 제품 기본이 바뀌면 측정 사실이 아닌데도 조용히 따라간다.
+ *
+ * 표에 행이 없는 타입(G · V · C)은 항목이 없다 — 그 타입은 행이 0 이라 `unmeasured`(C 는 구조 잠금 `type-c-ultra`)로
+ * 잠긴다. 그 타입의 행이 생기면 선언도 같이 생겨야 한다(위 (3)). V 를 잴 때는 cornerMarker 와 co2AnchorTones 를 함께
+ * 키로 올릴 것 — 제품 기본 V 는 v-cm 이다.
+ * TODO(다음 재측정): 생성기(gen-allow)가 이 구성을 허용표 머리로 내보내도록 옮기고, 이 상수는 표에서 읽게 바꿀 것.
+ */
+export const CELL_SHAPE_MEASURED_CONFIG = Object.freeze({
+  O: Object.freeze({ cornerMarker: false, sagoae: false, eccLevel: 'H' }),
+  A: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H' }),
+  K: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H' }),
+  Y: Object.freeze({ eccLevel: 'H' }),
+});
+
+/** 위 선언을 읽어 낸 허용표 영수증(`cell-shape-allow.js` RECEIPT_SHA256). 표가 바뀌면 선언을 재유도하고 이 값을 갱신한다. */
+export const CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 = 'd4bd39162483d1040244f15e2142a3c41048fc22353f5475eb1b95a69e332165';
+
+/**
  * 구조 잠금이 읽는 **표 밖** 문맥 키(허용표 행에는 없다 — 표로 가를 수 없어서 따로 둔다).
  *   Y: qrPosition(상태 — 'inner' = 윈도 β · 안쪽 QR) · qrWindow(인코딩 `window` — 윈도 β 코드) ·
- *      qrSlot(인코딩에 `role:'slot'` 셀이 있는가 — 슬롯 레이아웃).
- * 빠지면 잴 수 없으므로 잠근다(`ctx-incomplete`) — fail-closed. O/A/K 는 표 키(type · finderPatternId)로
- * 충분하다(C 는 `cellShapeCtx` 가 코드에서 type 'C' 로 판정).
+ *      qrSlot(인코딩에 `role:'slot'` 셀이 있는가 — 슬롯 레이아웃) + 측정 구성 키(eccLevel).
+ *   O/A/K: 측정 구성 키(cornerMarker · sagoae · eccLevel). 타입 C 는 `cellShapeCtx` 가 코드에서 type 'C' 로 판정.
+ * 빠지면 잴 수 없으므로 잠근다(`ctx-incomplete`) — fail-closed.
  */
 export const CELL_SHAPE_LOCK_CTX_KEYS = Object.freeze({
-  oak: Object.freeze([]),
-  y: Object.freeze(['qrPosition', 'qrWindow', 'qrSlot']),
+  oak: Object.freeze([...CELL_SHAPE_MEASURED_CONFIG_KEYS.oak]),
+  y: Object.freeze(['qrPosition', 'qrWindow', 'qrSlot', ...CELL_SHAPE_MEASURED_CONFIG_KEYS.y]),
 });
+
+// 로드 시 자기검증 — 선언의 키가 그 표의 측정 구성 키와 정확히 같다(빠진 키는 잠금 판정에서 조용히 빠진다).
+for (const [configType, config] of Object.entries(CELL_SHAPE_MEASURED_CONFIG)) {
+  const want = [...CELL_SHAPE_MEASURED_CONFIG_KEYS[configType === 'Y' ? 'y' : 'oak']].sort().join(',');
+  if (Object.keys(config).sort().join(',') !== want) {
+    throw new Error(`cell-shape: 측정 구성 ${configType} 의 키가 ${want} 가 아니다`);
+  }
+}
 
 /**
  * 잠금 사유 — **안정 id**. UI 는 이 값으로 인라인 사유 문구(i18n 키)를 고른다. 문자열을 바꾸면 i18n
@@ -630,6 +688,9 @@ export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
   Y_HEX_FRAME_EXPOSED: 'y-hex-frame-gap-dot', // §3.2 — hex-frame-v1 × gap/dot
   BULLSEYE_DOT: 'bullseye-dot', // §3.1 표 — 불스아이 계열(불스아이 · cube-bullseye)은 dot 전면 금지
   BEVEL_RAISED: 'bevel-raised', // §3.1 safety M13 — 돌출 bevel(게인 > 1, 1.4)은 바닥 띠를 흰 판 쪽으로 넓힌다
+  // ── 측정 구성 불일치(2026-09-27 — 표 행은 `CELL_SHAPE_MEASURED_CONFIG` 에서만 잰 사실이다) ──
+  SEAT_CONFIG: 'seat-config', // 자리(코너 마커 · 사괘) 구성이 그 타입의 측정 구성과 다르다
+  ECC_LEVEL: 'ecc-level', // 인코딩 ECC 레벨이 측정 구성과 다르다(같은 기하라도 정정 여유가 다르다)
 });
 
 /** 구조 잠금 사유 id 전부 — `cellShapeStructuralLock` 이 낼 수 있는 값의 목록(테스트 · i18n 대조용). */
@@ -641,6 +702,8 @@ export const CELL_SHAPE_STRUCTURAL_LOCK_REASONS = Object.freeze([
   CELL_SHAPE_LOCK_REASONS.Y_HEX_FRAME_EXPOSED,
   CELL_SHAPE_LOCK_REASONS.BULLSEYE_DOT,
   CELL_SHAPE_LOCK_REASONS.BEVEL_RAISED,
+  CELL_SHAPE_LOCK_REASONS.SEAT_CONFIG,
+  CELL_SHAPE_LOCK_REASONS.ECC_LEVEL,
 ]);
 
 /**
@@ -663,9 +726,29 @@ function allowTableOf(type) {
 }
 
 /**
+ * 측정 구성 불일치 — 문맥의 측정 구성 키가 그 타입의 측정 구성(`CELL_SHAPE_MEASURED_CONFIG`)과 다르면 사유 id.
+ * 자리 축(코너 마커 · 사괘)이 먼저, 그다음 ECC. 선언이 없는 타입(G · V · C)은 판정하지 않는다(행이 0 이라 unmeasured).
+ * 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로 잠근다(다른 구조 잠금 줄과 같은 결:
+ * 증거가 있을 때만 사유를 낸다).
+ */
+function measuredConfigLock(table, ctx) {
+  const R = CELL_SHAPE_LOCK_REASONS;
+  const config = CELL_SHAPE_MEASURED_CONFIG[table === 'y' ? 'Y' : ctx.type];
+  if (!config) return null;
+  const differs = (k) => Object.prototype.hasOwnProperty.call(config, k) && ctx[k] !== undefined && ctx[k] !== config[k];
+  if (CELL_SHAPE_SEAT_CONFIG_KEYS.some(differs)) return R.SEAT_CONFIG;
+  if (differs('eccLevel')) return R.ECC_LEVEL;
+  return null;
+}
+
+/**
  * 구조 잠금 판정 — 허용표와 **무관하게** 잠그는 조합이면 사유 id, 아니면 null. 순수 함수.
  * resolver 가 허용표보다 먼저 부른다(측정 영수증에 그 조합의 행이 생겨도 열리지 않는다).
  * 여는 쪽(측정 레인)이 풀려면 이 함수의 해당 줄을 **먼저 지우고 이유를 적어야** 한다.
+ *
+ * 순서: 문맥 전체를 막는 설계 잠금(C · Y 2톤 · 안쪽 QR · 슬롯) → 측정 구성 불일치(자리 · ECC — 모든 모양) →
+ * 모양별 잠금(불스아이 dot · hex-frame gap/dot · 돌출 bevel). 모든 모양을 막는 사유가 모양별 사유보다 먼저라,
+ * 카드 사유 줄이 «그 문맥을 막는 원인» 하나로 모인다.
  *
  * @param {'oak'|'y'} table
  * @param {string} kind 셀 모양(square 제외)
@@ -677,14 +760,18 @@ export function cellShapeStructuralLock(table, kind, param, ctx) {
   const R = CELL_SHAPE_LOCK_REASONS;
   if (table === 'oak') {
     if (ctx.type === 'C') return R.TYPE_C_ULTRA;
-    if (kind === 'dot' && BULLSEYE_FAMILY_FINDER_PATTERN_IDS.includes(ctx.finderPatternId)) return R.BULLSEYE_DOT;
   } else if (table === 'y') {
     if (ctx.tones === 2) return R.Y_TWO_TONE;
     if (ctx.qrWindow === true || ctx.qrPosition === 'inner') return R.Y_INNER_QR;
     if (ctx.qrSlot === true) return R.Y_QR_SLOT;
-    if ((kind === 'gap' || kind === 'dot') && ctx.locatorProfile === LOCATOR_PROFILE_HEX_FRAME_V1) {
-      return R.Y_HEX_FRAME_EXPOSED;
-    }
+  }
+  const config = measuredConfigLock(table, ctx);
+  if (config !== null) return config;
+  if (table === 'oak' && kind === 'dot' && BULLSEYE_FAMILY_FINDER_PATTERN_IDS.includes(ctx.finderPatternId)) {
+    return R.BULLSEYE_DOT;
+  }
+  if (table === 'y' && (kind === 'gap' || kind === 'dot') && ctx.locatorProfile === LOCATOR_PROFILE_HEX_FRAME_V1) {
+    return R.Y_HEX_FRAME_EXPOSED;
   }
   // 게인 > 1 = 돌출(띠를 흰 쪽으로) — 1.4 가 그 값이다. 도메인이 늘어도 «돌출» 이면 잠근다.
   if (kind === 'bevel' && typeof param === 'number' && param > 1) return R.BEVEL_RAISED;
@@ -825,6 +912,28 @@ export function cellShapeTypeOf(type, encoded, state) {
   return null;
 }
 
+/** ECC 레벨 이름 도메인 — `formatinfo.ECC_NAME_BY_VALUE`(RESERVED 제외)에서 유도한다(손 목록 아님). */
+const ECC_LEVEL_NAMES = Object.freeze(Object.values(ECC_NAME_BY_VALUE));
+
+/**
+ * 측정 구성 문맥 값 — **인코딩 결과**에서만 읽는다(상태 표지 아님 — `CELL_SHAPE_MEASURED_CONFIG_KEYS` 주석).
+ *   cornerMarker: 인코더가 돌려준 boolean(encode · encodeA · encodeK 가 항상 싣는다), 아니면 undefined(값 모름).
+ *   sagoae: 인코더가 돌려준 boolean 이 늘 우선. 키가 없으면 실효 타입 K 만 false — «개념 없음»(encodeK 는 sagoae:true 에
+ *     던지고 결과에 키를 싣지 않는다; 반례 자는 test/cell-shape-measured-config.test.js). 그 밖(O/A 인데 키 없음)은 undefined.
+ *   eccLevel: 인코딩이 실제로 쓴 레벨(auto 해석 뒤)이 L · M · H 중 하나면 그 값, 아니면 undefined.
+ * undefined 는 resolver 가 `ctx-incomplete` 로 잠근다 — 개념 없음(명시 값)과 값 모름(undefined)을 가른다.
+ */
+function measuredConfigCtx(effType, encoded) {
+  let sagoae;
+  if (typeof encoded.sagoae === 'boolean') sagoae = encoded.sagoae;
+  else if (effType === 'K') sagoae = false;
+  return {
+    cornerMarker: typeof encoded.cornerMarker === 'boolean' ? encoded.cornerMarker : undefined,
+    sagoae,
+    eccLevel: ECC_LEVEL_NAMES.includes(encoded.eccLevel) ? encoded.eccLevel : undefined,
+  };
+}
+
 function hasSlotCells(encoded) {
   const cells = encoded && encoded.cellDigits;
   if (!cells || typeof cells.values !== 'function') return undefined;
@@ -838,10 +947,12 @@ function hasSlotCells(encoded) {
  * 공통: tones = 인코딩 tones ?? 상태 tone · gapGrade = `cellGapGrade(state, render)` · bgMode = 상태 ·
  *       paletteGrade = `paletteGradeOf(state)`.
  * O/A/K(+C/G/V) `table:'oak'`: type(실효 — `cellShapeTypeOf`) · version = 인코딩 · finderPatternId = 상태
- *       **선택값**(중앙 QR 로 렌더가 양보해도 선택값) · qrPosition = 상태.
+ *       **선택값**(중앙 QR 로 렌더가 양보해도 선택값) · qrPosition = 상태 ·
+ *       구조 잠금 키 cornerMarker · sagoae · eccLevel(인코딩 — `measuredConfigCtx`).
  * Y `table:'y'`: cellSurfaceLayout = 인코딩 ?? 'none' · locatorProfile = 인코딩 ?? 상태 locatorProfileY(해석 뒤) ·
  *       nBand = String(인코딩 n)(구간 = n 하나) · seamAdjacent = `Y_SEAM_ADJACENT_PRODUCT` ·
- *       구조 잠금 키 qrPosition(상태) · qrWindow(인코딩 window) · qrSlot(인코딩 role 'slot' 셀 유무).
+ *       구조 잠금 키 qrPosition(상태) · qrWindow(인코딩 window) · qrSlot(인코딩 role 'slot' 셀 유무) ·
+ *       eccLevel(인코딩).
  * 값을 모르면 그 키는 undefined 로 남는다 — resolver 가 `ctx-incomplete` 로 잠근다(추측으로 채우지 않는다).
  *
  * @param {'O'|'A'|'K'|'Y'} type 생성기 타입(`generatorState.type`)
@@ -861,10 +972,12 @@ export function cellShapeCtx(type, encoded, state, render) {
     bgMode: state.bgMode,
     paletteGrade: paletteGradeOf(state),
   };
+  const config = measuredConfigCtx(effType, encoded);
   if (effType !== 'Y') {
     return {
       table: 'oak', type: effType, version: encoded.version, finderPatternId: state.finderPatternId,
       qrPosition: state.qrPosition, ...common,
+      cornerMarker: config.cornerMarker, sagoae: config.sagoae, eccLevel: config.eccLevel,
     };
   }
   return {
@@ -878,6 +991,7 @@ export function cellShapeCtx(type, encoded, state, render) {
     qrPosition: state.qrPosition,
     qrWindow: encoded.window === true,
     qrSlot: hasSlotCells(encoded),
+    eccLevel: config.eccLevel,
   };
 }
 

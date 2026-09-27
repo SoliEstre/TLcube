@@ -31,7 +31,7 @@ import { FACES, facePolygon } from '../src/hexgrid.js';
 import { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } from '../src/luminance.js';
 import { TL_READER_URL } from '../src/qr.js';
 import {
-  CELL_TIERS, cellShapeAllowedKinds, cellShapeTier, resolveCellShapeSpec,
+  CELL_TIERS, cellShapeAllowedKinds, cellShapeCtx, cellShapeTier, resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 
 const SLATE = getPreset('slate');
@@ -431,10 +431,12 @@ describe('기본값 · resolver 경유', () => {
   test('resolver: 스텁(전부 잠금)이면 spec null → 꺼진 장면 · fixture 허용표 행이면 꾸민 장면', () => {
     const fx = FIXTURES[0];
     const b = built(fx);
-    const ctx = {
-      type: 'O', version: b.encoded.version, finderPatternId: fx.opts.finderPatternId, tones: 3,
-      gapGrade: 'white', bgMode: 'white', paletteGrade: 'slate', qrPosition: 'none',
-    };
+    // 문맥은 제품 함수로 이 fixture 의 실제 인코딩에서 유도한다(손 문맥은 측정 구성 키 — 코너 마커 · 사괘 · ECC — 를
+    // 빠뜨리거나 거짓으로 채운다). 이 fixture 는 O + 코너 마커(안쪽 o-cm)라 실효 타입 G 다 — G 행은 생성 표에 없다.
+    const ctx = cellShapeCtx('O', b.encoded, {
+      finderPatternId: fx.opts.finderPatternId, innerSeat: 'o-cm', tone: 3, bgMode: 'white', preset: 'slate', qrPosition: 'none',
+    }, { quietColor: 'white' });
+    assert.equal(ctx.type, 'G');
     const state = Object.freeze({ cellShape: 'gap', cellGap: 0.08 });
     const locked = resolveCellShapeSpec(state, ctx);
     assert.equal(locked.spec, null);

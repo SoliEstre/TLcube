@@ -21,16 +21,19 @@
 //   ⓗ 잠금 사유가 표에서 유도된다 — 흰 틈 노출형 행의 미지 틈 문맥은 (열리지 않으면) exposed-gap, 표에 없는 버전 · n 은
 //      unmeasured(«틈 탓» 이라 말하지 않는다 — 2026-09-27 화면의 Y n21 오안내).
 // 못 재는 것: 행이 측정적으로 참인가(영수증 · 승격 게이트 재측정의 몫 — §7.6). y 행의 구조 잠금 문맥 키(qrPosition ·
-//   qrWindow · qrSlot)는 표에 없어 «제품 기본 Y(코너 QR · 윈도 아님 · 슬롯 없음)» 값으로 채워 잰다 — 다른 QR 배치에서
-//   열리는지는 이 자 밖이다(구조 잠금 쪽은 cell-shape-allowlist ③ 이 잰다).
+//   qrWindow · qrSlot · eccLevel)는 표에 없어 «제품 기본 Y(코너 QR · 윈도 아님 · 슬롯 없음 · 측정 ECC)» 값으로 채워 잰다 —
+//   다른 QR 배치에서 열리는지는 이 자 밖이다(구조 잠금 쪽은 cell-shape-allowlist ③ 이 잰다). oak 행의 구조 잠금 문맥 키
+//   (측정 구성 — 코너 마커 · 사괘 · ECC)는 행 타입의 측정 구성 선언으로 채운다 — 구성을 바꾸면 잠기는지는
+//   cell-shape-measured-config.test.js 가 잰다.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  CELL_SHAPES, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_PARAMS, CELL_GAP_GRADES,
-  EXPOSED_CELL_SHAPES, Y_SEAM_ADJACENT_PRODUCT, cellShapeStructuralLock, resolveCellShapeSpec,
+  CELL_SHAPES, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_MEASURED_CONFIG,
+  CELL_SHAPE_PARAMS, CELL_GAP_GRADES, EXPOSED_CELL_SHAPES, Y_SEAM_ADJACENT_PRODUCT, cellShapeStructuralLock,
+  resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 import {
   H_CELL_GROUNDS, H_CELL_STYLE_ALLOW_KEYS, H_CELL_STYLE_DEFAULT, H_CELL_STYLE_LOCK_REASONS, hCellStyleCtx,
@@ -70,16 +73,22 @@ const ROW_KEYS = Object.freeze({
 });
 
 /**
- * y 행 구조 잠금 문맥 키(표 밖)의 «제품 기본 Y» 값 — 코너 QR(상태 기본 qrPosition) · 윈도 아님 · 슬롯 없음.
+ * y 행 구조 잠금 문맥 키(표 밖)의 «제품 기본 Y» 값 — 코너 QR(상태 기본 qrPosition) · 윈도 아님 · 슬롯 없음 ·
+ * 측정 구성(ECC — 선언 `CELL_SHAPE_MEASURED_CONFIG.Y` 에서 읽는다).
  * 키 목록은 cell-shape.js 에서 읽는다 — 키가 늘면 여기서 던진다(빠진 키는 resolver 가 ctx-incomplete 로 잠가
  * ⓕ 가 엉뚱한 사유로 빨개진다).
  */
-const Y_LOCK_CTX = Object.freeze({ qrPosition: FRESH.qrPosition, qrWindow: false, qrSlot: false });
+const Y_LOCK_CTX = Object.freeze({ qrPosition: FRESH.qrPosition, qrWindow: false, qrSlot: false, ...CELL_SHAPE_MEASURED_CONFIG.Y });
 {
   const want = [...CELL_SHAPE_LOCK_CTX_KEYS.y].sort().join(',');
   const have = Object.keys(Y_LOCK_CTX).sort().join(',');
   if (want !== have) throw new Error(`y 구조 잠금 문맥 키 어긋남: 모듈 ${want} · 자 ${have}`);
-  if (CELL_SHAPE_LOCK_CTX_KEYS.oak.length !== 0) throw new Error('oak 구조 잠금 문맥 키가 생겼다 — cellCtxOf 에 채워라');
+  // oak 구조 잠금 문맥 키 = 측정 구성 키 — cellCtxOf 가 행 타입의 측정 구성 선언으로 채운다(선언 키가 모자라면 던진다).
+  for (const [configType, config] of Object.entries(CELL_SHAPE_MEASURED_CONFIG)) {
+    if (configType === 'Y') continue;
+    const missing = CELL_SHAPE_LOCK_CTX_KEYS.oak.filter((k) => !Object.prototype.hasOwnProperty.call(config, k));
+    if (missing.length) throw new Error(`oak 구조 잠금 문맥 키 ${missing} 가 측정 구성 ${configType} 선언에 없다 — cellCtxOf 가 못 채운다`);
+  }
   if (FRESH.qrPosition === 'inner') throw new Error('제품 기본 qrPosition 이 inner 다 — Y_LOCK_CTX 가 잠그는 값이 됐다');
 }
 
@@ -133,11 +142,18 @@ for (const [table, keys] of Object.entries(ROW_KEYS)) {
 
 // ── 행 → resolver 호출 ──────────────────────────────────────────────────────
 
-/** 셀 행의 문맥(resolver 입력) — 표 키 + (y) 제품 기본 구조 잠금 키. type 은 oak 행의 값, y 는 'Y'. */
+/**
+ * 셀 행의 문맥(resolver 입력) — 표 키 + 구조 잠금 키. type 은 oak 행의 값, y 는 'Y'.
+ * oak 구조 잠금 키(측정 구성)는 **행 타입의 측정 구성**으로 채운다 — 행은 그 구성에서 잰 사실이다. 선언이 없는 타입의
+ * 행은 채우지 않는다: resolver 가 ctx-incomplete 로 잠가 ⓕ(not-opened)가 빨개진다 — 행이 생긴 타입에 선언이 없다는 신호.
+ */
 function cellCtxOf(row) {
   const ctx = { table: row.table };
   for (const k of CELL_SHAPE_ALLOW_KEYS[row.table]) ctx[k] = row[k];
   if (row.table === 'y') Object.assign(ctx, { type: 'Y' }, Y_LOCK_CTX);
+  else if (Object.prototype.hasOwnProperty.call(CELL_SHAPE_MEASURED_CONFIG, row.type) && row.type !== 'Y') {
+    Object.assign(ctx, CELL_SHAPE_MEASURED_CONFIG[row.type]);
+  }
   return ctx;
 }
 function cellStateOf(row) {

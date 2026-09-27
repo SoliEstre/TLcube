@@ -9,7 +9,8 @@
 //      «기본값(사유 없는 null)» · «잠금 + 안정 사유 id» 셋 중 하나다. 빈 표(스텁 모양 STUB 을 **주입** — 기본 모듈은
 //      2026-09-27 부터 L6 생성본이다)에서는 비기본 전부가 잠금 + 사유. 생성본 자체의 성질은 cell-shape-allow-generated.test.js.
 //   ③ 구조 잠금 — 그 조합의 행을 **정확히** 넣은 «전부 열림» 표(심은 결함)로도 잠긴다. 판별력: 잠금 조건 하나만 뒤집은
-//      문맥(같은 표)에서는 같은 선택이 열린다. 구조 잠금 사유 7(셀) + 1(QR) + 2(H) 가 모두 실제 문맥에서 한 번 이상 난다.
+//      문맥(같은 표)에서는 같은 선택이 열린다. 구조 잠금 사유 전부(셀 — 측정 구성 불일치 seat-config · ecc-level 포함 ·
+//      QR · H)가 실제 문맥에서 한 번 이상 난다. 대표 문맥은 제품 경로(ECC H · A/K 자동 코너 마커)로 인코딩한다.
 //   ④ resolver 는 상태를 고치지 않는다(동결 상태 · JSON 전후 동일).
 //   ⑤ 상태 정규화 — 부재 · 문자열 · 범위 밖 · 정수 아님 → 기본값, 도메인 안은 그대로. 정규화를 거친 customSat 로는
 //      makeCustomPalette 가 절대 RangeError 를 내지 않는다.
@@ -31,9 +32,9 @@ import { getPreset, PRESETS } from '../src/luminance.js';
 import { makeCustomPalette } from '../src/palette-hue.js';
 import { centralBeaconEncoderOptions, encodeOptionsForY } from '../src/generator-render-config.js';
 import {
-  CELL_SHAPES, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_REASONS, CELL_SHAPE_PARAMS,
-  CELL_SHAPE_STRUCTURAL_LOCK_REASONS, cellShapeAllowCtx, cellShapeCtx, cellShapeStructuralLock, cellShapeTypeOf,
-  resolveCellShapeSpec,
+  CELL_SHAPES, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_LOCK_REASONS,
+  CELL_SHAPE_PARAMS, CELL_SHAPE_STRUCTURAL_LOCK_REASONS, cellShapeAllowCtx, cellShapeCtx, cellShapeStructuralLock,
+  cellShapeTypeOf, resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 import {
   QR_ALLOW_KEYS, QR_DECO_LOCK_REASONS, QR_DECO_STRUCTURAL_LOCK_REASONS, QR_HOSTS, QR_LOCKED_HOSTS, qrDecoHostOf,
@@ -104,26 +105,42 @@ const isQrDefault = (c) => c.qrCellStyle === D.qrCellStyle.defaultValue && c.qrC
 
 const N7 = 'central-n7-payload';
 const PINWHEEL = 'pinwheel-c2-2-1100-cw';
-const yEnc = (locatorProfileY, tone, fallback = { mode: 'corner', corner: 'TL' }) => encodeY(PAYLOAD, encodeOptionsForY({ tone, fallback, locatorProfileY }));
+/**
+ * 대표 문맥은 **제품 경로** 인코딩으로 만든다(2026-09-27 자리 레인): 제품 ECC 는 auto 라 짧은 페이로드에서 H 를 고르고,
+ * A · K 의 제품 기본 자리는 자동 코너 마커(a-cm · k-cm)다 — 허용표 행은 그 측정 구성(CELL_SHAPE_MEASURED_CONFIG)에서 잰
+ * 사실이다. 인코더 기본값(eccLevel 'M' · cornerMarker 없음)은 측정 밖 구성이라 새 구조 잠금(seat-config · ecc-level)에
+ * 걸린다 — 그 구성은 아래 «측정 밖» 문맥이 음성으로 잰다.
+ */
+const H = Object.freeze({ eccLevel: 'H' });
+const N7_OPTS = centralBeaconEncoderOptions(N7, false);
+// 윈도 β(Y2 · 2톤 강제)는 H 로 인코딩되지 않는다(19 B — 제품 auto 는 M 으로 내려간다). 2톤 잠금이 먼저라 ECC 는 판정 밖이다.
+const yEnc = (locatorProfileY, tone, fallback = { mode: 'corner', corner: 'TL' }, eccLevel = 'H') => encodeY(PAYLOAD, { ...encodeOptionsForY({ tone, fallback, locatorProfileY }), eccLevel });
 const W = { quietColor: 'white' };
-/** 이름 → {ctx, expect: 구조 잠금 기대(설계 §3.1 · §3.2 1차 잠금 목록 — 선택 → 사유|null)}. */
+/** 이름 → {ctx, expect: 구조 잠금 기대(설계 §3.1 · §3.2 1차 잠금 목록 + 측정 구성 불일치 — 선택 → 사유|null)}. */
 const CTXS = {
-  'O n7 TL': { ctx: cellShapeCtx('O', encode(PAYLOAD, centralBeaconEncoderOptions(N7, false)), FRESH, W), expect: () => null },
-  'O pinwheel(흰 평탄화)': { ctx: cellShapeCtx('O', encode(PAYLOAD), { ...FRESH, finderPatternId: PINWHEEL, bgMode: 'white' }, { quietColor: 'none' }), expect: () => null },
-  'O 불스아이': { ctx: cellShapeCtx('O', encode(PAYLOAD), { ...FRESH, finderPatternId: 'bullseye' }, W), expect: (k) => (k === 'dot' ? 'bullseye-dot' : null) },
-  'O cube-bullseye': { ctx: cellShapeCtx('O', encode(PAYLOAD), { ...FRESH, finderPatternId: 'cube-bullseye' }, W), expect: (k) => (k === 'dot' ? 'bullseye-dot' : null) },
+  'O n7 TL': { ctx: cellShapeCtx('O', encode(PAYLOAD, { ...N7_OPTS, ...H }), FRESH, W), expect: () => null },
+  'O pinwheel(흰 평탄화)': { ctx: cellShapeCtx('O', encode(PAYLOAD, H), { ...FRESH, finderPatternId: PINWHEEL, bgMode: 'white' }, { quietColor: 'none' }), expect: () => null },
+  'O 불스아이': { ctx: cellShapeCtx('O', encode(PAYLOAD, H), { ...FRESH, finderPatternId: 'bullseye' }, W), expect: (k) => (k === 'dot' ? 'bullseye-dot' : null) },
+  'O cube-bullseye': { ctx: cellShapeCtx('O', encode(PAYLOAD, H), { ...FRESH, finderPatternId: 'cube-bullseye' }, W), expect: (k) => (k === 'dot' ? 'bullseye-dot' : null) },
   'C(ultra)': { ctx: cellShapeCtx('O', encode(PAYLOAD, { notchC: true, version: 0 }), { ...FRESH, versionO: 'ultra', finderPatternId: PINWHEEL }, W), expect: () => 'type-c-ultra' },
-  'G(o-cm)': { ctx: cellShapeCtx('O', encode(PAYLOAD, { cornerMarker: true }), { ...FRESH, innerSeat: 'o-cm', finderPatternId: PINWHEEL }, W), expect: () => null },
-  'A n7': { ctx: cellShapeCtx('A', encodeA(PAYLOAD, centralBeaconEncoderOptions(N7, false)), { ...FRESH, type: 'A' }, W), expect: () => null },
+  // G · V 는 측정 구성 선언이 없다(행 0 — 표에서 unmeasured). 열림 fixture 로는 열린다(구조 잠금이 아니다).
+  'G(o-cm)': { ctx: cellShapeCtx('O', encode(PAYLOAD, { cornerMarker: true, ...H }), { ...FRESH, innerSeat: 'o-cm', finderPatternId: PINWHEEL }, W), expect: () => null },
+  'A n7(자동 a-cm)': { ctx: cellShapeCtx('A', encodeA(PAYLOAD, { ...N7_OPTS, cornerMarker: true, ...H }), { ...FRESH, type: 'A', outerSeat: 'a-cm' }, W), expect: () => null },
   'V(turnA)': { ctx: cellShapeCtx('A', encodeA(PAYLOAD, { turnA: true }), { ...FRESH, type: 'A', turnA: true, finderPatternId: PINWHEEL }, W), expect: () => null },
-  'K pinwheel(검정 판)': { ctx: cellShapeCtx('K', encodeK(PAYLOAD), { ...FRESH, type: 'K', finderPatternId: PINWHEEL }, { quietColor: 'black' }), expect: () => null },
+  'K pinwheel(검정 판 · 자동 k-cm)': { ctx: cellShapeCtx('K', encodeK(PAYLOAD, { cornerMarker: true, ...H }), { ...FRESH, type: 'K', outerSeat: 'k-cm', finderPatternId: PINWHEEL }, { quietColor: 'black' }), expect: () => null },
   'Y v0 3톤(투명)': { ctx: cellShapeCtx('Y', yEnc('cell-surface-v0', 3), FRESH, { quietColor: 'none' }), expect: () => null },
   'Y v0 3톤(흰 평탄화)': { ctx: cellShapeCtx('Y', yEnc('cell-surface-v0', 3), { ...FRESH, bgMode: 'white' }, { quietColor: 'none' }), expect: () => null },
   'Y v0 2톤': { ctx: cellShapeCtx('Y', yEnc('cell-surface-v0', 2), { ...FRESH, tone: 2, bgMode: 'white' }, { quietColor: 'none' }), expect: () => 'y-two-tone' },
   'Y hex-frame 3톤': { ctx: cellShapeCtx('Y', yEnc('hex-frame-v1', 3), { ...FRESH, bgMode: 'white', locatorProfileY: 'hex-frame-v1' }, { quietColor: 'none' }), expect: (k) => (k === 'gap' || k === 'dot' ? 'y-hex-frame-gap-dot' : null) },
   'Y v0ty 슬롯 3톤': { ctx: cellShapeCtx('Y', yEnc('cell-surface-v0ty', 3), { ...FRESH, bgMode: 'white' }, { quietColor: 'none' }), expect: () => 'y-qr-slot' },
   'Y v0 안쪽 QR 3톤': { ctx: cellShapeCtx('Y', yEnc('cell-surface-v0', 3), { ...FRESH, bgMode: 'white', qrPosition: 'inner' }, { quietColor: 'none' }), expect: () => 'y-inner-qr' },
-  'Y 윈도 β': { ctx: cellShapeCtx('Y', yEnc('off', 3, { mode: 'window' }), { ...FRESH, bgMode: 'white', qrPosition: 'inner' }, { quietColor: 'none' }), expect: () => 'y-two-tone' },
+  'Y 윈도 β': { ctx: cellShapeCtx('Y', yEnc('off', 3, { mode: 'window' }, 'M'), { ...FRESH, bgMode: 'white', qrPosition: 'inner' }, { quietColor: 'none' }), expect: () => 'y-two-tone' },
+  // ── 측정 밖 구성(2026-09-27) — 표 키는 측정 구성과 같아 행으로 열리던 거짓 열림. 모든 모양이 구조 잠금이다 ──
+  'A n7 바깥 없음': { ctx: cellShapeCtx('A', encodeA(PAYLOAD, { ...N7_OPTS, ...H }), { ...FRESH, type: 'A' }, W), expect: () => 'seat-config' },
+  'K pinwheel 바깥 없음': { ctx: cellShapeCtx('K', encodeK(PAYLOAD, H), { ...FRESH, type: 'K', finderPatternId: PINWHEEL }, { quietColor: 'black' }), expect: () => 'seat-config' },
+  'O n7 사괘': { ctx: cellShapeCtx('O', encode(PAYLOAD, { ...N7_OPTS, sagoae: true, ...H }), { ...FRESH, deepSeat: 'sagoae' }, W), expect: () => 'seat-config' },
+  'O n7 ECC M': { ctx: cellShapeCtx('O', encode(PAYLOAD, { ...N7_OPTS, eccLevel: 'M' }), FRESH, W), expect: () => 'ecc-level' },
+  'Y v0 3톤 ECC M': { ctx: cellShapeCtx('Y', yEnc('cell-surface-v0', 3, undefined, 'M'), { ...FRESH, bgMode: 'white' }, { quietColor: 'none' }), expect: () => 'ecc-level' },
 };
 /** bevel 1.4(돌출)는 문맥 무관 구조 잠금 — 문맥 기대보다 뒤에 적용(문맥 잠금이 먼저 판정된다). */
 function expectedStructural(name, choice) {
@@ -303,10 +320,20 @@ test('③ 구조 잠금: 그 행을 넣은 표로도 잠긴다 · 기대 사유�
 
 test('③ 구조 잠금 문맥 키가 빠지면 잠근다(fail-closed) — 추측으로 열지 않는다', () => {
   const v0 = CTXS['Y v0 3톤(흰 평탄화)'].ctx;
-  for (const k of ['qrPosition', 'qrWindow', 'qrSlot', ...CELL_SHAPE_ALLOW_KEYS.y]) {
+  assert.ok(['qrPosition', 'qrWindow', 'qrSlot', 'eccLevel'].every((k) => CELL_SHAPE_LOCK_CTX_KEYS.y.includes(k)));
+  for (const k of [...CELL_SHAPE_LOCK_CTX_KEYS.y, ...CELL_SHAPE_ALLOW_KEYS.y]) {
     const ctx = { ...v0 };
     delete ctx[k];
     assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, ctx, openCellFixture(v0)).lockReason, CELL_SHAPE_LOCK_REASONS.CTX_INCOMPLETE, k);
+  }
+  // oak 측정 구성 키(코너 마커 · 사괘 · ECC)도 같다 — 값 모름은 측정 구성과 «같다» 로 읽지 않는다.
+  const a = CTXS['A n7(자동 a-cm)'].ctx;
+  assert.deepEqual([...CELL_SHAPE_LOCK_CTX_KEYS.oak].sort(), ['cornerMarker', 'eccLevel', 'sagoae']);
+  // type 은 표를 고르는 키라 빠지면 type-not-rhombus 다(표 선택이 문맥 완전성보다 먼저) — 여기서는 뺀다.
+  for (const k of [...CELL_SHAPE_LOCK_CTX_KEYS.oak, ...CELL_SHAPE_ALLOW_KEYS.oak.filter((x) => x !== 'type')]) {
+    const ctx = { ...a };
+    delete ctx[k];
+    assert.equal(resolveCellShapeSpec({ cellShape: 'bevel' }, ctx, openCellFixture(a)).lockReason, CELL_SHAPE_LOCK_REASONS.CTX_INCOMPLETE, 'oak ' + k);
   }
   // gapGrade 는 렌더 뒤 값 — render 가 없으면 잠긴다.
   const noRender = cellShapeCtx('Y', yEnc('cell-surface-v0', 3), { ...FRESH, bgMode: 'white' });
