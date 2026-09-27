@@ -11,12 +11,14 @@
 //   ② 모든 키에서 제품 minRoundtripPpu(비디더) ≥ MEASURED_FLOORS — 제품 하한을 내리는 착지는 여기서 빨개진다(재측정하거나 순서를 바꿀 것).
 //   ③ Y 행의 하한 문맥(n)은 내보내기 경로의 모양(버전 — index.html `minRoundtripPpu({type, version, cellSurfaceLayout})`)과 같은 키다.
 //   ④ 판정 함수의 판별력 — 심은 결함 표(하한 하나 올림 · 키 하나 빠짐 · 행 없는 키 · 모르는 실효 타입 행)마다 그 결함이 **각각** 잡힌다.
-// 못 재는 것: 디더 하한(L6 격자가 비디더 점만 잰다 — 이름 붙인 축) · MEASURED_FLOORS 값 자체가 참인가(private 영수증 · gen-allow 의 몫).
-//   · 내보내기 **호출부의 문맥 모양** — 이 자는 표를 제품 함수(export-options minRoundtripPpu)와 맞대고, index.html 의 호출
-//     (exportPlanFor · syncExportPpiHint 의 minRoundtripPpu({type: current.type, version, cellSurfaceLayout}))은 읽지 않는다. 호출 모양이
-//     바뀌면(예 실효 타입을 넘김) 이 자는 초록인 채 제품 하한 키가 어긋날 수 있다 — ③ 은 Y 의 n ↔ 버전 키만 잰다(2026-09-28 착지 검토).
-//   · 고정 크기(192 · 512 px) · 커스텀 크기 내보내기 — minPpu 를 안 써(export-options resolveExportSize) 잰 하한 아래 ppu 로 나갈 수
-//     있다(cell-shape allowRowFloorCtx 주석). 기본(자동 맞춤)만 이 자가 지킨다.
+// 못 재는 것: MEASURED_FLOORS 값 자체가 참인가(측정 영수증의 몫). 디더 하한은 L6 격자가 비디더 점만 잰다 — 그래서 제품은 디더
+//   내보내기에서 셀 모양 카드를 잠근다(2026-09-28 외부 검토 — 이 자가 아니라 test/decoration-ui.test.js «내보내기 디더» 가 잰다).
+//   · 내보내기 **호출부의 문맥 모양**은 이 자가 읽지 않는다(표 ↔ 제품 함수만) — index.html 내보내기 계획(exportPlanFor)이 minRoundtripPpu 에
+//     실제로 넘긴 문맥의 키가 셀 꾸미기 판정의 잰 하한 키와 같은지는 test/decoration-ui.test.js «잰 하한 키 = index.html 내보내기 호출
+//     모양» 이 제품 렌더로 잰다(2026-09-28 착지 검토 minor 해소).
+//   · 고정 크기(192 · 512 px) · 커스텀 크기 내보내기는 minPpu 를 안 써(export-options resolveExportSize) 잰 하한 아래 ppu 로 갈 수 있다 —
+//     이 자는 자동 크기의 하한 상수만 지킨다. 그 경로는 셀 모양 카드를 잠가 덮는다(cell-shape export-size — test/decoration-ui.test.js
+//     «내보내기 크기» 가 잰다).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

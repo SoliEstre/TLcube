@@ -28,6 +28,9 @@
  *      (보조 필드 `measuredStateAtTableKey` — 2026-09-28). 다른 표 키로 가면 그 키에 행이 있어도 unmeasured 다(따르면 열릴 수도
  *      있지만 표 키 고정 반사실로는 말하지 않는다 — 문구 «판독이 확인되지 않은 조합» 은 참).
  *      렌더 면 게인(face-gain — Y 큐브 입체감)도 측정 구성 축이다(측정 구성 키 밖 — `CELL_SHAPE_MEASURED_FACE_GAINS`).
+ *      내보내기 축(export-dither · export-size — 2026-09-28 외부 검토)도 같다: 행은 비디더 · 잰 하한(`MEASURED_FLOORS`) 이상 ppu 에서만 잰
+ *      사실이라, 지금 내보내기 계획이 디더를 걸거나 고정 · 커스텀 크기가 잰 하한 아래 ppu 를 내면 잠근다(렌더 값 `exportPlan` 이 있을 때만).
+ *      사유 축은 **정확히 하나**만 다를 때만 그 축이다 — 둘 이상이면 unmeasured(`CELL_SHAPE_LOCK_AXES`).
  *      표 키에는 길이가 없다 — 행은 그 표 키의 **측정 밴드**(제품 자동이 그 키를 고르는 길이)에서 잰 사실이라, 버전 고정 · Y 로케이터
  *      직접 선택으로 더 짧은 페이로드가 그 키에 닿으면(잰 적 없는 영 패딩) 같은 보조 필드가 거짓이라 잠근다.
  *   ⑤ 문맥 — `cellShapeCtx(type, encoded, state, render)`: 제품이 resolver 에 넘길 문맥을
@@ -834,11 +837,20 @@ export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
   // 렌더 면 게인(큐브 입체감)이 측정 면 게인(`CELL_SHAPE_MEASURED_FACE_GAINS` — Y 만)과 다르고, 측정 게인이면 열린다(2026-09-28).
   // 렌더 값이 게인을 실을 때만 판정한다(그 상수 주석).
   FACE_GAIN: 'face-gain',
+  // ── 내보내기 축(2026-09-28 외부 검토 major — 허용표 행은 비디더 · 잰 하한 이상 ppu 에서만 잰 사실이다) ──
+  //   렌더 값 `render.exportPlan`(지금 내보내기 계획 — generator-render-config `cellShapeExportPlan`)이 있을 때만 판정한다(측정 하네스
+  //   경로는 싣지 않는다). 미리보기도 같은 판정으로 사각이 된다(내보내기 결과 = 미리보기).
+  // 내보내기가 디더(양자화)를 건다 — 측정은 비디더만 쟀다. 디더를 끄면 열린다.
+  EXPORT_DITHER: 'export-dither',
+  // 내보내기 계획의 ppu(고정 · 커스텀 크기)가 그 표 키의 잰 하한(허용표 `MEASURED_FLOORS`)보다 낮다. 자동 크기로 두면 열린다.
+  EXPORT_SIZE: 'export-size',
 });
 
 /**
  * 구조 잠금 사유 id 전부 — `cellShapeStructuralLock` 이 낼 수 있는 값의 목록(테스트 · i18n 대조용).
- * seat-config · ecc-level · detector-emphasis 는 resolver 가 반사실로 거른 뒤에만 카드 사유로 나간다(`resolveCellShapeSpec`).
+ * seat-config · ecc-level · detector-emphasis · face-gain 은 resolver 가 반사실로 거른 뒤에만 카드 사유로 나간다(`resolveCellShapeSpec`).
+ * 내보내기 축(export-dither · export-size)은 여기 없다 — 구조 잠금(측정 하네스 계약)이 아니라 resolver 가 렌더 값으로만 판정한다
+ * (`CELL_SHAPE_LOCK_AXES`).
  */
 export const CELL_SHAPE_STRUCTURAL_LOCK_REASONS = Object.freeze([
   CELL_SHAPE_LOCK_REASONS.TYPE_C_ULTRA,
@@ -856,7 +868,8 @@ export const CELL_SHAPE_STRUCTURAL_LOCK_REASONS = Object.freeze([
 
 /**
  * 측정 구성 축 → 사유(판정 순서 그대로) — 자리(와이어 셀 역할) → ECC(와이어 정정 여유) → 실효 검출 강조(렌더 채움색).
- * 여러 축이 함께 다르면 앞 축의 사유다(각 문구는 «이 설정에서는 판독이 확인되지 않았다» 라 어느 축이든 참이다).
+ * 이 순서는 구조 잠금(`cellShapeStructuralLock` — 측정 하네스 계약, 첫 번째로 다른 축)의 순서다. 카드 **사유**는 순서로 고르지 않는다 —
+ * resolver 는 다른 축을 전부 세어 **정확히 하나**일 때만 그 축을 탓한다(`CELL_SHAPE_LOCK_AXES` 주석 — 2026-09-28 외부 검토 major).
  * 측정 구성 키 전부가 정확히 한 축에 든다(아래 로드 시 자기검증 — 새 키가 사유 없이 조용히 빠지지 않게).
  */
 export const CELL_SHAPE_MEASURED_CONFIG_AXES = Object.freeze([
@@ -902,20 +915,79 @@ function allowTableOf(type) {
  * 하네스의 계약(주입한 행은 구조 잠금이 없으면 연다 — 아니면 «키 드리프트» 로 멈춘다)과 V 에서 충돌한다(시험해 확인). 선언
  * 없는 타입의 행은 표를 다시 생성할 때만 들어오고, 그때 ⓒ 가 빨개진다. 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로
  * 잠근다(다른 구조 잠금 줄과 같은 결: 증거가 있을 때만 사유를 낸다).
+ * 반환은 다른 축 **전부**(축 순서) — 구조 잠금은 그 첫째를 쓰고(`measuredConfigLock`), resolver 는 개수를 센다(`lockAxes`).
  */
-function measuredConfigLock(table, ctx) {
+function measuredConfigDiffs(table, ctx) {
   const config = CELL_SHAPE_MEASURED_CONFIG[table === 'y' ? 'Y' : ctx.type];
-  if (!config) return null;
+  if (!config) return [];
   const differs = (k) => Object.prototype.hasOwnProperty.call(config, k) && ctx[k] !== undefined
     && !measuredValueMatches(k, ctx[k], config[k]);
-  for (const axis of CELL_SHAPE_MEASURED_CONFIG_AXES) if (axis.keys.some(differs)) return axis.reason;
-  // 렌더 면 게인(측정 구성 키 밖 — `CELL_SHAPE_MEASURED_FACE_GAINS` 주석): 렌더 값이 게인을 실었을 때만 판정한다. 축 순서의 맨 뒤다
-  // (자리 → ECC → 강조 → 면 게인 — 여러 축이 함께 다르면 앞 축 사유, 문구는 어느 축이든 «이 설정에서는 확인 안 됨» 이라 참이다).
-  const gains = CELL_SHAPE_MEASURED_FACE_GAINS[table === 'y' ? 'Y' : ctx.type];
-  if (gains && ctx.faceGains !== undefined && !FACE_GAIN_KEYS.every((k) => ctx.faceGains[k] === gains[k])) {
-    return CELL_SHAPE_LOCK_REASONS.FACE_GAIN;
+  const out = CELL_SHAPE_MEASURED_CONFIG_AXES.filter((axis) => axis.keys.some(differs)).map((axis) => axis.reason);
+  // 렌더 면 게인(측정 구성 키 밖 — `CELL_SHAPE_MEASURED_FACE_GAINS` 주석): 렌더 값이 게인을 실었을 때만 판정한다. 축 순서의 맨 뒤다.
+  if (faceGainsDiffer(table, ctx.type, ctx.faceGains)) out.push(CELL_SHAPE_LOCK_REASONS.FACE_GAIN);
+  return out;
+}
+/** 구조 잠금의 측정 구성 줄 — 첫 번째로 다른 축(측정 하네스 계약: 잠금 여부만 쓴다). 카드 사유는 이 값이 아니다(`lockAxes`). */
+function measuredConfigLock(table, ctx) {
+  return measuredConfigDiffs(table, ctx)[0] ?? null;
+}
+/** 면 게인이 그 표의 측정 면 게인과 다른가 — 측정 게인 선언이 없는 타입이거나 게인을 모르면(undefined) 판정 안 함(false). */
+function faceGainsDiffer(table, type, gains) {
+  const measured = CELL_SHAPE_MEASURED_FACE_GAINS[table === 'y' ? 'Y' : type];
+  return Boolean(measured) && gains !== undefined && !FACE_GAIN_KEYS.every((k) => gains[k] === measured[k]);
+}
+
+/**
+ * 카드 사유가 될 수 있는 **축** — 측정 구성 축(`CELL_SHAPE_MEASURED_CONFIG_AXES`) · 면 게인 · 내보내기 축(디더 · 크기). resolver 는
+ * 행이 있는 표 키(hit)에서 이 축들 중 다른 것을 **전부** 세고(`lockAxes`), 사유를 이렇게 고른다(2026-09-28 외부 검토 major — 두 렌즈가
+ * 독립으로 같은 결함을 냈다: 옛 규칙 «여러 축이 함께 다르면 앞 축 사유» 는 그 축만 따라서는 안 열리는 틀린 안내였다).
+ *   0 개 → 열림(측정 상태 거짓이면 unmeasured) · **정확히 1 개** → 그 축을 측정 값으로 돌리면 열릴 때만(`measuredCounterfactualHolds`) 그 축 ·
+ *   2 개 이상 → unmeasured(g1162 «판독이 확인되지 않은 조합» — 어느 한 축만 따라서는 안 열린다).
+ * 잠금 여부는 개수와 무관하다(하나라도 다르면 잠근다) — 바뀌는 것은 사유뿐이다.
+ * 디더 ↔ 면 게인(Y): 자동 입체감은 디더 비트깊이를 읽어 게인을 바꾼다(export-options resolveRenderProfile — 디더 2 → 출력물용). 그래서
+ * 디더 축의 반사실(디더를 끈 내보내기)은 면 게인도 다시 유도한 값(`exportPlan.faceGainsDitherOff`)으로 센다: 디더를 끄면 측정 게인으로
+ * 돌아오면 면 게인 차이는 디더의 파생이라 **한 축(디더)** 으로 세고 사유는 export-dither 다(face-gain 은 나오지 않는다 — 두 사유가 같은
+ * 원인을 두 번 말하지 않는다). 디더를 꺼도 게인이 측정 밖이면(입체감 카드 · 인쇄용 갈래 · 슬라이더) 두 축이라 unmeasured 다. 디더를 끈
+ * 게인을 모르면 지금 게인으로 센다(보수 — 둘 다 다르면 unmeasured).
+ */
+export const CELL_SHAPE_LOCK_AXES = Object.freeze([
+  ...CELL_SHAPE_MEASURED_CONFIG_AXES.map((a) => a.reason),
+  CELL_SHAPE_LOCK_REASONS.FACE_GAIN,
+  CELL_SHAPE_LOCK_REASONS.EXPORT_DITHER,
+  CELL_SHAPE_LOCK_REASONS.EXPORT_SIZE,
+]);
+
+/**
+ * 다른 축 전부(`CELL_SHAPE_LOCK_AXES` 의 부분집합 — 순서는 의미 없다, 개수만 쓴다)와 «잰 하한을 모른다».
+ * 내보내기 축은 문맥 보조 필드 `exportPlan`(렌더 값 — `renderAuxCtx`)이 있을 때만 센다:
+ *   dithered → export-dither(면 게인은 위 규칙으로 디더를 끈 게인으로 다시 센다).
+ *   ppu · floorKey → 허용표 `MEASURED_FLOORS[floorKey]` 보다 ppu 가 낮으면 export-size. 표가 MEASURED_FLOORS 를 싣는데 그 키가 없으면
+ *     floorUnknown(잴 수 없으면 잠근다 — 생성 표에서는 행의 하한 키가 늘 있다: test/cell-shape-measured-floors.test.js ①). 표가
+ *     MEASURED_FLOORS 자체를 안 싣으면(행만 주입한 표 — 테스트 fixture · 옛 스텁) 크기는 판정하지 않는다.
+ */
+function lockAxes(table, ctx, allow) {
+  const axes = measuredConfigDiffs(table, ctx);
+  const plan = ctx.exportPlan;
+  let floorUnknown = false;
+  if (!plan) return { axes, floorUnknown };
+  const R = CELL_SHAPE_LOCK_REASONS;
+  if (plan.dithered === true) {
+    if (plan.faceGainsDitherOff !== undefined) {
+      const at = axes.indexOf(R.FACE_GAIN);
+      const afterDitherOff = faceGainsDiffer(table, ctx.type, plan.faceGainsDitherOff);
+      if (at >= 0 && !afterDitherOff) axes.splice(at, 1); // 게인 차이는 디더의 파생 — 한 축
+      else if (at < 0 && afterDitherOff) axes.push(R.FACE_GAIN); // 디더를 끄면 게인이 측정 밖이 된다 — 두 축
+    }
+    axes.push(R.EXPORT_DITHER);
   }
-  return null;
+  if (typeof plan.ppu === 'number' && typeof plan.floorKey === 'string') {
+    const floors = allow && allow.MEASURED_FLOORS;
+    if (floors && typeof floors === 'object') {
+      if (!Object.prototype.hasOwnProperty.call(floors, plan.floorKey)) floorUnknown = true;
+      else if (plan.ppu < floors[plan.floorKey]) axes.push(R.EXPORT_SIZE);
+    }
+  }
+  return { axes, floorUnknown };
 }
 
 /** 측정 구성 축 사유 중 **와이어** 축(자리 · ECC — 바꾸면 재인코딩된다). 강조 · 면 게인은 렌더 축이다(인코딩 불변). */
@@ -934,7 +1006,9 @@ export const CELL_SHAPE_WIRE_CONFIG_KEYS = Object.freeze(
  * `measuredStateAtTableKey` 가 제품 인코더 · 제품 자동 경로로 유도한 «측정 상태가 이 표 키에 있다» — 측정 와이어 구성(자리 · ECC)으로 제품
  * 자동 버전 · 레이아웃을 고르면 이 페이로드가 같은 표 키에 닿는다)에서만 읽는다.
  *   와이어 축(자리 · ECC): 그 값이 true 일 때만 참. 없거나(모름) 거짓이면 «그 축 탓» 은 따를 수 없는 안내라 unmeasured.
- *   렌더 축(강조 · 면 게인): 인코딩이 안 바뀌므로 값이 **거짓일 때만** 거짓(모름이면 참 — 측정 하네스 경로는 이 값을 안 싣는다).
+ *   렌더 축(강조 · 면 게인 · 내보내기 디더 · 크기): 인코딩이 안 바뀌므로 값이 **거짓일 때만** 거짓(모름이면 참 — 측정 하네스 경로는 이 값을
+ *   안 싣는다). 이 판정은 다른 축이 **하나뿐**일 때만 쓴다(`CELL_SHAPE_LOCK_AXES` — 하나뿐이면 «그 축 = 측정 구성 전부» 라 와이어 반사실
+ *   (측정 와이어 구성 전부로 인코딩)이 곧 그 축 하나를 돌린 반사실이다).
  * 왜: ① 제품 auto 는 H 가 안 들어가는 길이에서 M 을 고른다(A 79–96 · Y n25 v0tr 114–117 B 등 — 행이 있는 표 키만 hit) — 그
  * 버전에 H 로는 안 들어가므로 «ECC 를 H 로» 는 참이 아니다. ② A 바깥 «없음» 79–80 B(v2 H)는 코너 마커를 켜면 v2 H 에 안 들어가
  * auto 가 M 으로 내려간다 — «자리 탓» 을 따라도 열리지 않는다. ③ 버전을 고정(고급 화면)하거나 Y 로케이터를 직접 고른 짧은
@@ -1001,9 +1075,10 @@ export function cellShapeStructuralLock(table, kind, param, ctx) {
  *   문맥 완전성(측정 구성 키) → 허용표 행 × **측정 구성 불일치**(표와 무관하게 잠근다). 행은 문맥 · 모양 · 파라미터가
  *   **모두** 같아야 연다(type 키 포함 — 다른 타입 행은 같은 비-type 문맥이어도 이 문맥을 열지 않는다). round-bevel 의
  *   param 은 null(고정 조합).
- * - 사유는 참이어야 한다(반사실): seat-config · ecc-level · detector-emphasis · face-gain 은 «같은 표 키에서 측정 구성만 바꾸면
- *   이 행이 열린다» 일 때만, exposed-gap 은 «틈만 흰색으로 바꾸면 열린다»(측정 구성 일치 ∧ 측정 상태 ∧ 흰 틈 형제 행) 일 때만.
- *   그 밖은 unmeasured. 와이어 축(seat-config · ecc-level)은 그 반사실이 **실현 가능**할 때만 — 제품 자동 경로가 측정 와이어 구성으로
+ * - 사유는 참이어야 한다(반사실 — «그걸 따르면 열린다»): 축 사유(seat-config · ecc-level · detector-emphasis · face-gain ·
+ *   export-dither · export-size)는 다른 축이 **정확히 하나**이고 «같은 표 키에서 그 축만 측정 값으로 돌리면 이 행이 열린다» 일 때만
+ *   (`CELL_SHAPE_LOCK_AXES` — 둘 이상이면 unmeasured), exposed-gap 은 «틈만 흰색으로 바꾸면 열린다»(다른 축 0 ∧ 측정 상태 ∧ 흰 틈 형제 행)
+ *   일 때만. 그 밖은 unmeasured. 와이어 축(seat-config · ecc-level)은 그 반사실이 **실현 가능**할 때만 — 제품 자동 경로가 측정 와이어 구성으로
  *   이 페이로드를 같은 표 키에 인코딩한다(문맥 보조 필드 `measuredStateAtTableKey`, `measuredCounterfactualHolds`). 거짓이거나
  *   모르면 unmeasured(2026-09-28, DESIGN_002 §4.4 + 착지 검토). 보조 필드가 **거짓**이면(측정 밴드 밖 — 버전 고정 · Y 로케이터
  *   직접 선택의 짧은 페이로드) 구성이 측정과 같아도 잠그고 사유는 unmeasured 다.
@@ -1013,7 +1088,8 @@ export function cellShapeStructuralLock(table, kind, param, ctx) {
  *
  * @param {object} state 생성기 상태(cellShape · cellRound · cellBevel · cellGap · cellDot)
  * @param {object} ctx 렌더 시점 문맥 — `cellShapeCtx` 결과(`CELL_SHAPE_REQUIRED_CTX_KEYS[table]`)
- * @param {{ROWS?: object[]}} [allow] 허용표(기본 `src/cell-shape-allow.js`)
+ * @param {{ROWS?: object[], MEASURED_FLOORS?: object}} [allow] 허용표(기본 `src/cell-shape-allow.js`) — MEASURED_FLOORS 는 내보내기 크기
+ *   판정(`lockAxes`)에만 쓴다
  * @returns {{spec: null | {kind:string, param:number|null}, lockReason?: string}}
  */
 export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
@@ -1051,28 +1127,32 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
     && row.cellShape === kind
     && row.param === param
     && keys.every((k) => Object.prototype.hasOwnProperty.call(row, k) && row[k] === ctx[k]));
-  // 측정 구성 불일치는 행이 있어도 잠근다(표 행은 측정 구성에서만 잰 사실). 행 매칭은 표 키만 보므로, 여기서 hit 는
-  // 곧 «같은 표 키에서 측정 구성 키만 바꾼 반사실 문맥에서 이 행이 연다» 이다 — 그때만 자리 · ECC · 강조 사유가 참이다
-  // (표 키 고정 반사실 — 자동 버전의 재인코딩은 표 키를 바꿀 수 있어 «되돌리면 열린다» 까지는 말하지 않는다).
-  const config = measuredConfigLock(table, ctx);
+  // 측정 구성 · 면 게인 · 내보내기 축 불일치는 행이 있어도 잠근다(표 행은 측정 구성 · 비디더 · 잰 하한 이상에서만 잰 사실). 행 매칭은
+  // 표 키만 보므로, 여기서 hit 는 곧 «같은 표 키에서 다른 축을 측정 값으로 돌린 반사실 문맥에서 이 행이 연다» 이다(표 키 고정 반사실 —
+  // 자동 버전의 재인코딩은 표 키를 바꿀 수 있어 와이어 축은 `measuredStateAtTableKey` 로 따로 본다).
+  const { axes, floorUnknown } = lockAxes(table, ctx, allow);
   // 측정 상태 밖(보조 필드가 **거짓** — 모름은 판정 안 함): 구성이 측정 구성과 같아도 이 표 키의 측정 밴드 밖이다(버전 고정 ·
   // Y 로케이터 직접 선택의 짧은 페이로드 — 잰 적 없는 영 패딩 구간, 2026-09-28 착지 검토 major). 행이 있어도 잠그고, 어느 한 축만
   // 바꿔서는 안 열리니 사유는 unmeasured(틈 탓도 아니다 — 아래 whiteSibling 이 같은 조건을 본다).
   const outOfMeasuredState = ctx.measuredStateAtTableKey === false;
   if (hit) {
-    if (config === null) return outOfMeasuredState ? { spec: null, lockReason: R.UNMEASURED } : { spec: { kind, param } };
-    // 축 사유는 반사실을 따를 수 있을 때만(`measuredCounterfactualHolds`) — 와이어 축(자리 · ECC)은 같은 표 키에 측정 상태가 있어야 한다.
-    if (!measuredCounterfactualHolds(config, ctx)) return { spec: null, lockReason: R.UNMEASURED };
-    return { spec: null, lockReason: config };
+    // 잰 하한을 모르는 표 키(표가 하한을 싣는데 이 키가 없다)는 크기를 잴 수 없다 — 잠그고, 어느 축을 따라도 열린다고 말할 수 없다.
+    if (floorUnknown) return { spec: null, lockReason: R.UNMEASURED };
+    if (axes.length === 0) return outOfMeasuredState ? { spec: null, lockReason: R.UNMEASURED } : { spec: { kind, param } };
+    // 축 사유는 다른 축이 정확히 하나이고 그 반사실을 따를 수 있을 때만(`measuredCounterfactualHolds` — 와이어 축은 같은 표 키에 측정
+    // 상태가 있어야 한다). 둘 이상이면 어느 한 축만 따라서는 안 열린다 — unmeasured(2026-09-28 외부 검토 major).
+    if (axes.length === 1 && measuredCounterfactualHolds(axes[0], ctx)) return { spec: null, lockReason: axes[0] };
+    return { spec: null, lockReason: R.UNMEASURED };
   }
 
   // 사유도 표에서 유도한다. exposed-gap = 노출형 × 비흰 틈 × **흰 틈 형제 행이 있다**(틈 · 바탕만 다르고
   // 나머지 표 키 · 모양 · 강도가 같은 행 — 측정 격자에서 틈 등급과 bgMode 는 짝지어 움직인다). 틈이 실제로
   // 가르는 축일 때만 «틈 탓» 이다. 스텁 표 시절의 «노출형 × 비흰 틈 ⇒ 틈 탓» 은 실측 표에서 거짓이 됐다 —
   // Y 투명(unknown) n13 은 둥글게를 여는데 행이 없는 n21 에서도 «틈 탓» 이라 말했다(2026-09-27 화면 확인).
-  // 측정 구성까지 다르면 틈만 바꿔서는 안 열린다(자리 · ECC · 강조도 같이 바꿔야 한다) — 한 축이 가르지 않으니 unmeasured.
+  // 다른 축(측정 구성 · 면 게인 · 내보내기)까지 다르면 틈만 바꿔서는 안 열린다 — 한 축이 가르지 않으니 unmeasured. 흰 틈 형제의 잰
+  // 하한 키는 이 문맥과 같다(하한 키는 타입 · 버전/n · 레이아웃뿐) — 하한을 모르면 형제도 모른다.
   // 그 밖은 unmeasured — 미측정 · 측정 실패 · 판정 무효를 표는 가르지 않으므로 «판독이 확인되지 않음» 이다.
-  const whiteSibling = config === null && !outOfMeasuredState && EXPOSED_CELL_SHAPES.includes(kind) && ctx.gapGrade !== 'white'
+  const whiteSibling = axes.length === 0 && !floorUnknown && !outOfMeasuredState && EXPOSED_CELL_SHAPES.includes(kind) && ctx.gapGrade !== 'white'
     && rows.some((row) => row
       && row.table === table
       && row.cellShape === kind
@@ -1183,17 +1263,32 @@ function measuredConfigCtx(effType, encoded, render) {
  * 렌더 값 → 문맥 보조 필드(표 키도 필수 키도 아니다 — 모양이 틀리거나 없으면 **키를 만들지 않는다**, 추측으로 채우지 않는다).
  *   measuredStateAtTableKey: boolean 만(generator-render-config `measuredStateAtTableKey` — 측정 상태가 이 표 키에 있는가).
  *   faceGains: Y 만, T · L · R 이 유한한 양수인 객체만 → 그 세 값의 동결 사본(generator-render-config `producerFaceGains`).
+ *   exportPlan: 지금 내보내기 계획(generator-render-config `cellShapeExportPlan`) — dithered 가 boolean 인 객체만. 그 안에서 ppu(유한한
+ *     양수)와 floorKey(문자열)는 **둘 다** 있을 때만, faceGainsDitherOff 는 Y 이고 게인 모양일 때만 싣는다(동결 사본).
  * 없을 때 뜻: measuredStateAtTableKey 모름 → 와이어 축 사유를 안 낸다(잠금은 같다) · faceGains 모름 → 면 게인을 판정 안 한다
- * (측정 하네스 경로 — `CELL_SHAPE_MEASURED_FACE_GAINS` 주석).
+ * (측정 하네스 경로 — `CELL_SHAPE_MEASURED_FACE_GAINS` 주석) · exportPlan 모름 → 내보내기 축을 판정 안 한다(측정 하네스 경로 ·
+ * 제품 렌더의 첫 판정 — index.html render 가 계획을 얻은 뒤 다시 판정한다) · ppu 모름 → 크기를 판정 안 한다(내보내기 계획이 던진다 —
+ * 커스텀 크기 오입력: 내보낼 그림이 없다).
  */
 function renderAuxCtx(effType, render) {
   const aux = {};
   if (!render) return aux;
   if (typeof render.measuredStateAtTableKey === 'boolean') aux.measuredStateAtTableKey = render.measuredStateAtTableKey;
-  const g = render.faceGains;
-  if (effType === 'Y' && g && typeof g === 'object'
-    && FACE_GAIN_KEYS.every((k) => typeof g[k] === 'number' && Number.isFinite(g[k]) && g[k] > 0)) {
-    aux.faceGains = Object.freeze({ T: g.T, L: g.L, R: g.R });
+  const gainsOf = (g) => (g && typeof g === 'object'
+    && FACE_GAIN_KEYS.every((k) => typeof g[k] === 'number' && Number.isFinite(g[k]) && g[k] > 0)
+    ? Object.freeze({ T: g.T, L: g.L, R: g.R }) : undefined);
+  const g = effType === 'Y' ? gainsOf(render.faceGains) : undefined;
+  if (g) aux.faceGains = g;
+  const p = render.exportPlan;
+  if (p && typeof p === 'object' && typeof p.dithered === 'boolean') {
+    const plan = { dithered: p.dithered };
+    if (typeof p.ppu === 'number' && Number.isFinite(p.ppu) && p.ppu > 0 && typeof p.floorKey === 'string') {
+      plan.ppu = p.ppu;
+      plan.floorKey = p.floorKey;
+    }
+    const off = effType === 'Y' ? gainsOf(p.faceGainsDitherOff) : undefined;
+    if (off) plan.faceGainsDitherOff = off;
+    aux.exportPlan = Object.freeze(plan);
   }
   return aux;
 }
@@ -1218,21 +1313,23 @@ function hasSlotCells(encoded) {
  *       설계 잠금 키 qrPosition(상태) · qrWindow(인코딩 window) · qrSlot(인코딩 role 'slot' 셀 유무) ·
  *       측정 구성 키 eccLevel(인코딩) · detectorEmphasis(렌더 값).
  * 값을 모르면 그 키는 undefined 로 남는다 — resolver 가 `ctx-incomplete` 로 잠근다(추측으로 채우지 않는다).
- * 보조 필드(표 키도 필수 키도 아니다 — `renderAuxCtx`): measuredStateAtTableKey(boolean) · faceGains(Y 만) — 렌더 값이 주면
- *       싣고, 없거나 모양이 틀리면 **키를 만들지 않는다**(값 모름으로 잠그지 않는다 — resolver 는 그때 와이어 축 사유를 안 내고
- *       면 게인을 판정하지 않는다).
+ * 보조 필드(표 키도 필수 키도 아니다 — `renderAuxCtx`): measuredStateAtTableKey(boolean) · faceGains(Y 만) · exportPlan — 렌더 값이
+ *       주면 싣고, 없거나 모양이 틀리면 **키를 만들지 않는다**(값 모름으로 잠그지 않는다 — resolver 는 그때 와이어 축 사유를 안 내고
+ *       면 게인 · 내보내기 축을 판정하지 않는다).
  *
  * @param {'O'|'A'|'K'|'Y'} type 생성기 타입(`generatorState.type`)
  * @param {object} encoded 실제 인코딩 결과(자동 버전 · 레이아웃 해석 뒤)
  * @param {object} state 생성기 상태
  * @param {{quietColor?: 'white'|'black'|'none'|'surface', detectorEmphasis?: string, measuredStateAtTableKey?: boolean,
- *          faceGains?: {T: number, L: number, R: number}}} [render]
+ *          faceGains?: {T: number, L: number, R: number},
+ *          exportPlan?: {dithered: boolean, ppu?: number, floorKey?: string, faceGainsDitherOff?: {T: number, L: number, R: number}}}} [render]
  *   렌더 뒤에야 아는 값 — quietColor = `resolveQuietZoneChoice(...).color`(없으면 gapGrade 가 undefined — 잠금) ·
  *   detectorEmphasis = 생산자 옵션에서 유도한 실효 검출 강조(generator-render-config `detectorEmphasisEquivalents(type, encoded,
  *   sceneOpts)` — 없으면 undefined, 잠금) · measuredStateAtTableKey = 제품 자동 경로가 측정 와이어 구성으로 이 페이로드를 같은 표
  *   키에 인코딩하는가(generator-render-config `measuredStateAtTableKey` — 제품 인코더 · 자동 사다리로 유도, 와이어 축 사유의 실현 조건이자
  *   측정 밴드 판정 · 없으면 와이어 축 사유를 안 낸다) · faceGains = 생산자가 쓸 면 게인(generator-render-config `producerFaceGains` —
- *   Y 만, 없으면 면 게인을 판정 안 한다).
+ *   Y 만, 없으면 면 게인을 판정 안 한다) · exportPlan = 지금 내보내기 계획의 셀 꾸미기 판정 모양(generator-render-config
+ *   `cellShapeExportPlan` — 디더 여부 · ppu · 잰 하한 키 · 디더를 끈 면 게인, 없으면 내보내기 축을 판정 안 한다).
  * @returns {object|null} 문맥, 또는 마름모 셀이 아닌 타입(H 등) · 입력 없음이면 null
  */
 export function cellShapeCtx(type, encoded, state, render) {
@@ -1325,12 +1422,14 @@ export const CELL_SHAPE_GENERATOR_TYPE_COLLISIONS = GENERATOR_TYPE_DERIVATION.co
  *   h   → {type: 'H', version}
  *   qr · 모르는 표 · 모르는 실효 타입 → null(qr 은 px/모듈이라 하한 키가 없다).
  * 디더 비트는 싣지 않는다(비디더 — 잰 하한이 비디더 점만 센다).
- * 잰 하한이 지키는 것은 **자동 크기의 하한 상수**(export-options minRoundtripPpu)뿐이다 — 못 지키는 축(2026-09-28 착지 검토, 표 머리
- * «잰 하한이 못 지키는 축» 에 없던 것): 고정 크기(192 · 512 px)와 커스텀 크기 내보내기는 minPpu 를 안 쓰므로(export-options
- * resolveExportSize) 꾸민 심볼이 모든 잰 하한 아래 ppu(192 px ≈ 2–3 · 512 px ≈ 5.7–8.2)로 나갈 수 있다. 카드 잠금도 경고도 없다 —
- * 꾸미기 전부터의 제품 정책이고, 기본(자동 맞춤 ×1.5)은 안전하다. 덮으려면 고정 · 커스텀 크기에서 꾸미기를 잠그거나 경고를 띄울 것.
+ * 두 소비자가 이 한 벌을 쓴다: (1) 잰 하한 자(test/cell-shape-measured-floors.test.js — 자동 크기의 하한 상수 export-options
+ * minRoundtripPpu ≥ 잰 하한) (2) 셀 모양 카드의 내보내기 크기 잠금(generator-render-config `cellShapeExportPlan` 이 렌더 문맥의 표 키로
+ * 이 유도를 불러 잰 하한 키를 싣고, resolver 가 지금 내보내기 계획의 ppu 와 맞댄다 — 고정 크기(192 · 512 px)와 커스텀 크기는 minPpu 를
+ * 안 써(export-options resolveExportSize) 잰 하한 아래로 갈 수 있어서다, 2026-09-28 외부 검토 major). 그 호출 모양(index.html 내보내기
+ * 계획의 minRoundtripPpu 문맥)과 같은 키가 나오는지는 test/decoration-ui.test.js 가 제품 렌더로 잰다.
  * 또 h 행의 잰 하한은 증거 케이스의 사다리 floorPpu 가 아니라 제품 H 하한 점 판별(hFloor)에서 온다 — 표 머리의 «값 = 그 키 행의
- * 증거 케이스 비디더 floorPpu» 문장은 h 에 맞지 않는다(방향은 보수 — 생성기 문구를 고칠 몫, 이 표는 생성본이라 손대지 않는다).
+ * 증거 케이스 비디더 floorPpu» 문장은 h 에 맞지 않는다(방향은 보수 — 표 머리는 생성본이라 손대지 않는다: 다음 재생성 때 생성기 문구를
+ * 고칠 몫).
  * @param {object} row 허용표 행
  * @returns {{type: string, version?: number, n?: number|null, cellSurfaceLayout?: string|null}|null}
  */

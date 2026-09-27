@@ -15,10 +15,12 @@ import {
 import { finderRenderKindOf } from './finder-render-kind.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
 import {
-  CELL_SHAPE_MEASURED_CONFIG, CELL_SHAPE_SEAT_CONFIG_KEYS, CELL_SHAPE_WIRE_CONFIG_KEYS, cellShapeAllowCtx, cellShapeCtx,
+  CELL_SHAPE_MEASURED_CONFIG, CELL_SHAPE_SEAT_CONFIG_KEYS, CELL_SHAPE_WIRE_CONFIG_KEYS, allowRowFloorCtx, cellShapeAllowCtx, cellShapeCtx,
 } from './cell-shape.js';
 import { payloadByteLength } from './header.js';
 import { DEFAULT_RENDER_PROFILE, faceGainsForRenderProfile } from './render-profile.js';
+import { DITHER_BIT_DEPTHS, quantizeDitherRaster } from './dither.js';
+import { minRoundtripPpuKey } from './export-options.js';
 import { resolveAutoY } from './generator-auto-y.js';
 import {
   CELL_SURFACE_FINAL_V0,
@@ -392,6 +394,50 @@ export function producerFaceGains(type, sceneOpts) {
   if (type !== 'Y') return undefined;
   const gains = sceneOpts && sceneOpts.palette ? sceneOpts.palette.faceGains : undefined;
   return gains === undefined ? faceGainsForRenderProfile(DEFAULT_RENDER_PROFILE) : gains;
+}
+
+/**
+ * 디더 비트깊이가 **항등**(픽셀을 안 바꾼다)인가 — 내보내기 양자화기(dither `quantizeDitherRaster` — 내보내기 파이프라인이 부르는 그 함수)를
+ * 표본 픽셀에 돌려 잰다(«24 = 항등» 을 여기 다시 적지 않는다). 표본은 어느 낮은 비트깊이로도 정확히 표현되지 않는 값이다.
+ */
+const DITHER_PROBE = Object.freeze([1, 2, 3, 255, 127, 128, 129, 255, 254, 253, 252, 255]);
+const DITHER_IDENTITY = new Map();
+function ditherIsIdentity(bits) {
+  if (!DITHER_IDENTITY.has(bits)) {
+    const raster = { width: 3, height: 1, pixels: new Uint8ClampedArray(DITHER_PROBE) };
+    const out = quantizeDitherRaster(raster, bits).pixels;
+    DITHER_IDENTITY.set(bits, DITHER_PROBE.every((v, i) => out[i] === v));
+  }
+  return DITHER_IDENTITY.get(bits);
+}
+
+/**
+ * **지금 내보내기 계획** → 셀 꾸미기 문맥 보조 필드(cell-shape `cellShapeCtx` 의 render.exportPlan)의 유도(2026-09-28 외부 검토 major 두 건 —
+ * 허용표 행은 비디더 · 잰 하한 이상 ppu 에서만 잰 사실인데 디더 내보내기와 고정 · 커스텀 크기가 그 밖으로 나갔다).
+ * 입력은 제품 내보내기 계획이 **실제로 쓰는 값**이다 — index.html 이 자기 내보내기 계획(exportPlanFor → export-options resolveExportSize)의
+ * ppu 와 비트깊이를 넘긴다(규칙을 여기 다시 적지 않는다).
+ *   dithered — 비트깊이가 양자화를 거는가(null · 항등이면 false — `ditherIsIdentity`).
+ *   ppu · floorKey — 계획의 ppu 와 그 렌더 표 키의 잰 하한 키(cell-shape `allowRowFloorCtx` — 허용표 MEASURED_FLOORS 를 만든 것과 같은 유도,
+ *     export-options `minRoundtripPpuKey` 철자). ppu 를 모르면(계획이 던졌다 — 내보낼 그림이 없다) 둘 다 싣지 않는다.
+ *   faceGainsDitherOff — 디더를 끈 내보내기에서 생산자가 쓸 면 게인(Y 만 — 호출자가 같은 유도에 비트깊이 null 을 넣어 만든다). resolver 는
+ *     디더 축 반사실의 면 게인으로 쓴다(cell-shape `CELL_SHAPE_LOCK_AXES` 주석).
+ * @param {{type: 'O'|'A'|'K'|'Y', state: object, encoded: object, ppu?: number, ditherBits: number|null,
+ *          faceGainsDitherOff?: {T: number, L: number, R: number}}} input
+ * @returns {{dithered: boolean, ppu?: number, floorKey?: string, faceGainsDitherOff?: object}|undefined} 입력을 모르면 undefined
+ *   (→ 내보내기 축을 판정 안 함)
+ */
+export function cellShapeExportPlan({ type, state, encoded, ppu, ditherBits, faceGainsDitherOff } = {}) {
+  if (!encoded || typeof encoded !== 'object' || !state || typeof state !== 'object') return undefined;
+  if (!(ditherBits === null || DITHER_BIT_DEPTHS.includes(ditherBits))) return undefined;
+  const plan = { dithered: ditherBits !== null && !ditherIsIdentity(ditherBits) };
+  const ctx = cellShapeCtx(type, encoded, state, TABLE_KEY_PROBE_RENDER);
+  const floorCtx = ctx ? allowRowFloorCtx(cellShapeAllowCtx(ctx)) : null;
+  if (floorCtx && typeof ppu === 'number' && Number.isFinite(ppu) && ppu > 0) {
+    plan.ppu = ppu;
+    plan.floorKey = minRoundtripPpuKey(floorCtx);
+  }
+  if (faceGainsDitherOff !== undefined) plan.faceGainsDitherOff = faceGainsDitherOff;
+  return plan;
 }
 
 /**

@@ -222,13 +222,16 @@ test('index.html — 카드가 실제로 배선돼 있다 (있기만 한 카드 
   // 렌더 경로가 프로파일을 실제로 소비한다 — 상수 폴백으로 돌아가면 안 된다.
   // 2026-08-19 개편: «자동» 이 끼면서 상태값 직접 소비가 아니라 **해석 경유**가 계약이
   // 됐다 (faceGainsForRenderProfile 은 'auto' 를 거부한다 — 해석 없이 부르면 죽는다).
+  // **의도적 갱신 (2026-09-28)** — 세 함수가 비트깊이 인자를 받는다(셀 꾸미기의 «디더를 끈 내보내기» 반사실이 같은 유도를 쓴다 —
+  // index.html cellShapeExportPlanNow). 생략하면 지금 선택(exportDitherBits)이라 해석 경유 계약은 그대로다. 슬라이더 보간 단언은
+  // currentFaceGains 안으로 좁혔다 — 옛 `const base = profileFaceGains();` 는 syncFaceGainLabel 의 같은 줄로도 맞아 공허했다.
   assert.match(INDEX_SOURCE,
-    /function profileFaceGains\(\)\s*\{\s*return faceGainsForRenderProfile\(resolvedRenderProfile\(\)\);/);
+    /function profileFaceGains\((ditherBits)?\)\s*\{\s*return faceGainsForRenderProfile\(resolvedRenderProfile\(\1\)\);/);
   assert.match(INDEX_SOURCE,
-    /function resolvedRenderProfile\(\)\s*\{\s*return resolveRenderProfile\(generatorState\.renderProfile,/,
+    /function resolvedRenderProfile\((ditherBits = exportDitherBits\(\))?\)\s*\{\s*return resolveRenderProfile\(generatorState\.renderProfile,/,
     '자동 해석이 export-options.resolveRenderProfile 단일 정의를 안 탄다');
   assert.match(INDEX_SOURCE, /faceGains: faceGains === undefined \? profileFaceGains\(\) : faceGains,/);
-  assert.match(INDEX_SOURCE, /const base = profileFaceGains\(\);/,
+  assert.match(INDEX_SOURCE, /function currentFaceGains\((ditherBits)?\)\s*\{\s*const base = profileFaceGains\(\1\);/,
     '면 게인 슬라이더가 프로파일까지의 보간이 아니다');
   // 상수 게인을 **코드로** 쓰면 안 된다 (설명 주석에 이름이 나오는 것은 무방하다).
   assert.doesNotMatch(INDEX_SOURCE, /import \{[^}]*DEFAULT_FACE_GAINS/,

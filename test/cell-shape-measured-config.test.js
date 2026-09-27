@@ -30,9 +30,11 @@
 //      기본이 잠기는 것이 맞다 — 선언은 영수증에서만 바꾼다).
 //   ⓔ 선언이 묶인 영수증 = 허용표 RECEIPT_SHA256 — 표를 다시 생성하면 빨개진다(선언을 재유도하고 sha 를 갱신할 것).
 //   ⓕ 사유는 참이다(반사실 불변식) — 생성 표의 문맥 격자(측정 구성 · 자리/ECC/강조 뒤집기 · 두 축 동시 · 같은 그림 집합 · 틈 ·
-//      행 없는 버전 × 모든 선택지)에서 seat-config · ecc-level · detector-emphasis ⇒ 측정 구성으로 바꾸면 열린다 · 사유는 첫 번째로
-//      다른 축(자리 → ECC → 강조) · exposed-gap ⇒ 틈만 흰색으로 바꾸면 열린다 · unmeasured ⇒ 그 어느 한 축만 바꿔서는 안 열린다 ·
-//      설계 잠금 ⇒ 측정 구성으로 바꿔도 같은 사유다. 측정 구성과 다르면 열림은 없다.
+//      행 없는 버전 × 모든 선택지)에서 seat-config · ecc-level · detector-emphasis · face-gain ⇒ 다른 축이 정확히 하나이고 그 축만
+//      측정 값으로 돌리면 열린다(2026-09-28 외부 검토 major — 옛 «첫 번째로 다른 축» 은 두 축 문맥에서 틀린 안내였다) · 두 축 이상 ⇒
+//      unmeasured 이고 어느 한 축만 돌려서는 안 열린다 · exposed-gap ⇒ 틈만 흰색으로 바꾸면 열린다 · unmeasured ⇒ 그 어느 한 축만
+//      바꿔서는 안 열린다 · 설계 잠금 ⇒ 측정 구성으로 바꿔도 같은 사유다. 측정 구성과 다르면 열림은 없다.
+//      (내보내기 축 — 디더 · 크기 — 은 이 합성 격자 밖이다: 렌더 값 exportPlan 이 있을 때만 판정하고, ⓚ 와 decoration-ui 가 잰다.)
 //      반사실은 **표 키 고정**(같은 버전)이다 — 제품 자동 버전은 구성을 바꾸면 재인코딩으로 버전이 바뀔 수 있어(짧은 페이로드의
 //      G + 사괘 · G ECC M 실측) «되돌리면 열린다» 까지는 이 자가 말하지 않는다(사유 문구 «이 구성으로는 확인 안 됨» 은 그때도 참).
 //   ⓗ ECC 반사실의 실현 조건(2026-09-28, DESIGN_002 §4.4) — ecc-level 은 제품 자동 경로가 측정 ECC(H)로 그 페이로드를 **같은 표 키**에
@@ -47,6 +49,11 @@
 //   ⓙ 면 게인 — 착지 검토 major(2026-09-28): Y 생산자는 면 게인(큐브 입체감)으로 그리고 하네스는 화면용 게인 하나로 쟀다. 측정 게인
 //      선언 = 하네스 규약(자동 · 인쇄용 아님 · 디더 없음)의 게인 · Y 장면은 게인에 따라 달라지고 O/A/K 장면은 안 달라진다(판정 범위의
 //      근거) · 다른 게인이면 표 키가 같아도 face-gain 으로 잠긴다.
+//   ⓚ 내보내기 축 — 외부 검토 major 셋(2026-09-28): 렌더 값 exportPlan(지금 내보내기 계획)이 디더거나 ppu 가 그 표 키의 잰 하한
+//      (MEASURED_FLOORS) 아래면 행이 있어도 잠근다 · 그 축 하나뿐이면 그 사유(export-dither · export-size) · 다른 축과 함께면 unmeasured ·
+//      잰 하한 모름은 unmeasured · 표가 하한을 안 실으면 크기는 판정 안 함 · Y 디더 ↔ 면 게인(디더를 끄면 측정 게인이면 한 축) ·
+//      보조 필드 모양 검증 · 계획 유도(디더 = 양자화기가 픽셀을 바꾼다 · 잰 하한 키 = 내보내기 호출 모양의 키). 제품 경로(실물 index.html
+//      render · exportPlanFor · 트리거 · 미리보기 ↔ 내보내기)는 test/decoration-ui.test.js 가 잰다.
 //   ⓖ 실효 검출 강조 ≡ 실제 렌더 — 제품 조립 격자(O · A · K 파인더 × 코너 마커 × 중앙 QR × 팔레트, Y 스키마 레이아웃 전부)에서
 //      «q 가 넘긴 p 의 집합에 든다 ⟺ p 와 q 가 같은 장면(도형 JSON 전부 — 채움색만이 아니라 좌표 · 획 · 순서까지)» 을
 //      buildScene · buildSceneY 로 잰다 — 유도 함수의 렌더 구조(중앙 검출기 두 팔 · 검출 셀 한 팔 · Y 셀 표면 로케이터)를 믿지 않는다.
@@ -65,7 +72,8 @@ import {
   CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_LOCK_REASONS, CELL_SHAPE_MEASURED_CONFIG, CELL_SHAPE_MEASURED_CONFIG_AXES,
   CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256, CELL_SHAPE_PARAMS, CELL_SHAPE_REQUIRED_CTX_KEYS,
   CELL_SHAPE_MEASURED_FACE_GAINS, CELL_SHAPE_SEAT_CONFIG_KEYS, CELL_SHAPE_STRUCTURAL_LOCK_REASONS, CELL_SHAPE_WIRE_CONFIG_KEYS,
-  EXPOSED_CELL_SHAPES, cellShapeAllowCtx, cellShapeCtx, cellShapeTypeOf, resolveCellShapeSpec,
+  CELL_SHAPE_LOCK_AXES, EXPOSED_CELL_SHAPES, allowRowFloorCtx, cellShapeAllowCtx, cellShapeCtx, cellShapeStructuralLock, cellShapeTypeOf,
+  resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 import { ECC_NAME_BY_VALUE } from '../src/formatinfo.js';
 import { encode } from '../src/encode.js';
@@ -73,11 +81,12 @@ import { encodeA } from '../src/encodeA.js';
 import { encodeK } from '../src/encodeK.js';
 import { encodeY } from '../src/encodeY.js';
 import {
-  centralBeaconEncoderOptions, centralN7FamilyForType, detectorEmphasisEquivalents, encodeOptionsForY, measuredStateAtTableKey,
-  producerFaceGains, sceneOptionsForOA,
+  centralBeaconEncoderOptions, centralN7FamilyForType, cellShapeExportPlan, detectorEmphasisEquivalents, encodeOptionsForY,
+  measuredStateAtTableKey, producerFaceGains, sceneOptionsForOA,
 } from '../src/generator-render-config.js';
 import { DEFAULT_RENDER_PROFILE, RENDER_PROFILE_IDS, faceGainsForRenderProfile } from '../src/render-profile.js';
-import { resolveRenderProfile } from '../src/export-options.js';
+import { minRoundtripPpuKey, resolveRenderProfile } from '../src/export-options.js';
+import { DITHER_BIT_DEPTHS, quantizeDitherRaster } from '../src/dither.js';
 import { DEFAULT_FACE_GAINS } from '../src/sceneY.js';
 import {
   CENTRAL_N7_EMPHASIS_MODES, DEFAULT_CENTRAL_N7_EMPHASIS, GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS,
@@ -704,7 +713,7 @@ function cellChoices() {
   return out;
 }
 
-test('ⓕ 사유는 참이다(표 키 고정 반사실) — 자리 · ECC · 강조 · 면 게인 탓은 같은 표 키에서 측정 구성이면 열릴 때만(첫 번째로 다른 축 · 와이어 축은 측정 상태 참), 틈 탓은 틈만 바꾸면 열릴 때만, 설계 잠금이 먼저다', () => {
+test('ⓕ 사유는 참이다(표 키 고정 반사실) — 자리 · ECC · 강조 · 면 게인 탓은 다른 축이 정확히 하나이고 그 축만 돌리면 열릴 때만(와이어 축은 측정 상태 참 · 둘 이상이면 unmeasured), 틈 탓은 틈만 바꾸면 열릴 때만, 설계 잠금이 먼저다', () => {
   // 반사실은 표 키(버전 포함)를 고정한다 — 제품 자동 버전의 재인코딩(구성을 바꾸면 버전이 바뀐다)은 이 격자 밖이다(머리말 ⓕ).
   const cellRows = ALLOW.ROWS.filter((r) => r.table === 'oak' || r.table === 'y');
   const yLock = { qrPosition: FRESH.qrPosition, qrWindow: false, qrSlot: false };
@@ -757,9 +766,14 @@ test('ⓕ 사유는 참이다(표 키 고정 반사실) — 자리 · ECC · 강
       // 측정 구성으로 바꾼 반사실 — 같은 표 키 · 측정 상태는 그대로(측정 상태 거짓이면 반사실도 측정 밖이다).
       const measured = Object.freeze({ ...ctx, ...config, ...(measuredGains ? { faceGains: { ...measuredGains } } : {}) });
       const mismatch = Object.entries(v).some(([k, val]) => !same(k, val));
-      // 첫 번째로 다른 축 — 이 자의 비교로 판정한다.
-      const firstAxis = axes.find(([, keys]) => keys.some((k) => (k === 'faceGains' ? !same(k, ctx[k]) : k in config && !same(k, ctx[k]))));
-      const wireFirst = firstAxis && (firstAxis[0] === R.SEAT_CONFIG || firstAxis[0] === R.ECC_LEVEL);
+      // 다른 축 전부 — 이 자의 비교로 판정한다(2026-09-28 외부 검토 major: 사유는 «정확히 하나» 일 때만 그 축, 둘 이상이면 unmeasured).
+      const diffAxes = axes.filter(([, keys]) => keys.some((k) => (k === 'faceGains' ? !same(k, ctx[k]) : k in config && !same(k, ctx[k]))));
+      const onlyAxis = diffAxes.length === 1 ? diffAxes[0] : null;
+      const wireOnly = onlyAxis && (onlyAxis[0] === R.SEAT_CONFIG || onlyAxis[0] === R.ECC_LEVEL);
+      /** 그 축 하나만 측정 값으로 돌린 반사실(나머지 축 · 측정 상태는 그대로). */
+      const restoreOne = ([, keys]) => Object.freeze({
+        ...ctx, ...Object.fromEntries(keys.map((k) => [k, k === 'faceGains' ? { ...measuredGains } : config[k]])),
+      });
       for (const c of choices) {
         const st = Object.freeze(c);
         const res = resolveCellShapeSpec(st, ctx);
@@ -774,10 +788,12 @@ test('ⓕ 사유는 참이다(표 키 고정 반사실) — 자리 · ECC · 강
         bump((mismatch ? 'mismatch:' : 'measured:') + reason);
         if ([R.SEAT_CONFIG, R.ECC_LEVEL, R.DETECTOR_EMPHASIS, R.FACE_GAIN].includes(reason)) {
           assert.ok(opens(st, measured), '축 탓인데 측정 구성으로 바꿔도 안 열린다: ' + where);
-          assert.ok(firstAxis, '측정 구성과 같은데 측정 구성 사유: ' + where);
-          assert.equal(reason, firstAxis[0], '사유가 가리키는 축이 첫 번째로 다른 축이 아니다: ' + where);
+          assert.ok(onlyAxis, `축 탓인데 다른 축이 정확히 하나가 아니다(${diffAxes.map(([r]) => r).join(',') || '없음'}): ` + where);
+          assert.equal(reason, onlyAxis[0], '사유가 가리키는 축이 다른 그 축이 아니다: ' + where);
+          // 따르면 열린다 — 그 축 하나만 돌린 반사실이 연다(나머지 문맥 그대로).
+          assert.ok(opens(st, restoreOne(onlyAxis)), '축 탓인데 그 축만 돌려서는 안 열린다(틀린 안내): ' + where);
           assert.notEqual(state, false, '측정 상태 거짓인데 축 탓(따를 수 없는 안내): ' + where);
-          if (wireFirst) assert.equal(state, true, '와이어 축 탓인데 측정 상태가 참이 아니다(실현 불가 · 모름): ' + where);
+          if (wireOnly) assert.equal(state, true, '와이어 축 탓인데 측정 상태가 참이 아니다(실현 불가 · 모름): ' + where);
         } else if (reason === R.EXPOSED_GAP) {
           assert.equal(mismatch, false, '측정 구성까지 다른데 틈 탓: ' + where);
           assert.notEqual(state, false, '측정 밴드 밖인데 틈 탓: ' + where);
@@ -785,10 +801,18 @@ test('ⓕ 사유는 참이다(표 키 고정 반사실) — 자리 · ECC · 강
           const whiteOpens = ['white', 'transparent', 'black'].some((bg) => opens(st, { ...ctx, gapGrade: 'white', bgMode: bg }));
           assert.ok(whiteOpens, '틈 탓인데 틈만 흰색으로 바꿔도 안 열린다: ' + where);
         } else if (reason === R.UNMEASURED) {
-          // 측정 구성으로 바꾸면 열리는데 미확인인 것은 **와이어 축이 첫 축이고 측정 상태가 참이 아닐 때**뿐이다(따를 수 없는 안내).
+          // 측정 구성으로 바꾸면 열리는데 미확인인 것은 **다른 축이 둘 이상**(어느 한 축만 따라서는 안 열린다)이거나 **와이어 축 하나이고
+          // 측정 상태가 참이 아닐 때**뿐이다(따를 수 없는 안내).
           if (opens(st, measured)) {
-            assert.ok(wireFirst && state !== true, '측정 구성으로 바꾸면 열리는데 미확인이라 한다(축 탓이어야): ' + where);
-            bump('wire-state-unknown:unmeasured');
+            if (diffAxes.length >= 2) {
+              for (const axis of diffAxes) {
+                assert.equal(opens(st, restoreOne(axis)), false, `다른 축이 둘 이상인데 ${axis[0]} 만 돌려도 열린다: ` + where);
+              }
+              bump('multi-axis:unmeasured');
+            } else {
+              assert.ok(wireOnly && state !== true, '측정 구성으로 바꾸면 열리는데 미확인이라 한다(축 탓이어야): ' + where);
+              bump('wire-state-unknown:unmeasured');
+            }
           }
           if (state === false) {
             // 측정 상태 거짓이 축 사유를 거뒀다(같은 문맥 · 측정 상태 참이면 축 사유) — 판별력 갈래.
@@ -813,7 +837,8 @@ test('ⓕ 사유는 참이다(표 키 고정 반사실) — 자리 · ECC · 강
   // 같은 그림 집합이 실제로 열었다 · 측정 상태 거짓 · 모름이 와이어 축 사유를 실제로 거뒀다 · 밴드 밖이 실제로 잠갔다).
   for (const k of ['open', 'open:equivalent', 'mismatch:seat-config', 'mismatch:ecc-level', 'mismatch:detector-emphasis',
     'mismatch:face-gain', 'mismatch:unmeasured', 'mismatch:bevel-raised', 'mismatch:bullseye-dot', 'measured:exposed-gap',
-    'measured:unmeasured', 'state-false:axis-withdrawn', 'wire-state-unknown:unmeasured', 'out-of-band:unmeasured']) {
+    'measured:unmeasured', 'state-false:axis-withdrawn', 'wire-state-unknown:unmeasured', 'out-of-band:unmeasured',
+    'multi-axis:unmeasured']) {
     assert.ok(counts[k] > 0, `갈래 ${k} 가 격자에서 안 났다 — ${JSON.stringify(counts)}`);
   }
 });
@@ -1213,4 +1238,185 @@ test('ⓖ 실효 검출 강조 ≡ 실제 렌더 — «q 가 넘긴 p 의 집합
   }
   // 판별력 — 세 구조(해당 없음 · 검출 셀 한 팔 · 중앙 두 팔)가 격자에 다 있다.
   assert.ok(kinds.na > 0 && kinds.detectorOnly > 0 && kinds.all3 > 0, JSON.stringify(kinds));
+});
+
+// ── ⓚ 내보내기 축(디더 · 크기)과 사유 축 개수 — 합성 문맥(렌더 값 exportPlan) ────────────────────────────────
+
+/** 행의 표 키 문맥 + 그 타입의 측정 구성 + 측정 상태 참(측정 구성 문맥 — 내보내기 축만 흔든다). */
+function measuredCtxOfRow(row) {
+  const t = row.table === 'y' ? 'Y' : row.type;
+  const ctx = { table: row.table, type: t, measuredStateAtTableKey: true };
+  for (const k of CELL_SHAPE_ALLOW_KEYS[row.table]) ctx[k] = row[k];
+  if (row.table === 'y') Object.assign(ctx, { qrPosition: FRESH.qrPosition, qrWindow: false, qrSlot: false });
+  return Object.assign(ctx, CELL_SHAPE_MEASURED_CONFIG[t]);
+}
+
+test('ⓚ 내보내기 축 — 디더 · 잰 하한 아래 ppu 는 행이 있어도 잠그고, 그 축 하나뿐이면 그 사유(따르면 열림) · 다른 축과 함께면 unmeasured · 하한 모름은 unmeasured · 표가 하한을 안 실으면 크기는 판정 안 함 · 구조 잠금(하네스 계약)은 내보내기 축을 안 본다', () => {
+  const cellRows = ALLOW.ROWS.filter((r) => r.table === 'oak' || r.table === 'y');
+  const floors = ALLOW.MEASURED_FLOORS;
+  const counts = {};
+  const bump = (k) => { counts[k] = (counts[k] || 0) + 1; };
+  for (const row of cellRows) {
+    const base = measuredCtxOfRow(row);
+    const config = CELL_SHAPE_MEASURED_CONFIG[base.type];
+    const floorKey = minRoundtripPpuKey(allowRowFloorCtx(row));
+    assert.ok(Object.prototype.hasOwnProperty.call(floors, floorKey), `행의 잰 하한 키 ${floorKey} 가 표에 없다`);
+    const floor = floors[floorKey];
+    const withPlan = (p, extra = {}) => Object.freeze({
+      ...base, ...extra, exportPlan: Object.freeze({ dithered: false, ppu: floor, floorKey, ...p }),
+    });
+    const st = Object.freeze(stateOf(row));
+    const res = (ctx, allow = ALLOW) => resolveCellShapeSpec(st, ctx, allow);
+    const open = { spec: { kind: row.cellShape, param: row.param } };
+    const at = JSON.stringify(row);
+    // 잰 하한과 같은 ppu 는 잰 점이다 — 연다. 위도 연다.
+    assert.deepEqual(res(withPlan({})), open, `하한 ppu: ${at}`);
+    assert.deepEqual(res(withPlan({ ppu: floor * 4 })), open, `하한 위: ${at}`);
+    // 한 축 — 그 사유. 따르면(그 축만 측정 값으로 — 하한 ppu · 디더 끔) 위 두 줄처럼 열린다.
+    const below = withPlan({ ppu: floor - 0.25 });
+    assert.deepEqual(res(below), { spec: null, lockReason: R.EXPORT_SIZE }, `하한 아래: ${at}`);
+    const dither = withPlan({ dithered: true });
+    assert.deepEqual(res(dither), { spec: null, lockReason: R.EXPORT_DITHER }, `디더: ${at}`);
+    bump('single');
+    // 두 축 — unmeasured(어느 한 축만 따라서는 안 열린다: 한 축을 돌린 반사실은 남은 축 사유로 잠긴다).
+    const both = withPlan({ dithered: true, ppu: floor - 0.25 });
+    assert.deepEqual(res(both), { spec: null, lockReason: R.UNMEASURED }, `디더 + 하한 아래: ${at}`);
+    const eccOther = ECC_NAMES.find((e) => e !== config.eccLevel);
+    for (const [name, ctx] of [
+      ['ECC + 디더', withPlan({ dithered: true }, { eccLevel: eccOther })],
+      ['ECC + 하한 아래', withPlan({ ppu: floor - 0.25 }, { eccLevel: eccOther })],
+    ]) {
+      assert.deepEqual(res(ctx), { spec: null, lockReason: R.UNMEASURED }, `${name}: ${at}`);
+      bump('pair');
+    }
+    // 내보내기 축만 따르면 ECC 사유로 남는다(잠금 그대로) — 위 두 축이 참으로 둘이다.
+    assert.deepEqual(res(withPlan({}, { eccLevel: eccOther })), { spec: null, lockReason: R.ECC_LEVEL }, `ECC 한 축: ${at}`);
+    // 측정 상태 거짓(측정 밴드 밖)이면 내보내기 한 축이어도 따를 수 없다 — unmeasured.
+    assert.deepEqual(res(withPlan({ dithered: true }, { measuredStateAtTableKey: false })), { spec: null, lockReason: R.UNMEASURED });
+    // 잰 하한 모름(표가 하한을 싣는데 이 키가 없다) — 잴 수 없으면 잠근다(사유 unmeasured — 어느 축을 따라도 열린다고 말 못 한다).
+    assert.deepEqual(res(withPlan({ floorKey: 'Z:9' })), { spec: null, lockReason: R.UNMEASURED }, `하한 모름: ${at}`);
+    // 표가 MEASURED_FLOORS 를 안 실으면(행만 주입한 표) 크기는 판정하지 않는다 — 디더는 여전히 잠근다.
+    assert.deepEqual(res(below, { ROWS: [row] }), open, `하한 없는 표에서 크기를 판정했다: ${at}`);
+    assert.deepEqual(res(dither, { ROWS: [row] }), { spec: null, lockReason: R.EXPORT_DITHER });
+    // ppu 모름(계획이 던졌다 — 내보낼 그림이 없다)이면 크기는 판정하지 않는다.
+    assert.deepEqual(res(Object.freeze({ ...base, exportPlan: Object.freeze({ dithered: false }) })), open);
+    // 구조 잠금(측정 하네스 계약 — 첫 번째로 다른 측정 구성 축)은 내보내기 축을 안 본다.
+    assert.equal(cellShapeStructuralLock(row.table, row.cellShape, row.param, both), null, `구조 잠금이 내보내기 축을 봤다: ${at}`);
+  }
+  // exposed-gap — 틈만 흰색으로 바꾸면 열리는 문맥도 내보내기 축이 다르면 틈 탓이 아니다(두 축).
+  let gap = 0;
+  for (const row of cellRows.filter((r) => r.gapGrade === 'white' && EXPOSED_CELL_SHAPES.includes(r.cellShape))) {
+    const ctx = { ...measuredCtxOfRow(row), gapGrade: 'unknown', bgMode: 'transparent' };
+    const st = Object.freeze(stateOf(row));
+    if (resolveCellShapeSpec(st, Object.freeze(ctx)).lockReason !== R.EXPOSED_GAP) continue;
+    const floorKey = minRoundtripPpuKey(allowRowFloorCtx(row));
+    for (const p of [{ dithered: true }, { dithered: false, ppu: ALLOW.MEASURED_FLOORS[floorKey] - 0.25, floorKey }]) {
+      assert.deepEqual(resolveCellShapeSpec(st, Object.freeze({ ...ctx, exportPlan: Object.freeze(p) })), { spec: null, lockReason: R.UNMEASURED },
+        `틈 + 내보내기 축인데 틈 탓: ${JSON.stringify(row)} ${JSON.stringify(p)}`);
+    }
+    gap += 1;
+  }
+  assert.ok(counts.single > 0 && counts.pair > 0 && gap > 0, JSON.stringify({ ...counts, gap }));
+  // 축 목록 — 측정 구성 축(구조 잠금 순서) · 면 게인 · 내보내기 둘. 내보내기 사유는 구조 잠금 사유가 아니다(하네스 계약 밖).
+  assert.deepEqual([...CELL_SHAPE_LOCK_AXES], [...CELL_SHAPE_MEASURED_CONFIG_AXES.map((a) => a.reason), R.FACE_GAIN, R.EXPORT_DITHER, R.EXPORT_SIZE]);
+  for (const r of [R.EXPORT_DITHER, R.EXPORT_SIZE]) assert.ok(!CELL_SHAPE_STRUCTURAL_LOCK_REASONS.includes(r), `${r} 는 구조 잠금 사유가 아니다`);
+});
+
+test('ⓚ 디더 ↔ 면 게인(Y) — 디더를 끄면 측정 게인으로 돌아오면 게인 차이는 디더의 파생(한 축 export-dither) · 디더를 꺼도 게인이 측정 밖이면 두 축 · 디더를 끈 게인을 모르면 지금 게인으로 센다', () => {
+  const yRows = ALLOW.ROWS.filter((r) => r.table === 'y');
+  assert.ok(yRows.length > 0);
+  const measured = CELL_SHAPE_MEASURED_FACE_GAINS.Y;
+  const soft = faceGainsForRenderProfile('soft');
+  const print = faceGainsForRenderProfile('print');
+  assert.notDeepEqual({ ...soft }, { ...measured });
+  assert.notDeepEqual({ ...print }, { ...measured });
+  let n = 0;
+  for (const row of yRows) {
+    const base = measuredCtxOfRow(row);
+    const st = Object.freeze(stateOf(row));
+    const open = { spec: { kind: row.cellShape, param: row.param } };
+    const res = (faceGains, plan) => resolveCellShapeSpec(st, Object.freeze({
+      ...base, faceGains, ...(plan ? { exportPlan: Object.freeze(plan) } : {}),
+    }));
+    const at = JSON.stringify(row);
+    assert.deepEqual(res({ ...measured }, null), open, at);
+    // 디더 2(자동 → 출력물용) · 디더를 끄면 화면용(측정) — 한 축(디더). 면 게인 사유는 나오지 않는다.
+    assert.deepEqual(res(print, { dithered: true, faceGainsDitherOff: { ...measured } }), { spec: null, lockReason: R.EXPORT_DITHER }, at);
+    // 디더를 꺼도 약(인쇄용 갈래 · 약 명시) — 두 축.
+    assert.deepEqual(res(print, { dithered: true, faceGainsDitherOff: soft }), { spec: null, lockReason: R.UNMEASURED }, at);
+    // 지금 게인은 측정인데 디더를 끄면 측정 밖이 된다 — 디더만 따르면 게인으로 잠긴다: 두 축.
+    assert.deepEqual(res({ ...measured }, { dithered: true, faceGainsDitherOff: soft }), { spec: null, lockReason: R.UNMEASURED }, at);
+    // 디더를 끈 게인 모름 — 지금 게인으로 센다(지금 게인이 다르면 두 축 · 같으면 디더 한 축).
+    assert.deepEqual(res(print, { dithered: true }), { spec: null, lockReason: R.UNMEASURED }, at);
+    assert.deepEqual(res({ ...measured }, { dithered: true }), { spec: null, lockReason: R.EXPORT_DITHER }, at);
+    // 디더가 아니면 디더를 끈 게인은 판정에 안 쓴다 — 면 게인 한 축 그대로.
+    assert.deepEqual(res(soft, { dithered: false, faceGainsDitherOff: { ...measured } }), { spec: null, lockReason: R.FACE_GAIN }, at);
+    n += 1;
+  }
+  assert.ok(n > 0);
+});
+
+test('ⓚ 문맥 보조 필드 exportPlan — 모양이 맞을 때만 싣는다(dithered boolean · ppu 는 floorKey 와 함께 · 디더를 끈 게인은 Y 만) · 동결 사본', () => {
+  const enc = encodeA(PAYLOAD, { ...N7, cornerMarker: true, eccLevel: 'H' });
+  const A = { ...FRESH, type: 'A', outerSeat: 'a-cm' };
+  const ctx = (exportPlan, type = 'A', e = enc, s = A) => cellShapeCtx(type, e, s, { ...renderOf(type, e, s), exportPlan });
+  assert.equal('exportPlan' in ctx(undefined), false);
+  assert.equal('exportPlan' in ctx({ dithered: 'yes' }), false, 'dithered 가 boolean 이 아니면 싣지 않는다');
+  assert.deepEqual({ ...ctx({ dithered: false, ppu: 5 }).exportPlan }, { dithered: false }, 'floorKey 없는 ppu');
+  assert.deepEqual({ ...ctx({ dithered: false, ppu: -1, floorKey: 'A:0' }).exportPlan }, { dithered: false }, '양수 아닌 ppu');
+  assert.deepEqual({ ...ctx({ dithered: false, ppu: Number.NaN, floorKey: 'A:0' }).exportPlan }, { dithered: false });
+  const good = ctx({ dithered: true, ppu: 9.5, floorKey: 'A:0', faceGainsDitherOff: { T: 1, L: 0.72, R: 0.62 } }).exportPlan;
+  assert.deepEqual({ ...good }, { dithered: true, ppu: 9.5, floorKey: 'A:0' }, 'O/A/K 에 디더를 끈 게인이 실렸다');
+  assert.ok(Object.isFrozen(good));
+  const Y = { ...FRESH, type: 'Y', locatorProfileY: 'cell-surface-v0' };
+  const yEncoded = yEnc('H');
+  const yPlan = (g) => ctx({ dithered: true, faceGainsDitherOff: g }, 'Y', yEncoded, Y).exportPlan;
+  assert.deepEqual({ ...yPlan({ T: 1, L: 0.72, R: 0.62 }).faceGainsDitherOff }, { T: 1, L: 0.72, R: 0.62 });
+  assert.equal('faceGainsDitherOff' in yPlan({ T: 1, L: 0 }), false, '게인 모양이 아니면 싣지 않는다');
+  assert.ok(Object.isFrozen(yPlan({ T: 1, L: 0.72, R: 0.62 }).faceGainsDitherOff));
+});
+
+test('ⓚ 내보내기 계획 유도(cellShapeExportPlan) — 디더는 양자화기가 픽셀을 바꾸는 비트깊이만 · 잰 하한 키 = 내보내기 호출 모양(생성기 타입 · 버전 · 레이아웃)의 하한 키 · ppu 는 유한한 양수만', () => {
+  // 디더 — 양자화기(dither quantizeDitherRaster)가 픽셀을 바꾸는가와 같다(이 자는 유도 함수와 다른 표본으로 잰다).
+  const sample = new Uint8ClampedArray([10, 200, 77, 255, 3, 250, 128, 255]);
+  const enc = encodeA(PAYLOAD, { ...N7, cornerMarker: true, eccLevel: 'H' });
+  const A = { ...FRESH, type: 'A', outerSeat: 'a-cm' };
+  const planOf = (ditherBits, ppu = 9) => cellShapeExportPlan({ type: 'A', state: A, encoded: enc, ppu, ditherBits });
+  assert.equal(planOf(null).dithered, false);
+  for (const bits of DITHER_BIT_DEPTHS) {
+    const changes = quantizeDitherRaster({ width: 2, height: 1, pixels: sample }, bits).pixels.some((v, i) => v !== sample[i]);
+    assert.equal(planOf(bits).dithered, changes, `비트깊이 ${bits}`);
+  }
+  assert.ok(DITHER_BIT_DEPTHS.some((b) => planOf(b).dithered) && DITHER_BIT_DEPTHS.some((b) => !planOf(b).dithered), '디더 판정의 두 갈래');
+  assert.equal(planOf(7), undefined, '도메인 밖 비트깊이');
+  for (const bad of [undefined, 0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const p = cellShapeExportPlan({ type: 'A', state: A, encoded: enc, ppu: bad, ditherBits: null });
+    assert.equal('ppu' in p || 'floorKey' in p, false, `ppu ${bad}`);
+  }
+  // 잰 하한 키 — 내보내기 경로(index.html 내보내기 계획)가 minRoundtripPpu 에 넘기는 모양({생성기 타입, 버전, 셀 표면 레이아웃})의 키와 같다.
+  const cases = [
+    ['A', encodeA, { ...N7, cornerMarker: true }, A],
+    ['K', encodeK, { ...N7, cornerMarker: true }, { ...FRESH, type: 'K', outerSeat: 'k-cm' }],
+    ['O', encode, { ...N7 }, { ...FRESH, type: 'O', innerSeat: 'none' }],
+    ['O', encode, { ...N7, cornerMarker: true, markerTones: true }, { ...FRESH, type: 'O', innerSeat: 'o-cm' }],
+  ];
+  let n = 0;
+  for (const [type, fn, opts, state] of cases) {
+    for (const text of [PAYLOAD, lenText(35), lenText(60)]) {
+      let e;
+      try { e = fn(text, { ...opts, eccLevel: 'H' }); } catch { continue; }
+      const p = cellShapeExportPlan({ type, state, encoded: e, ppu: 9, ditherBits: null });
+      assert.equal(p.floorKey, minRoundtripPpuKey({ type, version: e.version, cellSurfaceLayout: e.cellSurfaceLayout || null }), `${type} ${text.length} B`);
+      n += 1;
+    }
+  }
+  for (const L of [13, 25, 60]) {
+    const auto = resolveAutoY({ payloadBytes: L, tones: 3, eccLevel: 'H' });
+    const opts = encodeOptionsForY({ tone: 3, versionY: auto.version, fallback: Y_TL, locatorProfileY: auto.locatorProfileY });
+    const e = encodeY(lenText(L), { ...opts, eccLevel: 'H' });
+    const p = cellShapeExportPlan({ type: 'Y', state: { ...FRESH, type: 'Y' }, encoded: e, ppu: 9, ditherBits: null });
+    assert.equal(p.floorKey, minRoundtripPpuKey({ type: 'Y', version: e.version, cellSurfaceLayout: e.cellSurfaceLayout || null }), `Y ${L} B`);
+    n += 1;
+  }
+  assert.ok(n >= 6, `대조 ${n}`);
 });
