@@ -31,7 +31,8 @@ import { FACES, facePolygon } from '../src/hexgrid.js';
 import { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } from '../src/luminance.js';
 import { TL_READER_URL } from '../src/qr.js';
 import {
-  CELL_TIERS, cellShapeAllowedKinds, cellShapeCtx, cellShapeTier, resolveCellShapeSpec,
+  CELL_SHAPE_MEASURED_CONFIG, CELL_SHAPE_MEASURED_CONFIG_KEYS, CELL_TIERS, cellShapeAllowedKinds, cellShapeCtx, cellShapeTier,
+  resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 import { detectorEmphasisEquivalents } from '../src/generator-render-config.js';
 
@@ -40,6 +41,8 @@ const paletteWith = (background) => ({
   background, levels: SLATE.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
 });
 const PAYLOAD = 'https://tl.estre.so';
+/** 명시적 빈 표 — «전부 잠금» 스텁 모양(행 0 · 영수증 없음). 제품 기본표(생성본)는 행이 있어 스텁이 아니다. */
+const STUB = Object.freeze({ ROWS: Object.freeze([]), RECEIPT_SHA256: null, MEASURED_AT: null, FINGERPRINT: null });
 
 // ── fixture ────────────────────────────────────────────────────────────────
 
@@ -429,20 +432,27 @@ describe('기본값 · resolver 경유', () => {
     assert.throws(() => buildScene(b.encoded, { ...fx.opts, palette: b.palette, cellShape: 'gap' }), TypeError);
   });
 
-  test('resolver: 스텁(전부 잠금)이면 spec null → 꺼진 장면 · fixture 허용표 행이면 꾸민 장면', () => {
-    const fx = FIXTURES[0];
+  test('resolver: 스텁(전부 잠금)이면 spec null → 꺼진 장면 · fixture 허용표 행이면 꾸민 장면 · 측정 구성 밖이면 fixture 행도 못 연다', () => {
+    // 문맥은 제품 함수로 fixture 의 실제 인코딩에서 유도한다(손 문맥은 측정 구성 키 — 코너 마커 · 사괘 · ECC · 강조 — 를
+    // 빠뜨리거나 거짓으로 채운다). fixture 0 은 O + 코너 마커(안쪽 o-cm)라 실효 타입 G 다. G 에는 측정 구성 선언이 있어(L6g)
+    // 표 행은 그 구성에서만 연다 — 그래서 경로 자는 fixture 0 을 **G 측정 구성**(선언의 ECC · 넘긴 강조)으로 다시 인코딩해 잰다.
+    // 실효 검출 강조(렌더 값)는 buildScene 에 넘기는 **그 옵션**에서 제품 유도 함수로 만든다.
+    const G = CELL_SHAPE_MEASURED_CONFIG.G;
+    assert.ok(G && G.cornerMarker === true, 'G 측정 구성 선언 전제 — 안쪽 코너 마커');
+    const ctxFor = (b, opts) => cellShapeCtx('O', b.encoded, {
+      finderPatternId: opts.finderPatternId, innerSeat: 'o-cm', tone: 3, bgMode: 'white', preset: 'slate', qrPosition: 'none',
+    }, { quietColor: 'white', detectorEmphasis: detectorEmphasisEquivalents('O', b.encoded, { ...opts, palette: b.palette }) });
+    const fx = {
+      ...FIXTURES[0], id: FIXTURES[0].id + ' @ G 측정 구성',
+      encoded: () => encode(PAYLOAD, { cornerMarker: true, markerTones: true, eccLevel: G.eccLevel }),
+      opts: { ...FIXTURES[0].opts, centralN7Emphasis: G.detectorEmphasis },
+    };
     const b = built(fx);
-    // 문맥은 제품 함수로 이 fixture 의 실제 인코딩에서 유도한다(손 문맥은 측정 구성 키 — 코너 마커 · 사괘 · ECC — 를
-    // 빠뜨리거나 거짓으로 채운다). 이 fixture 는 O + 코너 마커(안쪽 o-cm)라 실효 타입 G 다 — G 행은 생성 표에 없다.
-    // 실효 검출 강조(렌더 값)는 이 fixture 가 buildScene 에 넘기는 **그 옵션**에서 제품 유도 함수로 만든다.
-    const render = { quietColor: 'white', detectorEmphasis: detectorEmphasisEquivalents('O', b.encoded, { ...fx.opts, palette: b.palette }) };
-    const ctx = cellShapeCtx('O', b.encoded, {
-      finderPatternId: fx.opts.finderPatternId, innerSeat: 'o-cm', tone: 3, bgMode: 'white', preset: 'slate', qrPosition: 'none',
-    }, render);
+    const ctx = ctxFor(b, fx.opts);
     assert.equal(typeof ctx.detectorEmphasis, 'string', '실효 검출 강조가 문맥에 없다');
     assert.equal(ctx.type, 'G');
     const state = Object.freeze({ cellShape: 'gap', cellGap: 0.08 });
-    const locked = resolveCellShapeSpec(state, ctx);
+    const locked = resolveCellShapeSpec(state, ctx, STUB);
     assert.equal(locked.spec, null);
     assert.ok(locked.lockReason);
     const sLocked = buildScene(b.encoded, { ...fx.opts, palette: b.palette, ...(locked.spec ? { cellShape: locked.spec } : {}) });
@@ -453,6 +463,16 @@ describe('기본값 · resolver 경유', () => {
     assert.deepEqual(open.spec, { kind: 'gap', param: 0.08 });
     const sOpen = buildScene(b.encoded, { ...fx.opts, palette: b.palette, cellShape: open.spec });
     assert.ok(sOpen.shapes.some((s) => s.noSeam === true && Array.isArray(s.basePoints)));
+
+    // fixture 0 그대로(인코더 기본 ECC · 강조 안 넘김)는 G 측정 구성 밖이다 — 같은 표 키의 fixture 행이 있어도 잠긴다.
+    const raw = built(FIXTURES[0]);
+    const rawCtx = ctxFor(raw, FIXTURES[0].opts);
+    assert.equal(rawCtx.type, 'G');
+    const outside = CELL_SHAPE_MEASURED_CONFIG_KEYS.oak.filter((k) => (k === 'detectorEmphasis'
+      ? !String(rawCtx[k]).split('+').includes(G[k]) : rawCtx[k] !== G[k]));
+    assert.ok(outside.length > 0, 'fixture 0 이 G 측정 구성과 같아졌다 — 이 대조가 공허하다(단언을 다시 볼 것)');
+    const rawOpen = resolveCellShapeSpec(state, rawCtx, { ROWS: [{ table: 'oak', ...rawCtx, cellShape: 'gap', param: 0.08 }] });
+    assert.equal(rawOpen.spec, null, `측정 구성 밖(${outside.join(',')})인데 fixture 행이 열었다`);
   });
 });
 

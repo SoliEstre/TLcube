@@ -8,12 +8,13 @@
  *      잠금 + aria-disabled + 인라인 사유 한 줄(툴팁 title 아님)이다. «끔» 카드는 언제나 눌린다.
  *      제품 기본표(생성본)에서는 셀 모양 카드 열림 ⇔ «렌더 문맥에 맞는 표 행이 있다» 이고(행은 표에서 유도 — 박제 없음),
  *      제품 기본 Y(투명 배경 · 판 없음)에서 하나 이상 열려 그 카드는 사유 없이 생산자까지 간다.
- *      자리 · ECC 가 측정 구성(cell-shape CELL_SHAPE_MEASURED_CONFIG — A · K 자동 코너 마커 · 사괘 없음 · ECC H)과 다르면
+ *      자리 · ECC 가 측정 구성(cell-shape CELL_SHAPE_MEASURED_CONFIG — A · K · G 자동 코너 마커 · 사괘 없음 · ECC H)과 다르면
  *      표 키가 같아도 전부 잠기고, 매퍼가 사괘를 떨군 조합은 열린 채다(2026-09-27). 사유는 반사실이다 — 측정 구성에서
  *      열리던 카드만 «자리 · ECC 탓»(seat-config g1209 · ecc-level g1210), 측정 구성에서도 잠기던 카드는 그 사유 그대로.
  *      실효 검출 강조(2026-09-27)도 같은 규칙이다 — 생산자에 넘어간 강조가 측정(O/A/K 'all' · Y 미전달)과 다른 그림이면
  *      잠기고(detector-emphasis g1211), 강조를 소비하는 표면이 없으면 무엇을 골라도 강조로는 안 잠긴다. Y 는 고급 화면에서만 넘긴다.
- *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats) · 강조 'all'. O 는 안쪽 «없음»(측정 구성).
+ *      하네스 상태는 제품 기본을 따른다 — ECC auto · A/K 자동 자리(productAutoSeats) · 강조 'all'. O 는 안쪽 «없음»(실효 타입 O 의
+ *      측정 구성). 제품 자동 O(안쪽 o-cm → 실효 타입 G · G 측정 구성)는 ② 제품 기본표 자가 제품 기본 URL 로도 잰다.
  *   ③ 기본 상태에서는 어떤 타입(O · A · K · Y · H)도 생산자에 꾸미기 키를 넘기지 않는다 — sceneOpts.cellShape ·
  *      palette.qrDeco · hQr.deco · hCellStyle 부재(D1 이 넘긴 «이름 붙인 미측정 축»). 켬 → 끔 클릭 경로 뒤에도.
  *   ④ fixture 허용표를 주입하면(테스트 전용 경로 — decorationAllow 만 바꾼다) 카드가 열리고, 카드를 누르면
@@ -151,9 +152,11 @@ function makeNode(id = null, tag = 'div') {
  *   이 하네스 상태에 적용한다. 제품은 detectorAutoY = true 가 기본이라 Y 상태의 locatorProfileY 는 스키마 기본('off')이 아니라
  *   이 정책의 값이다. (QR 위치 파생 `deriveYLocatorForQrPosition` 은 inner · v0T/v0TR 계열에만 손대므로 싣지 않는다 —
  *   그 계열이 나오면 아래에서 던진다.)
- * @param {{state?: object, allow?: object, source?: string, missingIds?: string[], quietColor?: string, autoLocatorY?: boolean}} opts
+ * payload: 일반 모드 페이로드(index.html `normalPayloadText` 스텁의 반환). 기본은 짧은 자 전용 문자열이고, 제품 기본 URL
+ *   (`PRODUCT_DEFAULT_PAYLOAD`)로 제품 화면의 버전 · 셀 역할을 재현할 때만 준다.
+ * @param {{state?: object, allow?: object, source?: string, missingIds?: string[], quietColor?: string, autoLocatorY?: boolean, payload?: string}} opts
  */
-function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColor = 'white', autoLocatorY = false } = {}) {
+function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColor = 'white', autoLocatorY = false, payload = 'decoration-ui' } = {}) {
   const nodes = new Map();
   const $ = (id) => {
     if (missingIds.includes(id) || !HTML_IDS.has(id)) return null;
@@ -211,7 +214,7 @@ function harness({ state = {}, allow, source = INDEX, missingIds = [], quietColo
     currentFaceGains: () => ({ T: 1, L: 0.72, R: 0.57 }), resolvedRenderProfile: () => 'screen',
     BG_MODE_COLORS: { transparent: null, white: { r: 255, g: 255, b: 255 }, black: { r: 0, g: 0, b: 0 } },
     typeCGeneratorActive: (s = generatorState) => s.type === 'O' && s.versionO === 'ultra',
-    normalPayloadText: () => 'decoration-ui', effectiveVersionYForEncode: () => undefined,
+    normalPayloadText: () => payload, effectiveVersionYForEncode: () => undefined,
     ySlotLocatorActive: () => false, isLabPath: () => false, advancedOnlyCardsVisible: () => false,
     hImageEditor: { syncQrText: () => c.hFaceImages }, syncHFaceImagesUi() {}, syncStyleUi() {},
     decorActive: () => false, schedule: () => pending.push(1), drawScene: (scene) => calls.draws.push(scene),
@@ -286,14 +289,30 @@ function productAutoSeats(type) {
 }
 
 /**
- * 타입별 상태. A · K 는 제품 기본 자리(자동 코너 마커)다. O 는 안쪽 «없음» — 측정 구성이다(제품 자동은 안쪽 o-cm →
- * 타입 G 이고 G 행이 0 이라 잠긴다: 아래 ② 제품 기본표 자가 따로 단언한다).
+ * 타입별 상태. A · K 는 제품 기본 자리(자동 코너 마커)다. O 는 안쪽 «없음» — 실효 타입 O 의 측정 구성이다(제품 자동은 안쪽
+ * o-cm → 실효 타입 G 이고, G 는 G 측정 구성(L6g)의 행으로 연다: 아래 ② 제품 기본표 자가 «O 자동» 으로 따로 잰다).
  */
 const TYPE_STATES = Object.freeze({
   O: { type: 'O' }, A: { type: 'A', ...productAutoSeats('A') }, K: { type: 'K', ...productAutoSeats('K') },
   Y: { type: 'Y', yRepresentation: '2.5d' },
   H: { type: 'Y', yRepresentation: '3d', hFaces: 3, versionH: 'auto' },
 });
+
+/**
+ * 제품 기본 페이로드 — 상태 기본 콘텐츠 탭(url)의 index.html 입력 기본값을 제품 `normalizeUrl` 로 정규화한다(손으로 옮겨
+ * 적지 않는다). 제품 화면의 버전 · 셀 역할을 재현하는 자만 쓴다.
+ */
+const PRODUCT_DEFAULT_PAYLOAD = (() => {
+  assert.equal(createGeneratorState().contentTab, 'url', '제품 기본 콘텐츠 탭이 url 이 아니다 — 기본 페이로드 유도를 다시 볼 것');
+  const m = /id="nUrlPayload" value="([^"]*)"/.exec(INDEX);
+  assert.ok(m, 'index.html 에 URL 탭 입력(nUrlPayload) 기본값이 없다');
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(fnSource(INDEX, 'normalizeUrl'), ctx);
+  const payload = vm.runInContext(`normalizeUrl(${JSON.stringify(m[1])})`, ctx);
+  assert.ok(typeof payload === 'string' && payload.length > 0, '제품 기본 페이로드가 비었다');
+  return payload;
+})();
 
 // ── ① 스키마 유도 ─────────────────────────────────────────────────────────
 
@@ -423,23 +442,31 @@ function tableRowsFor(ctx) {
     && cellShapeStructuralLock(ctx.table, row.cellShape, row.param, ctx) === null);
 }
 
-test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문맥에 맞는 표 행 · 제품 기본 Y(투명)에서 하나 이상 열리고 사유 없이 생산자까지 간다', () => {
+test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문맥에 맞는 표 행 · 제품 기본 Y(투명)에서 하나 이상 열리고 사유 없이 생산자까지 간다', (t) => {
   assert.notEqual(DEFAULT_ALLOW.RECEIPT_SHA256, null, '제품 기본표가 스텁이다 — 이 자는 생성본을 잰다');
   // 제품 기본 상태(타입만 고른다) — Y 는 기본 투명 배경 + 판 없음(quiet auto 가 Y 에 판을 안 깐다 → 틈 등급 unknown) +
   // 제품 기본 «자동» 로케이터(autoLocatorY — 실물 정책 함수). 스키마 기본 'off' 그대로는 제품 화면이 아니다.
-  // A · K 는 제품 자동 자리(TYPE_STATES) · O 는 안쪽 «없음»(측정 구성) · «O 자동» 은 제품 자동 안쪽 o-cm(→ 타입 G, 행 0).
-  const CASES = [['O', TYPE_STATES.O, 'white', false], ['O 자동', { type: 'O', ...productAutoSeats('O') }, 'white', false],
+  // A · K 는 제품 자동 자리(TYPE_STATES) · O 는 안쪽 «없음»(실효 타입 O 의 측정 구성) · «O 자동» 은 제품 자동 안쪽 o-cm(→ 실효
+  // 타입 G — G 측정 구성, L6g 행). «O 자동(기본 URL)» 은 같은 상태를 제품 기본 페이로드로 그린다(제품 첫 화면의 버전 · 셀 역할).
+  const O_AUTO = { type: 'O', ...productAutoSeats('O') };
+  const CASES = [['O', TYPE_STATES.O, 'white', false], ['O(기본 URL)', TYPE_STATES.O, 'white', false, PRODUCT_DEFAULT_PAYLOAD],
+    ['O 자동', O_AUTO, 'white', false], ['O 자동(기본 URL)', O_AUTO, 'white', false, PRODUCT_DEFAULT_PAYLOAD],
     ['A', TYPE_STATES.A, 'white', false], ['K', TYPE_STATES.K, 'white', false],
     ['Y', TYPE_STATES.Y, 'none', true]];
   const openedByType = {};
-  for (const [label, state, quietColor, autoLocatorY] of CASES) {
+  for (const [label, state, quietColor, autoLocatorY, payload] of CASES) {
     const type = state.type;
-    const probe = harness({ state, quietColor, autoLocatorY });
+    const probe = harness({ state, quietColor, autoLocatorY, payload });
     probe.render();
     const ctx = probe.c.current.deco.ctx;
     assert.ok(ctx, label + ': 렌더가 셀 모양 문맥을 안 남겼다');
     const rows = tableRowsFor(ctx);
-    openedByType[label] = { ctx: cellShapeAllowCtx(ctx), rows: rows.length };
+    openedByType[label] = {
+      ctx: cellShapeAllowCtx(ctx), rows: rows.length,
+      config: Object.fromEntries(['cornerMarker', 'sagoae', 'eccLevel', 'detectorEmphasis'].filter((k) => k in ctx).map((k) => [k, ctx[k]])),
+      open: probe.cards('cellShape').filter((el) => el.dataset.decoValue !== CELL_SHAPE_DEFAULT && el.getAttribute('aria-disabled') === 'false')
+        .map((el) => el.dataset.decoValue),
+    };
     // 동치: 카드(지금 상태의 강도로 묻는다)가 열림 ⇔ 그 (모양, 강도) 행이 표에 있다. 끔 카드는 늘 열림.
     for (const el of probe.cards('cellShape')) {
       const kind = el.dataset.decoValue;
@@ -450,18 +477,17 @@ test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문�
         `${label} ${kind}(${param}): 카드 ${want ? '열림' : '잠금'} 기대 — 표 행 ${want ? '있음' : '없음'}, 사유 ${el.dataset.lockReason || '없음'}`);
       if (!want) assert.ok(el.dataset.lockReason, `${label} ${kind}: 잠겼는데 사유가 없다`);
     }
-    if (label === 'O 자동') {
-      // 제품 기본 O = 자동 안쪽 o-cm → 타입 G. G 는 측정하지 않았다(행 0) — 잠김이 맞고(fail-closed), 사유는 «미확인» 이다.
-      assert.equal(ctx.type, 'G', 'O 자동 자리가 타입 G 로 안 갈렸다');
-      for (const el of probe.cards('cellShape')) {
-        if (el.dataset.decoValue !== CELL_SHAPE_DEFAULT) assert.equal(el.dataset.lockReason, 'unmeasured', 'O 자동 ' + el.dataset.decoValue);
-      }
+    if (label.startsWith('O 자동')) {
+      // 제품 기본 O = 자동 안쪽 o-cm → 실효 타입 G. G 행은 G 측정 구성(자동 안쪽 코너 마커 · 사괘 없음 · ECC H · 강조 'all')에서
+      // 잰 사실이고 제품 기본이 그 구성이라, 위 동치(카드 열림 ⇔ 표 행)가 G 행으로 선다 — 행 수는 박제하지 않는다(아래 «행 > 0»).
+      assert.equal(ctx.type, 'G', label + ': O 자동 자리가 타입 G 로 안 갈렸다');
+      assert.ok(rows.every((row) => row.type === 'G'), label + ': G 문맥이 다른 타입 행을 골랐다');
     }
     // 연 행마다: 그 상태로 UI 를 세우면 카드 · 강도 카드가 열리고, 인라인 사유가 없고, spec 이 생산자까지 간다.
     for (const row of rows) {
       const def = CELL_SHAPE_PARAMS[row.cellShape];
       const chosen = { ...state, cellShape: row.cellShape, ...(def ? { [def.key]: row.param } : {}) };
-      const h = harness({ state: chosen, quietColor, autoLocatorY });
+      const h = harness({ state: chosen, quietColor, autoLocatorY, payload });
       h.render();
       const where = `${label} ${row.cellShape}(${row.param})`;
       const card = h.card('cellShape', row.cellShape);
@@ -476,16 +502,17 @@ test('② 제품 기본표(생성본): 셀 모양 카드 열림 ⇔ 렌더 문�
       assert.equal(opts.cellShape.param, row.param, where);
     }
   }
+  for (const [label, v] of Object.entries(openedByType)) t.diagnostic(`${label}: ${JSON.stringify(v)}`);
   // 표가 UI 경로에서 비지 않았다 — 제품 기본 Y(투명)에서 셀 모양 하나 이상(수치는 박제하지 않는다).
   assert.ok(openedByType.Y.rows > 0, '제품 기본 Y(투명 배경)에서 여는 행이 생성 표에 없다 — ' + JSON.stringify(openedByType));
-  // 제품 기본 A · K(자동 코너 마커)는 측정 구성이다 — 생성 표 행으로 열린다(측정한 기본을 잠그지 않는다).
-  // (O 안쪽 없음은 이 하네스 페이로드에서 자동 버전이 v1 이라 행이 없다 — 버전을 고정한 O 는 아래 자가 잰다.)
-  for (const label of ['A', 'K']) {
+  // 제품 기본 A · K(자동 코너 마커) · O(자동 안쪽 o-cm → G)는 측정 구성이다 — 생성 표 행으로 열린다(측정한 기본을 잠그지 않는다).
+  // O 안쪽 «없음»(실효 타입 O)도 제품 기본 URL 에서는 열린다. (짧은 하네스 페이로드에서는 O 안쪽 없음의 자동 버전이 달라 행이
+  // 없을 수 있다 — 그 경우도 위 동치가 잠금으로 선다. 버전을 고정한 O 는 아래 자가 잰다.)
+  for (const label of ['A', 'K', 'O 자동', 'O 자동(기본 URL)', 'O(기본 URL)']) {
     assert.ok(openedByType[label].rows > 0, `${label}(제품 자동 자리 · 측정 구성)에서 여는 행이 없다 — 제품 자동 자리가 바뀌어 `
       + '측정 구성(CELL_SHAPE_MEASURED_CONFIG)에서 벗어났다면 재측정하거나 제품 기본을 재검토할 것(선언은 영수증에서만 바꾼다 — '
       + '제품 기본에 맞추면 거짓 열림이 돌아온다) ' + JSON.stringify(openedByType));
   }
-  assert.equal(openedByType['O 자동'].rows, 0);
 });
 
 test('② 자리 · ECC 가 측정 구성과 다르면 셀 모양 카드가 전부 잠기고, 측정 구성에서 열리던 카드만 새 사유다 — 매퍼가 떨군 사괘는 자리 사유가 아니다', () => {

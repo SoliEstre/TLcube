@@ -667,14 +667,17 @@ function measuredValueMatches(key, ctxValue, measured) {
 /**
  * 측정 구성 — 허용표 행을 **잰** 렌더 구성. 키 = 실효 타입(oak 행의 `type`) · Y(y 표). 한 번만 선언한다.
  *
- * 출처: L6 측정 하네스 규약(동결 하네스 `lib-assemble.mjs` assembleOak) — 계열 상태의 자리는 그때의 제품 자동 자리표
- * (`autoSeatsFor`, 비-taegeuk · 막힌 칸 불허)로 채운 뒤 **O · C 는 안쪽을 «없음»** 으로, **V 는 turnA + 바깥 «없음»** 으로
- * 내렸다(안쪽 코너 마커 O 는 타입 G 로 따로 갈린다 · C · V 는 지금 행이 0 이라 선언이 없다). 사괘는 전 계열 없음,
- * ECC 는 전 영수증 H(짧은 페이로드 · auto). 검출 강조(detectorEmphasis — 생산자에 넘어간 값)는 O · A · K 가 'all' — 조립이
- * `createGeneratorState` 기본(GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS, 0d2e67b 에서도 'all')을 sceneOptionsForOA(O · A) ·
- * 손 조립(K)으로 늘 실었다 — 이고, Y 는 'default' — assembleY 가 강조 옵션을 안 실어 라이브러리 기본(DEFAULT_CENTRAL_N7_EMPHASIS)
- * 으로 그렸다(0d2e67b → a886347 사이 scene · sceneY · centralN7Emphasis · generator-render-config · generator-state 변경 없음
- * — 2026-09-27 git diff 확인. 이 착지는 generator-render-config 에 유도 함수만 더했다).
+ * 출처: L6 · L6g 측정 하네스 규약(동결 하네스 `lib-assemble.mjs` assembleOak — 두 측정이 같은 조립 코드 · 같은 측정 트리
+ * 0d2e67b) — 계열 상태의 자리는 그때의 제품 자동 자리표(`autoSeatsFor`, 비-taegeuk · 막힌 칸 불허)로 채운 뒤
+ * **O · C 는 안쪽을 «없음»** 으로, **V 는 turnA + 바깥 «없음»** 으로 내렸고, **G 는 자동 자리 그대로**(안쪽 o-cm — 코너 마커 +
+ * 마커 톤, 제품 기본 O 가 실효 타입 G 다. L6g 계열 g-n7 · g-pinwheel)다. C · V 는 지금 행이 0 이라 선언이 없다. 사괘는 전
+ * 계열 없음(O · G 자동 심부도 «없음»), ECC 는 전 영수증 H(짧은 페이로드 · auto). 검출 강조(detectorEmphasis — 생산자에 넘어간
+ * 값)는 O · A · K · G 가 'all' — 조립이 `createGeneratorState` 기본(GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS, 0d2e67b 에서도 'all')을
+ * sceneOptionsForOA(O · A · G) · 손 조립(K)으로 늘 실었다 — 이고, Y 는 'default' — assembleY 가 강조 옵션을 안 실어 라이브러리
+ * 기본(DEFAULT_CENTRAL_N7_EMPHASIS)으로 그렸다(0d2e67b → a886347 사이 scene · sceneY · centralN7Emphasis · generator-render-config ·
+ * generator-state 변경 없음 — 2026-09-27 git diff 확인. 이 착지는 generator-render-config 에 유도 함수만 더했다).
+ * G 의 'all' 은 렌더에서 계열마다 다른 «같은 그림 집합» 에 든다 — 중앙 n7 은 'all' 하나(중앙 두 팔), 핀휠은 'locator+all'(안쪽
+ * 코너 마커 검출 셀 한 팔). 2026-09-27 동결 하네스 조립(0d2e67b · 이 트리 둘 다 와이어 · 생산자 옵션 동일)으로 재유도했다.
  * 허용표 행 키에는 이 값들이 없다 — 영수증 code «A k=6 v=0» 로는 A 와 A-CM 을
  * 못 가른다. 그래서 여기 적고, `test/cell-shape-measured-config.test.js` 가 (1) 선언이 묶인 영수증 sha
  * (`CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256`)와 허용표 RECEIPT_SHA256 이 같은지(표를 다시 생성하면 빨개진다 — 재유도할 것)
@@ -683,30 +686,35 @@ function measuredValueMatches(key, ctxValue, measured) {
  * 제품 자동 자리표에서 **유도하지 않는다** — 제품 기본이 바뀌면 측정 사실이 아닌데도 조용히 따라간다. 선언은 영수증에서만
  * 바꾼다(제품 기본이 이 선언과 달라지면 그 기본이 잠기는 것이 맞다 — 재측정하거나 제품 기본을 재검토할 일이다).
  *
- * 표에 행이 없는 타입(G · V · C)은 항목이 없다 — 그 타입은 행이 0 이라 `unmeasured`(C 는 구조 잠금 `type-c-ultra`)로
+ * 표에 행이 없는 타입(V · C)은 항목이 없다 — 그 타입은 행이 0 이라 `unmeasured`(C 는 구조 잠금 `type-c-ultra`)로
  * 잠긴다. 그 타입의 행이 생기면 선언도 같이 생겨야 한다(위 (3)). V 를 잴 때는 cornerMarker 와 co2AnchorTones 를 함께
  * 키로 올릴 것 — 제품 기본 V 는 v-cm 이다.
- * TODO(다음 재측정 **전에** — 하네스 쪽 수정이 필수다, 2026-09-27 실측):
- *   ① 측정 하네스(L0 tl-decode allowCtxBaseOf)의 `cellShapeCtx` 호출이 `render.detectorEmphasis`(조립 sceneOpts 로
- *   generator-render-config `detectorEmphasisEquivalents`)를 실어야 한다. 지금 하네스는 quietColor 만 넘겨, 처치 행을 제품
- *   resolver 에 주입하면 측정 구성 키 값 모름(ctx-incomplete → lib-ctx «키 드리프트» throw)이 난다. 이 실패는 **조용하다** —
- *   tl-decode trial 이 그 throw 를 render-error 로 삼키고(처치 표지보다 먼저 던져 treatmentErrors 에도 안 잡힌다) 처치 행을
- *   treatment-invalid 로 세어 판정 PASS · exit 0 으로 끝난다(영수증에 allowShape 를 받은 처치 행이 0 개다). `test/cell-shape-ctx-locks.test.js`
- *   ⑧ 이 TL_L0_DIR 에서 이 경로를 잰다 — 하네스를 고치기 전엔 빨강이 맞다(자를 느슨하게 하지 말 것). ⑥ 은 --treatments none 이라
- *   이 경로를 안 지나고, ⑦ 은 고친 호출 모양이 완전한 문맥 · 선언과 같은 값을 내는지 잰다.
- *   ② 생성기(gen-allow) probe 의 resolver 문맥({type, allowCtxLock, 행 키})에도 측정 구성 키가 없다 — 측정 구성 잠금이 들어온
- *   0b94f0b 부터 이 트리의 셀 행 238 개가 전부 ctx-incomplete 라 재생성이 E_RESOLVER_REJECTS 로 멈춘다(크게 실패한다).
- *   행 타입의 이 선언으로 채우거나, 생성기가 이 구성을 허용표 머리로 내보내도록 옮기고 이 상수는 표에서 읽게 바꿀 것.
+ * 하네스 과제(2026-09-27 실측):
+ *   ① (반영됨 — 2026-09-27, L0 하네스가 조립 sceneOpts 로 `detectorEmphasisEquivalents` 를 `render.detectorEmphasis` 에 싣는다.
+ *   `test/cell-shape-ctx-locks.test.js` ⑧ 이 TL_L0_DIR 에서 초록) 측정 하네스(L0 tl-decode allowCtxBaseOf)의 `cellShapeCtx`
+ *   호출이 강조를 안 실으면 처치 행을 제품 resolver 에 주입할 때 측정 구성 키 값 모름(ctx-incomplete → lib-ctx «키 드리프트»
+ *   throw)이 나고, 이 실패는 **조용하다** — tl-decode trial 이 그 throw 를 render-error 로 삼키고(처치 표지보다 먼저 던져
+ *   treatmentErrors 에도 안 잡힌다) 처치 행을 treatment-invalid 로 세어 판정 PASS · exit 0 으로 끝난다(영수증에 allowShape 를
+ *   받은 처치 행이 0 개다). ⑧ 이 그 경로의 자다(느슨하게 하지 말 것). ⑥ 은 --treatments none 이라 이 경로를 안 지나고, ⑦ 은
+ *   호출 모양이 완전한 문맥 · 선언과 같은 값을 내는지 잰다.
+ *   ② (남음 — 다음 재측정 **전에**) 생성기(gen-allow) probe 의 resolver 문맥({type, allowCtxLock, 행 키})에 측정 구성 키가 없다 —
+ *   측정 구성 잠금이 들어온 0b94f0b 이후 트리로 재생성하면 셀 행이 전부 ctx-incomplete 라 E_RESOLVER_REJECTS 로 멈춘다(크게
+ *   실패한다. L6g 재생성은 측정 트리 0d2e67b — 잠금 전 — 에서 돌아 해당 없었다). 행 타입의 이 선언으로 채우거나, 생성기가 이
+ *   구성을 허용표 머리로 내보내도록 옮기고 이 상수는 표에서 읽게 바꿀 것.
  */
 export const CELL_SHAPE_MEASURED_CONFIG = Object.freeze({
   O: Object.freeze({ cornerMarker: false, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),
+  G: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),
   A: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),
   K: Object.freeze({ cornerMarker: true, sagoae: false, eccLevel: 'H', detectorEmphasis: 'all' }),
   Y: Object.freeze({ eccLevel: 'H', detectorEmphasis: 'default' }),
 });
 
-/** 위 선언을 읽어 낸 허용표 영수증(`cell-shape-allow.js` RECEIPT_SHA256). 표가 바뀌면 선언을 재유도하고 이 값을 갱신한다. */
-export const CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 = 'd4bd39162483d1040244f15e2142a3c41048fc22353f5475eb1b95a69e332165';
+/**
+ * 위 선언을 읽어 낸 허용표 영수증(`cell-shape-allow.js` RECEIPT_SHA256). 표가 바뀌면 선언을 재유도하고 이 값을 갱신한다.
+ * 2026-09-27 L6g — 영수증 7 개(L6 5 + L6g 2)의 묶음. O · A · K · Y 는 L6 과 같은 하네스 규약이라 그대로, G 를 더했다.
+ */
+export const CELL_SHAPE_MEASURED_CONFIG_RECEIPT_SHA256 = '9c4c86a69b5d439990cb44c6617ae16f2bc17681aa97bdc27a2f60ba14bc5bb8';
 
 /**
  * 설계 잠금이 읽는 **표 밖** 문맥 키(허용표 행에는 없다 — 표로 가를 수 없어서 따로 둔다).
@@ -838,7 +846,7 @@ function allowTableOf(type) {
 /**
  * 측정 구성 불일치 — 문맥의 측정 구성 키가 그 타입의 측정 구성(`CELL_SHAPE_MEASURED_CONFIG`)과 다르면 사유 id.
  * 축 순서(`CELL_SHAPE_MEASURED_CONFIG_AXES`): 자리(코너 마커 · 사괘) → ECC → 실효 검출 강조. 강조는 «측정 값이 문맥의 같은
- * 그림 집합에 드는가» 로 비교한다(`measuredValueMatches` — 해당 없음이면 늘 같다). 선언이 없는 타입(G · V · C)은 판정하지
+ * 그림 집합에 드는가» 로 비교한다(`measuredValueMatches` — 해당 없음이면 늘 같다). 선언이 없는 타입(V · C)은 판정하지
  * 않는다(행이 0 이라 unmeasured). 값 모름(undefined)은 여기서 판정하지 않는다 — resolver 가 먼저 `ctx-incomplete` 로
  * 잠근다(다른 구조 잠금 줄과 같은 결: 증거가 있을 때만 사유를 낸다).
  */

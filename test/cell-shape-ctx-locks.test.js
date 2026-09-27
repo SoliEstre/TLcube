@@ -17,7 +17,7 @@
 //      이력: 첫 대조(2026-09-26 17:1x)에서 Y 투명 · 판 없음의 gapGrade 가 하네스 'white' · 제품 'unknown' 으로 갈렸다
 //      (하네스 L6 «white» 등급이 투명 PNG 를 흰 표면에 합성). 하네스 레인(D2)이 17:2x 에 제품 뜻(설계 §3.2 B2)으로
 //      맞추고 Y «white» 등급을 bgMode white(흰 평탄화)로 조립하게 바꿨다 — 그 케이스('y-v0' · 'y-v0|gap=white')가 격자에 있다.
-//   ⑦ (TL_L0_DIR) 측정 구성 선언(CELL_SHAPE_MEASURED_CONFIG) ≡ 하네스 조립 — ⑥ 격자를 하네스 lib-assemble 로 조립하고 조립
+//   ⑦ (TL_L0_DIR) 측정 구성 선언(CELL_SHAPE_MEASURED_CONFIG) ≡ 하네스 조립 — ⑥ 격자(+ 제품 기본 G 계열 g-n7)를 하네스 lib-assemble 로 조립하고 조립
 //      sceneOpts 로 실효 검출 강조를 유도(detectorEmphasisEquivalents)해 제품 문맥을 만들면 (1) 문맥이 완전하고 (2) 선언이 있는
 //      타입은 측정 구성 값이 선언과 같고(강조는 «선언 값이 같은 그림 집합에 드는가») (3) 하네스 구조 잠금 판정(lib-ctx
 //      cellShapeProductLock)이 키 드리프트 없이 제품 cellShapeStructuralLock 과 같은 답을 낸다. 선언은 «그 하네스가 잰 구성» 의
@@ -231,7 +231,13 @@ const FAM = {
   'y-v0': { type: 'Y' },
   'a-n7': { type: 'A' },
   'k-n7': { type: 'K' },
+  'g-n7': { type: 'G' }, // L6g — 제품 기본 O(자동 안쪽 o-cm = 실효 타입 G) · 생성기 기본 파인더(중앙 n7)
 };
+/**
+ * ⑦ 에만 더하는 측정 계열 — 하네스를 하위 프로세스로 돌리지 않고 조립(lib-assemble)만 한다. ⑥ 격자의 'G|pinwheel…' 는 고른
+ * 조합이고, 제품 기본 G 는 중앙 n7(강조 구조가 다르다 — 중앙 두 팔 'all' vs 코너 마커 검출 셀 한 팔 'locator+all')이라 따로 잰다.
+ */
+const MEASURED_CONFIG_EXTRA_CASES = ['g-n7'];
 const GRADE = { white: {}, black: { bgMode: 'black' }, unknown: { quietMode: 'none' } };
 /** 하네스 L6_GRADES.overY — Y 는 안전영역 판이 없어 «흰» 등급을 흰 평탄화로 조립한다. */
 const GRADE_Y = { white: { bgMode: 'white' } };
@@ -380,7 +386,7 @@ test('⑦ 측정 구성 선언 ≡ L0 하네스 조립 — 조립 sceneOpts 로 
   const declaredSeen = new Set();
   const undeclaredSeen = new Set();
   const structural = {};
-  for (const id of await l0CaseIds()) {
+  for (const id of [...await l0CaseIds(), ...MEASURED_CONFIG_EXTRA_CASES]) {
     const c = caseSpec(id);
     const a = assemble(M, c);
     const base = OAK_BASE[c.type];

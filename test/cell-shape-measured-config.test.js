@@ -1,7 +1,8 @@
 // cell-shape-measured-config.test.js — 셀 꾸미기 «측정 구성» 잠금 (2026-09-27 자리 레인 · 강조 레인)
 //
 // 허용표 행은 표 키(타입 · 버전 · 파인더 · 톤 · 틈 · 바탕 · 팔레트 · QR 위치)만 갖지만, 그 행이 참인 것은 **측정 구성**
-// (L6 측정 하네스 규약 — 자동 자리 · O · C 는 안쪽 없음 · 사괘 없음 · ECC H · 검출 강조 O/A/K 'all' · Y 미전달)에서다.
+// (L6 · L6g 측정 하네스 규약 — 자동 자리 · O · C 는 안쪽 없음 · G 는 자동 안쪽 o-cm · 사괘 없음 · ECC H · 검출 강조 O/G/A/K 'all' ·
+// Y 미전달)에서다.
 // 표 키 밖의 축이 다르면 같은 표 키에서도 셀 역할 · 정정 여유 · 채움색이 달라진다(A · K 바깥 «없음» 이 a-cm/k-cm 에서 잰 행으로
 // 열리던 거짓 열림 · 강조 'locator' · 'default' 가 'all' 에서 잰 행으로 열리던 거짓 열림). 그래서 resolver 는 렌더 구성이 그
 // 타입의 측정 구성(cell-shape `CELL_SHAPE_MEASURED_CONFIG`)과 다르면 모든 모양을 잠근다.
@@ -12,7 +13,8 @@
 //
 // 재는 것(실제 인코더 · 생성 허용표 · 제품 자동 자리표 · 실제 렌더):
 //   ⓐ 유닛 — 측정 구성 문맥은 생성 표 행으로 열리고, 표 키가 같은 «한 축만 다른» 문맥은 새 사유로 잠긴다:
-//      A · K 바깥 없음(seat-config) · O 사괘(seat-config) · 같은 버전 ECC M · L(ecc-level, Y 포함) · O 안쪽 o-cm = G(unmeasured) ·
+//      A · K 바깥 없음(seat-config) · O 사괘(seat-config) · 같은 버전 ECC M · L(ecc-level, Y 포함) · O 안쪽 o-cm = G(G 자기 행 —
+//      표 행 ⇔ 열림) ·
 //      강조(detector-emphasis): 중앙 TL 의 O · A · K 에서 'locator' · 'default', Y 고급 화면이 실은 'all' · 'locator'.
 //      강조를 소비하는 표면이 없는 렌더(대상 아닌 중앙 · 검출 셀 없음 · Y hex-frame)는 무엇을 넘겨도 «해당 없음» 이라 안 잠긴다.
 //      K · Y 기본 인코딩이 ctx-incomplete 로 잠기지 않는다(K 사괘 «개념 없음» = false).
@@ -22,7 +24,8 @@
 //   ⓒ 생성 표 성질 — 행이 있는 타입마다 선언이 있고, 모든 셀 행은 그 타입 측정 구성 문맥에서 열리며, 측정 구성 키를 하나
 //      바꾸면 그 축의 사유로 잠긴다(ECC 는 다른 레벨 전부 · 강조는 측정 값을 안 담은 집합 전부). 측정 값을 담은 집합은 열린다.
 //   ⓓ 선언 ↔ 제품 기본(성질) — 제품 자동 자리 · 제품 기본 강조로 그린 와이어/그림이 선언과 같으면 그 문맥의 표 행이 열리고,
-//      다르면 잠긴다. 값의 같음은 강제하지 않는다(제품 기본이 바뀌면 그 기본이 잠기는 것이 맞다 — 선언은 영수증에서만 바꾼다).
+//      다르면 잠긴다(A · K · 제품 기본 O = 자동 안쪽 o-cm 이라 실효 타입 G). 값의 같음은 강제하지 않는다(제품 기본이 바뀌면 그
+//      기본이 잠기는 것이 맞다 — 선언은 영수증에서만 바꾼다).
 //   ⓔ 선언이 묶인 영수증 = 허용표 RECEIPT_SHA256 — 표를 다시 생성하면 빨개진다(선언을 재유도하고 sha 를 갱신할 것).
 //   ⓕ 사유는 참이다(반사실 불변식) — 생성 표의 문맥 격자(측정 구성 · 자리/ECC/강조 뒤집기 · 두 축 동시 · 같은 그림 집합 · 틈 ·
 //      행 없는 버전 × 모든 선택지)에서 seat-config · ecc-level · detector-emphasis ⇒ 측정 구성으로 바꾸면 열린다 · 사유는 첫 번째로
@@ -197,19 +200,32 @@ test('ⓐ A · K: 자동 바깥 자리(코너 마커)는 생성 표 행으로 �
   assertMeasuredOpensOtherLocks('K 바깥 없음', kMeasured, kNone, R.SEAT_CONFIG);
 });
 
-test('ⓐ O: 안쪽 없음은 열리고, 안쪽 o-cm 은 타입 G(행 0 — unmeasured), 사괘는 같은 버전에서 seat-config 로 잠긴다', () => {
+test('ⓐ O: 안쪽 없음(O)은 열리고, 안쪽 o-cm(G — 자동 코너 마커)은 G 자기 행으로 열리며(표 행 ⇔ 열림), 사괘는 같은 버전에서 seat-config 로 잠긴다', () => {
   const O = { ...FRESH, type: 'O' };
   const oMeasured = ctxOf('O', encode(P12, { ...N7, eccLevel: 'H', version: 2 }), O);
   const oSagoae = ctxOf('O', encode(P12, { ...N7, sagoae: true, eccLevel: 'H', version: 2 }), { ...O, deepSeat: 'sagoae' });
   assert.equal(oSagoae.sagoae, true);
   assertMeasuredOpensOtherLocks('O 사괘', oMeasured, oSagoae, R.SEAT_CONFIG);
-  // 안쪽 o-cm(제품 자동) — 타입 G 로 갈리고 G 행이 없어 미확인. 측정 구성 선언도 없다(자리 사유가 아니다).
+  // 안쪽 o-cm(제품 자동) — 실효 타입 G(표 키 type 이 O 와 갈린다). G 행은 G 측정 구성(안쪽 코너 마커 · 마커 톤)에서 잰 사실이라
+  // 제품 인코더가 그 구성으로 만든 문맥은 G 자기 행으로 열린다. 수치(행 수 · 특정 행)는 박제하지 않는다 — 성질:
+  // «행 > 0» 과 «셀 모양 선택지 전부에서 열림 ⇔ 그 (모양, 강도) 의 G 행이 있다».
   const g = ctxOf('O', encode(PAYLOAD, { ...N7, cornerMarker: true, markerTones: true, eccLevel: 'H' }), { ...O, innerSeat: 'o-cm' });
   assert.equal(g.type, 'G');
-  assert.equal(Object.prototype.hasOwnProperty.call(CELL_SHAPE_MEASURED_CONFIG, 'G'), false);
-  for (const row of rowsFor({ ...g, type: 'O' })) {
-    assert.deepEqual(resolveRow(row, g), { spec: null, lockReason: R.UNMEASURED }, `G ${row.cellShape}`);
+  assert.equal(g.cornerMarker, true, 'G 문맥의 코너 마커 — 인코딩에서 읽는다');
+  assert.ok(Object.prototype.hasOwnProperty.call(CELL_SHAPE_MEASURED_CONFIG, 'G'), 'G 행이 있는데 G 측정 구성 선언이 없다(ⓒ)');
+  const gRows = rowsFor(g);
+  assert.ok(gRows.length > 0, `G(제품 자동 안쪽 o-cm) 문맥에 표 행이 없다 — 자가 비었다 ${JSON.stringify(cellShapeAllowCtx(g))}`);
+  assert.ok(gRows.every((row) => row.type === 'G'), 'G 문맥이 다른 타입 행을 골랐다');
+  let opened = 0;
+  for (const c of cellChoices()) {
+    const def = CELL_SHAPE_PARAMS[c.cellShape];
+    const param = def ? c[def.key] : null;
+    const hasRow = gRows.some((row) => row.cellShape === c.cellShape && row.param === param);
+    const res = resolveCellShapeSpec(Object.freeze(c), Object.freeze(g));
+    assert.equal(res.spec !== null, hasRow, `G ${JSON.stringify(c)}: 표 행 ${hasRow ? '있음' : '없음'} · ${res.lockReason ?? 'open'}`);
+    if (hasRow) opened += 1;
   }
+  assert.ok(opened > 0, 'G 선택지 중 열린 것이 없다 — 자가 비었다');
 });
 
 test('ⓐ ECC: 같은 버전에서 측정(H)이 아닌 레벨은 ecc-level 로 잠긴다 — O · A · K · Y', () => {
@@ -447,35 +463,48 @@ test('ⓒ 생성 표: 행이 있는 타입마다 측정 구성 선언이 있고,
 
 // ── ⓓ 선언 ↔ 제품 기본 ──────────────────────────────────────────────────────
 
-test('ⓓ 선언 ↔ 제품 기본(성질): 제품 자동 자리 · 제품 기본 강조의 와이어/그림이 선언과 같으면 열리고, 다르면 잠긴다 · O 는 하네스 규약(안쪽 없음)', (t) => {
+test('ⓓ 선언 ↔ 제품 기본(성질): 제품 자동 자리 · 제품 기본 강조의 와이어/그림이 선언과 같으면 열리고, 다르면 잠긴다 · O 는 하네스 규약(안쪽 없음) · 제품 기본 O 는 G', (t) => {
   // 값의 같음을 단언하지 않는다 — 선언은 측정 사실(영수증 — ⓔ 가 묶는다)이고 제품 기본은 바뀔 수 있다. 제품 기본이 선언과
   // 달라지면 그 기본이 잠기는 것이 맞다(재측정하거나 제품 기본을 재검토할 일 — 선언을 제품 기본에 맞추면 거짓 열림이 돌아온다).
   const auto = (type) => autoSeatsFor({ type, centralFinderIsTaegeuk: false, allowBlocked: false });
   // 제품 기본 강조 = 생성기 상태 기본(GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS). O/A/K 는 늘 넘기고(sceneOptionsForOA · K 손 조립),
   // Y 일반 화면은 안 넘긴다(renderTypeY 의 고급 게이트 — decoration-ui 자가 제품 경로로 잰다).
   assert.equal(FRESH.centralN7Emphasis, GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS);
-  for (const type of ['A', 'K']) {
+  // 생성기 타입 O 의 제품 기본은 자동 안쪽 자리다 — 안쪽이 o-cm 이면 실효 타입 G(선언은 **실효 타입**으로 찾는다).
+  for (const type of ['A', 'K', 'O']) {
     const a = auto(type);
-    const config = CELL_SHAPE_MEASURED_CONFIG[type];
     // 자리 id → 와이어: 코너 마커는 제품 술어(finder-zone-ui — buildConfig 의 cornerMarker 와 같은 함수). A 매퍼는 코너 마커가
-    // 켜지면 사괘를 떨군다(daehan > 코너 마커 > 사괘) · K 는 사괘 개념이 없다(인코더가 던진다).
-    const cm = cornerMarkerSeatActive({ type, outerSeat: a.outer, turnA: false });
-    const sagoae = type === 'A' && !cm && a.deep === SEAT_SAGOAE;
-    const enc = (type === 'A' ? encodeA : encodeK)(PAYLOAD, { ...N7, ...(cm ? { cornerMarker: true } : {}), ...(sagoae ? { sagoae: true } : {}), eccLevel: 'H' });
-    const state = { ...FRESH, type, outerSeat: a.outer, deepSeat: a.deep };
+    // 켜지면 사괘를 떨군다(daehan > 코너 마커 > 사괘) · K 는 사괘 개념이 없다(인코더가 던진다) · O 는 안쪽 코너 마커에 마커 톤을
+    // 싣고(O 안쪽 o-cm), 사괘는 심부 자리 그대로다(중앙 n7 — daehan 아님).
+    const cm = cornerMarkerSeatActive({ type, innerSeat: a.inner, outerSeat: a.outer, turnA: false });
+    const sagoae = (type === 'A' && !cm && a.deep === SEAT_SAGOAE) || (type === 'O' && a.deep === SEAT_SAGOAE);
+    const fn = { O: encode, A: encodeA, K: encodeK }[type];
+    const enc = fn(PAYLOAD, {
+      ...N7, ...(cm ? { cornerMarker: true } : {}), ...(cm && type === 'O' ? { markerTones: true } : {}),
+      ...(sagoae ? { sagoae: true } : {}), eccLevel: 'H',
+    });
+    const state = { ...FRESH, type, innerSeat: a.inner, outerSeat: a.outer, deepSeat: a.deep };
     const ctx = ctxOf(type, enc, state, 'white', FRESH.centralN7Emphasis);
-    const same = Object.keys(config).filter((k) => k !== 'eccLevel').every((k) => sameAsMeasured(k, ctx[k], config[k]));
+    const label = `${type}(실효 ${ctx.type})`;
+    const config = CELL_SHAPE_MEASURED_CONFIG[ctx.type];
     const rows = rowsFor(ctx);
+    if (!config) {
+      // 선언 없는 실효 타입은 행이 0 이어야 한다(ⓒ) — 제품 기본이 그 타입이면 미확인으로 잠긴다.
+      assert.equal(rows.length, 0, `${label}: 선언 없는 실효 타입의 행`);
+      t.diagnostic(`${label}: 제품 기본의 실효 타입에 측정 구성 선언이 없다 — 제품 기본이 잠긴다`);
+      continue;
+    }
+    const same = Object.keys(config).filter((k) => k !== 'eccLevel').every((k) => sameAsMeasured(k, ctx[k], config[k]));
     if (same) {
-      assert.ok(rows.length > 0, `${type}: 제품 자동 자리 · 기본 강조 = 측정 구성인데 그 문맥의 표 행이 없다 — 자가 비었다`);
+      assert.ok(rows.length > 0, `${label}: 제품 자동 자리 · 기본 강조 = 측정 구성인데 그 문맥의 표 행이 없다 — 자가 비었다`);
     } else {
-      t.diagnostic(`${type}: 제품 자동 자리(바깥 ${a.outer} · 심부 ${a.deep}) · 기본 강조(${FRESH.centralN7Emphasis})가 측정 구성과 다르다 — `
-        + '제품 기본이 잠긴다. 재측정하거나 제품 기본을 재검토할 것(선언은 영수증에서만 바꾼다)');
+      t.diagnostic(`${label}: 제품 자동 자리(안쪽 ${a.inner} · 바깥 ${a.outer} · 심부 ${a.deep}) · 기본 강조(${FRESH.centralN7Emphasis})가 `
+        + '측정 구성과 다르다 — 제품 기본이 잠긴다. 재측정하거나 제품 기본을 재검토할 것(선언은 영수증에서만 바꾼다)');
     }
     for (const row of rows) {
       const res = resolveRow(row, ctx);
-      if (same) assert.deepEqual(res, { spec: { kind: row.cellShape, param: row.param } }, `${type} 자동 ${row.cellShape}(${row.param})`);
-      else assert.equal(res.spec, null, `${type} 자동(측정 밖) ${row.cellShape}(${row.param}) 이 열렸다`);
+      if (same) assert.deepEqual(res, { spec: { kind: row.cellShape, param: row.param } }, `${label} 자동 ${row.cellShape}(${row.param})`);
+      else assert.equal(res.spec, null, `${label} 자동(측정 밖) ${row.cellShape}(${row.param}) 이 열렸다`);
     }
   }
   // O — 측정 하네스는 안쪽을 «없음» 으로 내렸다(안쪽 o-cm 은 타입 G 로 따로 갈린다). 사괘는 자동 심부와 같다.
