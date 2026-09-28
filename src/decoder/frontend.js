@@ -6,8 +6,10 @@
  */
 
 import {
+  createCenterQrRescueLedger,
   enumerateGridHypotheses,
   enumeratePriorGridHypotheses,
+  rescueCenterQrGrid,
   selectGridHypothesis,
 } from './bootstrap.js';
 import {
@@ -229,6 +231,15 @@ export function decodeFrontend(raster, options = {}) {
    * 들어간다. 기존 연속 스캔 경로는 이 옵션이 없을 때 **바이트 단위로 종전과 같다.**
    */
   const priorPoses = Array.isArray(options.priorPoses) ? options.priorPoses : null;
+  /*
+   * **중앙 QR 소생 (2026-09-28)** — 무시드 재시도와 같은 «실패 프레임 소생 전용» 정형.
+   * 원장은 가장 바깥 호출이 하나 만들고 재시도 호출이 같은 것을 물려받는다(재시도 패스의
+   * 탐지도 한 원장에 모인다). 소생은 **가장 바깥 호출이 돌려줄 결과가 실패일 때만** 한 번
+   * 돈다 — 무시드 재시도가 살리던 프레임은 그 결과를 그대로 받으므로 성공 프레임은 비트
+   * 동일이다. 기전·비용은 bootstrap.js 「중앙 QR 소생」 머리 주석.
+   */
+  const ownsQrRescueLedger = !priorPoses && !bootstrapOptions._qrRescueLedger;
+  if (ownsQrRescueLedger) bootstrapOptions._qrRescueLedger = createCenterQrRescueLedger();
   let enumerated;
   try {
     enumerated = priorPoses
@@ -266,16 +277,25 @@ export function decodeFrontend(raster, options = {}) {
     && enumerated.detail && enumerated.detail.outlineSeedsUsed === true
     && bootstrapOptions.disableOutlineSeeds !== true
     && !priorPoses) {
-    return decodeFrontend(raster, {
+    const retried = decodeFrontend(raster, {
       ...options,
       bootstrap: { ...bootstrapOptions, disableOutlineSeeds: true },
     });
-  }
-  if (!enumerated.ok) {
-    return fail(
-      enumerated.reason || FRONTEND_FAILURE.NO_GRID_HYPOTHESIS,
-      failureDetail(priorPoses ? 'prior' : 'bootstrap', enumerated),
-    );
+    if (retried.ok || !ownsQrRescueLedger) return retried;
+    const rescued = rescueCenterQrGrid(luma, bootstrapOptions, { reason: retried.reason });
+    if (!rescued || !rescued.ok) return retried;
+    enumerated = rescued;
+  } else if (!enumerated.ok) {
+    const rescued = ownsQrRescueLedger
+      ? rescueCenterQrGrid(luma, bootstrapOptions, { reason: enumerated.reason })
+      : null;
+    if (!rescued || !rescued.ok) {
+      return fail(
+        enumerated.reason || FRONTEND_FAILURE.NO_GRID_HYPOTHESIS,
+        failureDetail(priorPoses ? 'prior' : 'bootstrap', enumerated),
+      );
+    }
+    enumerated = rescued;
   }
 
   let selected;

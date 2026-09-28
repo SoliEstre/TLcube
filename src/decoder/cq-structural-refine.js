@@ -108,6 +108,21 @@ function scoreGeometry(field, H, cellCoord) {
     tieCells, invalidCells, cellCount });
 }
 
+/**
+ * 한 H 의 구조 점수 한 번(정련 없이). bootstrap 의 중앙 QR 소생 단계가 **어느 포즈를 정련할지** 고르는 데
+ * 쓴다 — 포맷 CRC 를 우연히 통과한 가짜 포즈는 셀당 분리 여유가 참 포즈의 1/10 아래라, 정련(\~33 평가)
+ * 전에 한 번 재서 거른다. 입력 계약은 cursor 와 같지만 휘도 전수 유한성 검사는 생략한다(호출자는
+ * toRelativeLuminance 결과를 넘긴다 — 그 모듈이 0..1 유한값을 보장한다).
+ */
+export function scoreCqGeometry(field, H, cellCoord) {
+  if (!Number.isInteger(field?.width) || !Number.isInteger(field?.height)
+    || !(field.data instanceof Float32Array) || !validH(H)
+    || !(cellCoord instanceof Int32Array) || cellCoord.length === 0 || cellCoord.length % 2 !== 0) {
+    throw new TypeError('CQ 점수에는 휘도장, H, cellCoord 가 필요해요');
+  }
+  return scoreGeometry(field, H, cellCoord);
+}
+
 function publicTrial(trial) {
   return Object.freeze({ H: trial.H.slice(), params: trial.params, score: trial.score });
 }

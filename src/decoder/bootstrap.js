@@ -210,6 +210,7 @@ import {
   tryReadBeaconFromText,
 } from './central-beacon-adapt.js';
 import { sampleHexCell, sampleHexGrid } from './grid-sample.js';
+import { createCqStructuralRefineCursor, scoreCqGeometry } from './cq-structural-refine.js';
 import { estimateHomography4, estimateHomographyN, projectPoint } from './homography.js';
 import { estimateLocalWarp, validateOReferences } from './reference-validate.js';
 import { robustPercentiles } from './luma.js';
@@ -3353,10 +3354,15 @@ function qrWindowReferenceRefinedHypotheses(luma, qrResult, options = {}) {
   return hypotheses;
 }
 
-function qrGeometryHypotheses(luma, qrResult, options = {}) {
+/**
+ * `indexOffset` — 소생 단계가 예비 후보(주 목록 뒤)로 부를 때 가설 id 의 `-c<N>` 이 주 목록과
+ * 겹치지 않게 번호를 이어 붙인다(주 경로는 0 — id 불변).
+ */
+function qrGeometryHypotheses(luma, qrResult, options = {}, indexOffset = 0) {
   if (!qrResult || !qrResult.ok) return [];
   const hypotheses = [];
-  qrResult.candidates.forEach((candidate, candidateIndex) => {
+  qrResult.candidates.forEach((candidate, listIndex) => {
+    const candidateIndex = indexOffset + listIndex;
     // F-21: kind 경계 ambiguous 표식은 center 해석도 받는다 — 게이트가 판정.
     if (candidate.kind === 'center' || candidate.kindAmbiguous === true) {
       qrCenterHomographies(candidate).forEach((H, axisIndex) => {
@@ -3613,6 +3619,7 @@ function enumerateGeometryHypothesesImpl(luma, familyEvidence, options, profile)
         cause: 'existing-path-positive',
       });
   }
+  recordCenterQrProbe(options._qrRescueLedger, shouldProbeQr, qrResult, finderResult);
 
   /*
    * central-n7은 일반 finder/cube/QR과 독립된 coded locator다. 종전에는 세 경로가
@@ -4925,7 +4932,11 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         formatAgreement: matchingFormatDigits / formatRead.samples.length,
       });
     }
-    if (acceptedForHypothesis.length === 0) continue;
+    if (acceptedForHypothesis.length === 0) {
+      // 포맷 CRC 는 통과했는데 본문이 한 후보도 못 냈다 — 소생 원장에 적기만 한다.
+      recordCenterQrFormatPass(options._qrRescueLedger, hypothesis, layout.dataCells, turn);
+      continue;
+    }
 
     const rH = reprojectionResidual(luma, hypothesis, referenceResult, options, cfg);
     const rK = hypothesis.sizeGeometry ? hypothesis.sizeGeometry.rK : 1;
@@ -5791,6 +5802,263 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
   });
 }
 
+/*
+ * ── 중앙 QR 소생 (2026-09-28) ──────────────────────────────────────────────────────
+ *
+ * 중앙 QR 코드가 ppu 격자의 **섬**에서 안 읽혔다(하한이 아니라 중간 ppu 의 산발 실패).
+ * 래스터를 열고 단계를 짚어 기전 셋을 갈랐다:
+ *   A 순위 — 참 삼중쌍은 매번 검출되는데 종류당 16 상한 밖(10\~62위)에서 잘린다.
+ *     관측 수 가산이 모듈 크기에 비례해 큰 가짜 파인더를 올린다 → 예비 후보(QR_RESERVE 주석).
+ *   B QR 꺼짐 — 거짓 파인더(«중앙 3톤 큐브» · QR 파인더를 읽은 다운샘플 불스아이)가 양성이면
+ *     QR 탐지 자체가 안 돈다(`shouldProbeQr`). 그 파인더의 가설은 전부 포맷 CRC 에서 죽는다.
+ *   C 척도 — 참 삼중쌍이 목록 **안**에 있어도(Type C k 18/20) 포맷 CRC 는 통과하고 본문 RS 가
+ *     한계를 한두 개 넘는다. 세 파인더 중심이 반픽셀 격자로 잡히고(실행 길이 중점) 래스터
+ *     자체도 supersample 2 라 QR 모서리가 반픽셀로 그려져, 다리 31 px 의 작은 QR 에서 축마다
+ *     ±1.6 % 척도 오차가 난다 — 반경 k 에서 ε·k 셀(k 20 → 0.3 셀)로 증폭된다. 부화소 중심
+ *     추정으로는 못 없앤다(래스터의 양자화라). 긴 기선이 필요하다: R2 엔진이 같은 기하에
+ *     이미 쓰는 구조 정련(`cq-structural-refine.js` — 데이터 셀 분리 여유 합의 척도·이동
+ *     좌표 하강, 포맷 CRC 통과 뒤에만)을 여기 재사용한다. 비컨 경로의 C 앵커 배율 탐색
+ *     (`findCAnchorHypotheses` 주석)과 같은 축의 세 번째 처방이다.
+ *
+ * 전부 **실패 프레임 소생 전용**이다 — frontend 가 무시드 재시도까지 총 실패한 뒤에만 한 번
+ * 부른다. 성공 프레임은 구성상 비트 동일(주 경로는 원장에 적기만 한다), 수용 게이트(포맷
+ * CRC · 본문 RS · payload · 오정정 방어)는 같은 validateGridHypotheses 그대로다.
+ */
+/*
+ * 정련 예산 — 실패 프레임에서도 포맷 CRC 를 **우연히** 통과하는 중앙 QR 가설이 흔하다(가설 수백 개 ×
+ * 짧은 CRC). 그 가짜 포즈를 전부 정련하면 1440 프레임에서 묶음당 0.3\~0.5 s 가 들었다. 그래서 정련 전에
+ * 시드 포즈의 구조 점수(셀당 분리 여유 평균 — 평가 한 번)를 재 문턱 아래를 버리고, 높은 순으로 두 묶음만
+ * 정련한다. 실측(점수 셀 256 안팎 · 셀이 가장 많은 k): 참 포즈 0.140\~0.163(합성 Type C · K 척도 섬) ·
+ * 실패 실사진의 가짜 포즈 0.0004\~0.018. 문턱 0.04 는 가짜 최댓값의 2 배 · 참 최솟값의 1/3.5 다.
+ * ⚠ 저대비 실사진의 «참» 척도 섬 표본은 없다 — 문턱에 걸리면 그 프레임은 종전처럼 실패로 남는다(회귀 아님).
+ */
+const QR_REFINE_POSE_LIMIT = 2;
+const QR_REFINE_SCORE_CELLS = 256;
+const QR_REFINE_MIN_SEED_SEPARATION = 0.04;
+
+/** frontend 가 한 호출(무시드 재시도 포함)에 하나 만들어 `options._qrRescueLedger` 로 흘린다. */
+export function createCenterQrRescueLedger() {
+  return {
+    qr: null,
+    qrProbed: false,
+    // 파인더 양성 때문에 QR 탐지를 건너뛴 패스의 finder source 들.
+    finderSkippedQr: new Set(),
+    formatPassed: [],
+    formatPassedIds: new Set(),
+  };
+}
+
+function recordCenterQrProbe(ledger, shouldProbeQr, qrResult, finderResult) {
+  if (!ledger) return;
+  if (shouldProbeQr) {
+    ledger.qrProbed = true;
+    if (qrResult.ok && ledger.qr === null) ledger.qr = qrResult;
+  } else if (finderResult.ok) {
+    ledger.finderSkippedQr.add(String(finderResult.source || 'unknown'));
+  }
+}
+
+function recordCenterQrFormatPass(ledger, hypothesis, dataCells, turn) {
+  if (!ledger || hypothesis.source !== 'center-qr-finder') return;
+  if (ledger.formatPassedIds.has(hypothesis.hypothesisId)) return;
+  ledger.formatPassedIds.add(hypothesis.hypothesisId);
+  ledger.formatPassed.push({ hypothesis, dataCells, turn });
+}
+
+/**
+ * 구조 점수에 쓸 셀 — scan order 에서 균등 간격으로 QR_REFINE_SCORE_CELLS 개 안팎. 척도는 바깥 링이
+ * 정하고 균등 간격은 링을 고르게 남긴다(전 셀로 재도 정련 결과가 같았고 값만 비쌌다).
+ */
+function centerQrScoreCells(dataCells, turn) {
+  const stride = Math.max(1, Math.floor(dataCells.length / QR_REFINE_SCORE_CELLS));
+  const scored = dataCells.filter((_, index) => index % stride === 0);
+  const cellCoord = new Int32Array(scored.length * 2);
+  scored.forEach((cell, index) => {
+    // 턴A 는 표본 자리만 반전 사상이다 (negateCellKeys 와 같은 규약).
+    cellCoord[2 * index] = turn ? -cell.q : cell.q;
+    cellCoord[2 * index + 1] = turn ? -cell.r : cell.r;
+  });
+  return cellCoord;
+}
+
+/** R2 의 CQ 구조 정련 cursor 를 한 프레임 안에서 끝까지 돌린다(동기 — 소생 전용). */
+function refineCenterQrPoseStructurally(luma, H, cellCoord) {
+  const origin = {
+    frameId: 'bootstrap-center-qr-rescue',
+    timestamp: 0,
+    generation: 0,
+    width: luma.width,
+    height: luma.height,
+  };
+  let cursor;
+  try {
+    cursor = createCqStructuralRefineCursor(luma, H, cellCoord, origin);
+  } catch {
+    return null;
+  }
+  for (let guard = 0; guard < 256; guard += 1) {
+    const step = cursor.resume(origin);
+    if (step.state === 'done' || step.state === 'discarded') break;
+  }
+  return cursor.takeForFrame(origin);
+}
+
+/**
+ * 포맷까지 간 중앙 QR 가설을 (H · family · 턴) 묶음으로 모아, 시드 구조 점수가 문턱 이상인 묶음을 높은
+ * 순으로 QR_REFINE_POSE_LIMIT 개만 정련해 같은 가설의 H 만 바꾼 사본을 낸다(위 «정련 예산» 주석).
+ * 묶음 안에서는 셀이 가장 많은 k 로 잰다 — 작은 k 는 큰 k 의 안쪽 링이다. 정련이 움직이지 않은
+ * 묶음(매개변수 전부 0)은 다시 검증할 이유가 없어 버린다.
+ */
+function refinedCenterQrHypotheses(luma, formatPassed) {
+  const groups = [];
+  const byKey = new Map();
+  for (const entry of formatPassed) {
+    const { hypothesis } = entry;
+    let perH = byKey.get(hypothesis.H);
+    if (!perH) {
+      perH = new Map();
+      byKey.set(hypothesis.H, perH);
+    }
+    const key = hypothesis.family + (entry.turn ? ':turn' : '');
+    let group = perH.get(key);
+    if (!group) {
+      group = { H: hypothesis.H, turn: entry.turn, entries: [], widest: entry };
+      perH.set(key, group);
+      groups.push(group);
+    }
+    group.entries.push(entry);
+    if (entry.dataCells.length > group.widest.dataCells.length) group.widest = entry;
+  }
+  const eligible = [];
+  groups.forEach((group, order) => {
+    const cellCoord = centerQrScoreCells(group.widest.dataCells, group.turn);
+    let seed;
+    try {
+      seed = scoreCqGeometry(luma, group.H, cellCoord);
+    } catch {
+      return;
+    }
+    const seedSeparation = seed.totalScore / seed.cellCount;
+    if (!(seedSeparation >= QR_REFINE_MIN_SEED_SEPARATION)) return;
+    eligible.push({ group, order, cellCoord, seedSeparation });
+  });
+  eligible.sort((left, right) => right.seedSeparation - left.seedSeparation || left.order - right.order);
+  const selected = eligible.slice(0, QR_REFINE_POSE_LIMIT);
+  const refinedHypotheses = [];
+  for (const { group, cellCoord, seedSeparation } of selected) {
+    const refined = refineCenterQrPoseStructurally(luma, group.H, cellCoord);
+    if (!refined || Object.values(refined.params).every((value) => value === 0)) continue;
+    const H = refined.H;
+    const cqStructuralRefine = {
+      params: refined.params,
+      seedSeparation,
+      seedScore: refined.seedScore.totalScore,
+      score: refined.score.totalScore,
+      evaluations: refined.evaluations,
+      scoredCells: cellCoord.length / 2,
+    };
+    for (const { hypothesis } of group.entries) {
+      const { sizeGeometry: staleSizeGeometry, ...rest } = hypothesis;
+      void staleSizeGeometry; // 옛 포즈로 잰 크기 증거 — 새 H 에 붙이지 않는다.
+      refinedHypotheses.push({
+        ...rest,
+        H,
+        finder: hypothesis.finder ? { ...hypothesis.finder, H, transform: H } : hypothesis.finder,
+        cqStructuralRefine,
+        hypothesisId: hypothesis.hypothesisId + '-cq-refined',
+      });
+    }
+  }
+  // 정련을 실제로 돌린 묶음 수도 돌려준다 — 움직이지 않은 정련(가설 0)도 비용은 썼다(소생 예산 자가 본다).
+  return { hypotheses: refinedHypotheses, groups: groups.length, refinedGroups: selected.length };
+}
+
+/**
+ * 총 실패 프레임의 중앙 QR 소생 — 위 머리 주석의 A · B · C 를 싼 순서로 한 번씩.
+ *
+ *   ① C  주 경로에서 포맷까지 간 중앙 QR 포즈를 구조 정련해 다시 검증
+ *   ② A  상한 밖 밀도 예비 후보(`reserve`)를 검증 — 거기서 포맷까지 가면 ① 과 같은 정련
+ *   ③ B  QR 탐지가 한 번도 안 돌았고(파인더 양성이 끔) 그 파인더 경로가 전멸했으면
+ *        (`NO_FORMAT_CANDIDATE` — 가설이 전부 포맷 CRC 에서 죽음 · `NO_ANCHORS` — 거짓 파인더 둘레에
+ *        앵커가 없어 가설 0개) QR 경로를 한 번 돈다(주 목록 → 예비, 각각 정련 포함). 두 사유는
+ *        frontend 무시드 재시도가 여는 사유와 같다. 중앙 큐브 파인더(K0 중앙+코너 @18)뿐 아니라
+ *        다운샘플 불스아이가 QR 파인더를 불스아이로 읽은 프레임(C3 중앙 QR @20 — 제품 조립은 포맷 사망,
+ *        손 조립은 앵커 사망 · `detected-multiscale-downsampled`)도 같은 축이다.
+ *        `_centerQrRescueAnyFinder: false` 면 중앙 큐브 출처만 연다(측정용 스위치).
+ *
+ * `_centerQrRescue: false` 면 아무것도 안 한다(측정·비트 동일 대조용).
+ *
+ * 반환: 성공이면 enumerateGridHypotheses 와 같은 모양의 ok(…), 아무것도 안 했으면 null,
+ * 시도했지만 실패면 `{ ok: false, attempts }` (호출자는 원래 실패를 그대로 돌려준다).
+ */
+export function rescueCenterQrGrid(luma, options = {}, failure = {}) {
+  const ledger = options._qrRescueLedger;
+  if (!ledger || typeof ledger !== 'object' || options._centerQrRescue === false) return null;
+  const quiet = { ...options, _qrRescueLedger: undefined };
+  const attempts = [];
+  const accepted = (path, hypotheses, validated) => ok({
+    hypotheses,
+    candidates: validated.candidates,
+    diagnostics: {
+      geometry: null,
+      validation: validated.diagnostics,
+      centerQrRescue: { path, attempts },
+    },
+  });
+  const refineAndValidate = (path, formatPassed) => {
+    const { hypotheses: refined, groups, refinedGroups } = refinedCenterQrHypotheses(luma, formatPassed);
+    if (refinedGroups === 0) return null;
+    if (refined.length === 0) {
+      attempts.push({ path, groups, refinedGroups, hypothesisCount: 0, ok: false });
+      return null;
+    }
+    const validated = validateGridHypotheses(luma, refined, quiet);
+    attempts.push({ path, groups, refinedGroups, hypothesisCount: refined.length, ok: validated.ok });
+    return validated.ok ? accepted(path, refined, validated) : null;
+  };
+  const validateThenRefine = (path, hypotheses) => {
+    for (const hypothesis of hypotheses) delete hypothesis.luma;
+    if (hypotheses.length === 0) return null;
+    const collected = createCenterQrRescueLedger();
+    const validated = validateGridHypotheses(luma, hypotheses, {
+      ...options,
+      _qrRescueLedger: collected,
+    });
+    attempts.push({ path, hypothesisCount: hypotheses.length, ok: validated.ok });
+    if (validated.ok) return accepted(path, hypotheses, validated);
+    return refineAndValidate(path + '+cq-refine', collected.formatPassed);
+  };
+  const reserveHypotheses = (qr) => (qr.reserve && qr.reserve.length > 0
+    ? qrGeometryHypotheses(luma, { ok: true, candidates: qr.reserve }, options, qr.candidates.length)
+    : []);
+
+  const refined = refineAndValidate('cq-refine', ledger.formatPassed);
+  if (refined) return refined;
+
+  if (ledger.qr) {
+    const reserved = validateThenRefine('reserve', reserveHypotheses(ledger.qr));
+    if (reserved) return reserved;
+  } else if (!ledger.qrProbed
+    && (failure.reason === FRONTEND_FAILURE.NO_FORMAT_CANDIDATE
+      || failure.reason === FRONTEND_FAILURE.NO_ANCHORS)
+    && (ledger.finderSkippedQr.has('central-cube-detected')
+      || (options._centerQrRescueAnyFinder !== false && ledger.finderSkippedQr.size > 0))) {
+    const qr = detectQrFinderTriples(luma, options.qrFinder || {});
+    attempts.push({
+      path: 'finder-skipped-qr-probe',
+      finderSources: [...ledger.finderSkippedQr].sort(),
+      ok: qr.ok,
+    });
+    if (qr.ok) {
+      const probed = validateThenRefine('finder-skipped-qr', qrGeometryHypotheses(luma, qr, options));
+      if (probed) return probed;
+      const reserved = validateThenRefine('finder-skipped-qr-reserve', reserveHypotheses(qr));
+      if (reserved) return reserved;
+    }
+  }
+  return attempts.length > 0 ? { ok: false, attempts } : null;
+}
+
 
 /*
  * 중앙 QR 기하 진입점.
@@ -5803,6 +6071,26 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
 const QR_PATTERN_MODULES = 7;
 const QR_MAX_CLUSTER_COUNT = 128;
 const QR_MAX_CANDIDATES_PER_KIND = 16;
+/*
+ * 예비 후보 (중앙 QR 복호 섬, 2026-09-28) — 상한 밖 center 후보 중 **관측 밀도 순서**로
+ * 고른 몇 개. 주 경로는 이 목록을 보지 않는다(검증 대상은 여전히 종류당 16) — 프레임이
+ * 총 실패한 뒤 frontend 의 소생 단계만 쓴다(`rescueCenterQrGrid`).
+ *
+ * 왜 따로 고르나: 현행 점수의 관측 수 가산 `−min(100, Σcount)×0.002` 는 **모듈 크기에
+ * 비례**한다(파인더 코어를 지나는 스캔 줄 수 ≈ 6×모듈). K2 별 셀·Type C 본문이 만드는
+ * 큰 가짜 파인더(모듈 4\~5배)는 기하가 어긋나도 가산이 상한(0.2)에 닿고, 기하가 완벽한
+ * 참 중앙 QR 삼중쌍(가산 0.08\~0.13)이 10\~62위로 밀려 16 밖에서 잘렸다. 밀도
+ * `count/module` 은 크기와 무관하게 참 파인더에서 ≈6 이다(합성 실측 14/2.29 · 22/3.60 ·
+ * 28/4.57 = 6.1) — 이 순서로 참 삼중쌍은 실패 섬 전부에서 1위(코너 QR 병행이면 2위)였다.
+ *
+ * 개수 2 · 밀도 하한 3: 소생된 프레임(합성 격자 165 · 실사진 4)은 **전부 예비 0번**으로 읽혔고, 참 예비
+ * 후보의 밀도는 실사진에서도 5.96\~6.29 였다. 계속 실패하는 실사진의 예비 후보는 0.11\~1.05 라 하한
+ * 3(이상값 6 의 절반)이 둘을 넓게 가른다 — 예비 한 후보 = 가설 34 개(hex · tri · star 전 k × 두 축)라,
+ * 하한 없이 4 개면 파인더 같은 것이 없는 실패 프레임마다 가설 136 개를 헛검증했다(1440 프레임 \~1 s).
+ */
+const QR_RESERVE_CANDIDATES = 2;
+const QR_FINDER_HIT_DENSITY = 6;
+const QR_RESERVE_MIN_DENSITY = QR_FINDER_HIT_DENSITY / 2;
 
 function qrOtsuThreshold(luma) {
   const histogram = new Uint32Array(256);
@@ -6328,11 +6616,51 @@ function qrTripleCandidates(clusters, options = {}) {
     || left.center.x - right.center.x);
   const limit = options.maxCandidatesPerKind ?? QR_MAX_CANDIDATES_PER_KIND;
   const countByKind = { center: 0, window: 0 };
-  return candidates.filter((candidate) => {
+  const kept = candidates.filter((candidate) => {
     if (countByKind[candidate.kind] >= limit) return false;
     countByKind[candidate.kind] += 1;
     return true;
   });
+  return {
+    kept,
+    reserve: qrReserveCandidates(
+      candidates,
+      new Set(kept),
+      options.reserveCandidates ?? QR_RESERVE_CANDIDATES,
+    ),
+  };
+}
+
+/**
+ * 상한 밖 center(및 경계 ambiguous) 후보에서 밀도 순서 상위 `limit` 개 — 위 QR_RESERVE 주석.
+ * 기하 항은 현행 점수에서 관측 수 가산만 되돌려 그대로 쓰고, 그 자리에 세 파인더 중 **가장
+ * 약한** 밀도(상한 QR_FINDER_HIT_DENSITY)를 같은 계수 자릿수로 넣는다. 가장 약한 밀도가
+ * QR_RESERVE_MIN_DENSITY 미만인 후보는 예비에 안 든다. 정렬 동률은 주 목록과 같은 중심 y·x
+ * 순이라 결정적이다.
+ */
+function qrReserveCandidates(candidates, kept, limit) {
+  if (!(limit > 0)) return [];
+  const best = [];
+  for (const candidate of candidates) {
+    if (kept.has(candidate)) continue;
+    if (candidate.kind !== 'center' && candidate.kindAmbiguous !== true) continue;
+    const { shared, axisA, axisB } = candidate;
+    const countBonus = Math.min(100, shared.count + axisA.count + axisB.count) * 0.002;
+    const density = Math.min(
+      shared.count / shared.module,
+      axisA.count / axisA.module,
+      axisB.count / axisB.module,
+    );
+    if (!(density >= QR_RESERVE_MIN_DENSITY)) continue;
+    const reserveScore = candidate.score + countBonus
+      - Math.min(QR_FINDER_HIT_DENSITY, density) * 0.02;
+    if (best.length === limit && !(reserveScore < best[best.length - 1].reserveScore)) continue;
+    let at = best.length;
+    while (at > 0 && reserveScore < best[at - 1].reserveScore) at -= 1;
+    best.splice(at, 0, { candidate, reserveScore });
+    if (best.length > limit) best.pop();
+  }
+  return best.map((entry) => entry.candidate);
 }
 /**
  * QR 파인더 삼중점 후보를 결정적으로 열거한다.
@@ -6358,7 +6686,7 @@ export function detectQrFinderTriples(luma, options = {}) {
   }
   const hits = qrScanHits(qrDarkMask(luma, threshold), luma.width, luma.height);
   const finderCenters = qrClusterHits(hits);
-  const candidates = qrTripleCandidates(finderCenters, options);
+  const { kept: candidates, reserve } = qrTripleCandidates(finderCenters, options);
   if (candidates.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FINDER, {
       stage: 'qr-finder',
@@ -6370,6 +6698,9 @@ export function detectQrFinderTriples(luma, options = {}) {
   }
   return ok({
     candidates,
+    // 소생 전용 예비 후보 — 주 경로 가설은 `candidates` 만으로 만든다. diagnostics 에는
+    // 싣지 않는다(성공 프레임 결과 모양 불변).
+    reserve,
     finderCenters,
     diagnostics: {
       threshold,

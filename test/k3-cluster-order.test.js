@@ -9,7 +9,8 @@
  *      따라 움직이고, 하한 아래에서는 키가 `count/상수` 로 퇴화해 정렬이 count 와 같아진다.
  *   ⓓ 12 tl 프레임의 **참 K3 순위 ≤ `cfg.maximumVerifiedPerKind`**, 그리고 참 count 가
  *      **소-u 군중 최대 count 이상**이다 (하한이 «막아 주는» 게 아니라 동결만 하므로).
- *   ⓔ k26 27장 × {960, 1440} 끝단 복호가 밀도 팔 기록과 **장별 동일**.
+ *   ⓔ k26 27장 × {960, 1440} 끝단 복호가 밀도 팔 기록과 **장별 동일** — 기록 뒤 승인된 FAIL → OK
+ *      뒤집힘(`K26_APPROVED_RESCUES`, 항목마다 양쪽 단언)만 예외.
  *   ⓕ 선형 참조판 ≡ 격자판 — 정렬을 바꿨으니 등가를 **덤프 없이도** 검산한다.
  *   ⓖ 하한이 **안 하는 일** — 소-u 군중을 `count/하한` 으로 동결할 뿐 0 으로 안 만든다.
  *      count 가 큰 소-u 잡음은 참을 이길 수 있다 (반례를 자로 굳혀 둔다).
@@ -531,6 +532,17 @@ const K26_EXPECT_PATH = process.env.TL_K26_EXPECT_JSONL
 
 const K26_RE = /^k26-(cube|qr|tl)-K([012])-(near|mid|tele)\.(\d+)\.luma$/;
 
+/**
+ * 기록(위 JSONL) **뒤에** 다른 디코더 수리로 FAIL → OK 가 된 장 — 승인한 차이만 적는다.
+ * 기록은 측정 산출물이라 고쳐 쓰지 않는다(그 장이 그때 죽었다는 사실은 그대로 참이다). 이 목록은 기록의 사본이
+ * 아니라 **기록과 현재의 차이**이고, 항목마다 «기록에선 FAIL · 지금은 OK» 를 단언한다 — 한쪽이라도 어긋나면(낡은
+ * 승인 · 기록에 없는 장) 빨갛다. OK → FAIL(죽음)은 여기 적을 수 없다.
+ */
+const K26_APPROVED_RESCUES = Object.freeze({
+  'k26-qr-K0-mid.1440.luma': '중앙 QR 소생 B — 거짓 중앙 큐브 파인더가 끈 QR 경로를 한 번 (2026-09-29)',
+  'k26-qr-K2-tele.960.luma': '중앙 QR 소생 A — 16 상한 밖 참 삼중쌍을 밀도 예비 후보로 (2026-09-29)',
+});
+
 function readK26Expectations(path) {
   const rows = readFileSync(path, 'utf8').trim().split(/\r?\n/)
     .filter((line) => line.length > 0)
@@ -579,12 +591,17 @@ test('ⓔ k26 27장 × {960,1440} 끝단 복호가 밀도 팔 기록과 장별 �
     }),
   });
 
+  for (const name of Object.keys(K26_APPROVED_RESCUES)) {
+    assert.equal(expected.get(name), false,
+      `${name}: 승인된 뒤집힘인데 기록에서 FAIL 이 아니다(${expected.get(name)}) — 승인 목록이 기록과 어긋났다`);
+  }
+
   const mismatches = [];
   let ok = 0;
   for (const job of K26_JOBS) {
     const luma = readLumaDump(job.path);
     const result = decodeFrontend(lumaToRaster(luma), decodeOptions);
-    const want = expected.get(job.name);
+    const want = expected.get(job.name) || K26_APPROVED_RESCUES[job.name] !== undefined;
     if (result.ok) ok += 1;
     if (result.ok !== want) {
       mismatches.push({
@@ -595,7 +612,8 @@ test('ⓔ k26 27장 × {960,1440} 끝단 복호가 밀도 팔 기록과 장별 �
       });
     }
   }
-  t.diagnostic(`k26 54행 ok ${ok}/${K26_JOBS.length} (기대 ${[...expected.values()].filter(Boolean).length})`);
+  t.diagnostic(`k26 54행 ok ${ok}/${K26_JOBS.length} (기록 ${[...expected.values()].filter(Boolean).length}`
+    + ` + 승인된 뒤집힘 ${Object.keys(K26_APPROVED_RESCUES).length})`);
   assert.deepEqual(mismatches, [],
     'k26 장별 성패가 밀도 팔 기록과 갈렸다 — 정렬 키가 끝단에서 다르게 선다');
 });
