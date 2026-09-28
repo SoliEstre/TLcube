@@ -41,6 +41,8 @@
  *      심은 결함이 각각 잡힌다.
  *      모드도 렌더 입력이다(Y 검출 강조는 고급 · 시험판에서만 생산자에 간다) — index.html 의 실물 모드 버튼 청취자 → setMode 를 태워,
  *      전환 뒤 미리보기 장면 · 카드 · 내보내기 장면이 새 모드의 정지 렌더와 같은지 잰다. 모드 전환만으로는 생성 비콘을 새로 세지 않는다.
+ *      입력 순서 — 실물 페이로드 입력 청취자 → runScheduledRender(자동 로케이터 · 버전 재유도) 로 편집 순서를 재생해, 최종 내용이 같으면
+ *      장면 · 카드 · 내보내기 장면이 새로 그린 것과 같은지 잰다(Y 사다리 경계 Y0 ↔ Y1 을 오가는 경로 포함 · 히스테리시스 심은 결함).
  *   ⑤ 잠금 사유 id(세 resolver 합집합)가 전부 사전 키로 매핑되고, 쓰는 키가 8언어에 모두 있다.
  *   ⑥ data-state-keys 배치 — 꾸미기 14키는 #sharedControls, customSat 은 customHue 와 같은 두 패널(D1 이양 자).
  *   ⑦ Canvas drawScene 이 noSeam 도형에 seam stroke 를 긋지 않는다(svg.js 와 같은 조건).
@@ -109,10 +111,13 @@ import { renderWithErrorDisplay } from '../src/render-status.js';
 import { hPlanarPreviewOptions, reconcileHPositionMode } from '../src/h-preview-decor.js';
 import { TL_READER_URL, tlReaderUrlWithHint } from '../src/qr.js';
 import { payloadByteLength } from '../src/header.js';
-import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
+import { SEAT_ZONE_TYPES, cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
 import { autoSeatsFor } from '../src/generator-seat-auto.js';
 import { resolveAutoY, resolveVersionForLayout } from '../src/generator-auto-y.js';
-import { LOCATOR_PROFILE_CELL_SURFACE_V0TR } from '../src/locatorY.js';
+import {
+  LOCATOR_PROFILE_CELL_SURFACE_V0T, LOCATOR_PROFILE_CELL_SURFACE_V0TR, LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRY, LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+} from '../src/locatorY.js';
 
 const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const LANGS = ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt'];
@@ -1667,6 +1672,151 @@ test('④ 심은 결함 — setMode 의 재렌더 예약을 지우면 모드 전
   assert.equal(broken.c.mode, 'normal', '심은 결함에서도 청취자는 모드를 바꾼다');
   assert.notEqual(sceneJson(broken), sceneJson(normal), '심은 결함(재렌더 삭제)인데 미리보기가 일반 화면과 같다 — 자가 결함을 못 본다');
   assert.equal(lastOf(broken.calls.buildSceneY).centralN7Emphasis, 'all', '심은 결함: 마지막 렌더는 고급 그대로여야 한다');
+});
+
+// ── 입력 순서(2026-09-28 — 편집 순서에 따라 Y 캔버스가 다르다는 관측의 가름) ──────────────────────────────────────────
+// 관측: 같은 모드 · 같은 URL 인데 편집 순서에 따라 #view 캔버스 해시가 달랐다(Y 27 B, 고급 · 일반). 가름: 두 경로의 장면(current.scene)
+// JSON 은 같았고 캔버스 차이는 반투명 경계 픽셀의 ±1 뿐이었다 — 측정용 getImageData 를 여러 번 부르면 Chrome 이 그 캔버스의 래스터 경로를
+// 바꿔서(willReadFrequently 경고) 생긴 차이다. 끝에 한 번만 읽으면 두 경로가 같고, 같은 내용을 제자리에서 다시 그려도 읽은 횟수만으로 해시가
+// 바뀐다. 내보내기는 장면에서 순수 JS 래스터(rasterize) · sceneToSvg 로 만들어 이 영향이 없다. 아래 자는 그 가름에서 확인한 성질을 잠근다 —
+// 실물 입력 청취자 → runScheduledRender(자동 로케이터 · 버전 재유도) → render 로 편집 순서를 재생해도, 최종 내용이 같으면 장면 · 카드 판정 ·
+// 내보내기 장면이 그 내용을 새로 그린 것과 같다. 자동 사다리 경계(Y0 ↔ Y1)를 오가는 경로가 히스테리시스를 잰다.
+
+/** index.html 의 페이로드 입력 청취자(실물 — input · change → schedule). */
+function payloadInputListeners(text) {
+  const start = text.indexOf('for (const el of [\n  els.nTextPayload');
+  const end = text.indexOf('\n}\n', start);
+  assert.ok(start >= 0 && end > start, '페이로드 입력 청취자를 못 찾았다');
+  return text.slice(start, end + 2);
+}
+
+/** `const NAME = Object.freeze([ … ]);` 선언 하나(index.html 상수 — 옮겨 적지 않는다). */
+function frozenArraySource(text, name) {
+  const start = text.indexOf(`const ${name} = Object.freeze([`);
+  const end = text.indexOf(']);', start);
+  assert.ok(start >= 0 && end > start, name + ' 선언을 못 찾았다');
+  return text.slice(start, end + 3);
+}
+
+/**
+ * 하네스에 실물 «입력 → 예약 렌더» 경로를 싣는다 — URL 입력 청취자 · runScheduledRender · 자동 로케이터/버전 유도 · 페이로드 읽기(normalizeUrl).
+ * 하네스 기본은 페이로드 · Y 버전 유도를 고정값으로 박은 스텁이라 편집 순서가 닿지 않는다. 스텁으로 남기는 것은 둘이다:
+ * syncYLocatorUi(카드 목록 표시 — 값은 applyAutoLocatorProfileY 가 정한다) · syncSeatUi(Y 는 자리 구역 밖 — 아래에서 단언한다).
+ */
+function withTypingPath(h, source = INDEX) {
+  assert.ok(!SEAT_ZONE_TYPES.includes('Y'), 'Y 가 자리 구역에 들어왔다 — syncSeatUi 를 실물로 실어야 한다');
+  Object.assign(h.c, {
+    detectorAutoY: true, resolveAutoY, resolveVersionForLayout, LOCATOR_PROFILE_CELL_SURFACE_V0, LOCATOR_PROFILE_CELL_SURFACE_V0T,
+    LOCATOR_PROFILE_CELL_SURFACE_V0TR, LOCATOR_PROFILE_CELL_SURFACE_V0TRQ, LOCATOR_PROFILE_CELL_SURFACE_V0TRY, LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+    syncYLocatorUi() {}, syncSeatUi() {},
+  });
+  h.run(frozenArraySource(source, 'Y_T_SERIES_PROFILES'));
+  for (const name of ['currentType', 'normalizeUrl', 'normalPayloadText', 'resolveAutoYSafe', 'resolveAutoLocatorProfileY',
+    'resolveVersionForLayoutSafe', 'effectiveVersionYForEncode', 'deriveYLocatorForQrPosition', 'applyAutoLocatorProfileY',
+    'runScheduledRender']) h.run(fnSource(source, name));
+  h.run(payloadInputListeners(source));
+  return h;
+}
+
+/** Y(2.5D) · 강조 'all'(제품 기본) · 투명 배경 · 모드 배선 · 입력 경로. 아직 안 그린다. */
+function yTypingHarness(mode, extraState = {}, source = INDEX) {
+  const h = harness({ state: { ...TYPE_STATES.Y, cellShape: 'bevel', centralN7Emphasis: 'all', ...extraState }, quietColor: 'none', source });
+  withModeWiring(h, mode, source);
+  return withTypingPath(h, source);
+}
+
+/**
+ * URL 입력칸에 값을 차례로 넣는다(키 하나 = 값 하나) — 실물 청취자 → 문서까지 버블 → 예약된 렌더(제품은 120 ms 뒤 runScheduledRender).
+ * 키마다 렌더한다(가장 촘촘한 이력 — 제품은 빠른 입력을 한 렌더로 합친다). 반환: 키마다 인코딩된 Y 버전.
+ */
+function typeUrl(h, values) {
+  const input = h.$('nUrlPayload');
+  const versions = [];
+  for (const value of values) {
+    input.value = value;
+    h.pending.length = 0;
+    input.dispatch('input');
+    h.dispatchDocument('input');
+    assert.ok(h.pending.length > 0, `입력 «${value}» 가 렌더를 예약하지 않았다`);
+    h.pending.length = 0;
+    h.run('runScheduledRender()');
+    assert.equal(h.$('error').textContent, '', `입력 «${value}» 렌더 오류: ${h.$('error').textContent}`);
+    versions.push(h.c.current.encoded.version);
+  }
+  return versions;
+}
+
+/** 전체 선택 후 한 글자씩 친 값들. */
+const retype = (to) => [...to].map((_, i) => to.slice(0, i + 1));
+/** from → to: 공통 접두 뒤를 한 글자씩 지우고, to 의 나머지를 한 글자씩 친 값들. */
+function editSteps(from, to) {
+  let common = 0;
+  while (common < from.length && common < to.length && from[common] === to[common]) common += 1;
+  const steps = [];
+  for (let n = from.length - 1; n >= common; n -= 1) steps.push(from.slice(0, n));
+  for (let n = common + 1; n <= to.length; n += 1) steps.push(to.slice(0, n));
+  return steps;
+}
+
+/** 편집 경로의 최종 화면 — 장면 · 카드 판정 · 내보내기 장면 · 해소된 로케이터와 버전. */
+const typedView = (h) => ({
+  scene: sceneJson(h), cards: cardView(h), exported: exportSceneJson(h),
+  locator: h.state.locatorProfileY, version: h.c.current.encoded.version,
+});
+
+/** 운영자 재현 URL(27 B · Y1)과 제품 기본 URL(index.html 입력칸 기본값 — 19 B · Y0). 자동 사다리 경계는 그 사이(20 ↔ 21 B)다. */
+const URL_27B = 'tl.estre.so/1234567';
+const URL_DEFAULT = /id="nUrlPayload" value="([^"]*)"/.exec(INDEX)[1];
+
+const TYPING_CASES = Object.freeze([
+  // 발견 경로 A · B(고급) — 전체 선택 «/1234567» → 전체 선택 «tl.estre.so/1234567» · 거기서 «8» 을 치고 지운다.
+  { name: '경로 A(고급)', mode: 'advanced', state: {}, steps: [...retype('/1234567'), ...retype(URL_27B)] },
+  { name: '경로 B(고급)', mode: 'advanced', state: {},
+    steps: [...retype('/1234567'), ...retype(URL_27B), ...editSteps(URL_27B, URL_27B + '8'), ...editSteps(URL_27B + '8', URL_27B)] },
+  // 두 번째 관측(일반 · 둥글게) — 19 자 → 18 자 → 19 자.
+  { name: '19 → 18 → 19 자(일반 · 둥글게)', mode: 'normal', state: { cellShape: 'round' },
+    steps: [...retype(URL_27B), ...editSteps(URL_27B, URL_27B.slice(0, -1)), ...editSteps(URL_27B.slice(0, -1), URL_27B)] },
+  // 사다리 경계 왕복 — 히스테리시스(줄어들 때 안 내려오는 유도)가 있으면 여기서 갈린다.
+  { name: 'Y0 → Y1 → Y0(일반)', mode: 'normal', state: {}, crosses: true,
+    steps: [...editSteps(URL_DEFAULT, URL_27B), ...editSteps(URL_27B, URL_DEFAULT)] },
+  { name: 'Y1 → Y0 → Y1(고급)', mode: 'advanced', state: {}, crosses: true,
+    steps: [...retype(URL_27B), ...editSteps(URL_27B, URL_DEFAULT), ...editSteps(URL_DEFAULT, URL_27B)] },
+]);
+
+/** 한 편집 경로 — 제품 기본 URL 로 한 번 그린 뒤 steps 를 친다. 대조군은 마지막 값을 새 하네스에서 한 번에 그린 것. */
+function replayTyping(entry, source = INDEX) {
+  const typed = yTypingHarness(entry.mode, entry.state, source);
+  typeUrl(typed, [URL_DEFAULT]);
+  const versions = typeUrl(typed, entry.steps);
+  const fresh = yTypingHarness(entry.mode, entry.state, source);
+  typeUrl(fresh, [entry.steps[entry.steps.length - 1]]);
+  return { typed, fresh, versions };
+}
+
+test('④ 입력 순서(실물 입력 청취자 → 예약 렌더): 편집 순서가 달라도 최종 내용이 같으면 장면 · 카드 판정 · 내보내기 장면이 새로 그린 것과 같다 — 관측 경로 셋 · 자동 사다리 경계(Y0 ↔ Y1) 왕복 둘', () => {
+  assert.equal(URL_DEFAULT, 'tl.estre.so', '제품 기본 URL 이 바뀌었다 — 경계 왕복 경로가 여전히 Y0 에서 시작하는지 다시 볼 것');
+  for (const entry of TYPING_CASES) {
+    const { typed, fresh, versions } = replayTyping(entry);
+    if (entry.crosses) {
+      assert.ok(versions.includes(0) && versions.includes(1), `${entry.name}: 사다리 경계를 건너지 않았다(버전 ${[...new Set(versions)]}) — 히스테리시스를 못 잰다`);
+    }
+    assert.deepEqual(typedView(typed), typedView(fresh), `${entry.name}: 편집 이력이 최종 화면(장면 · 카드 · 내보내기 · 로케이터/버전)에 남았다`);
+  }
+});
+
+test('④ 심은 결함 — 자동 로케이터에 히스테리시스(한 번 v0tr 이면 v0 로 안 내려감)를 넣으면 입력 순서 자가 빨개진다(자의 판별력)', () => {
+  const line = '  generatorState.locatorProfileY = resolveAutoLocatorProfileY(pos);\n';
+  const body = fnSource(INDEX, 'applyAutoLocatorProfileY');
+  assert.ok(body.includes(line), 'applyAutoLocatorProfileY 철자가 바뀌었다 — 결함 심기를 갱신할 것');
+  const sticky = '  const next = resolveAutoLocatorProfileY(pos);\n'
+    + '  if (!(generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TR && next === LOCATOR_PROFILE_CELL_SURFACE_V0)) generatorState.locatorProfileY = next;\n';
+  const planted = INDEX.replace(body, () => body.replace(line, sticky));
+  assert.notEqual(planted, INDEX);
+  const entry = TYPING_CASES.find((e) => e.name === 'Y0 → Y1 → Y0(일반)');
+  const { typed, fresh } = replayTyping(entry, planted);
+  assert.equal(fresh.state.locatorProfileY, LOCATOR_PROFILE_CELL_SURFACE_V0, '대조군: 새로 그린 19 B 는 v0 이다');
+  assert.equal(typed.state.locatorProfileY, LOCATOR_PROFILE_CELL_SURFACE_V0TR, '심은 결함: 왕복 뒤 v0tr 에 머물러야 한다');
+  assert.notDeepEqual(typedView(typed), typedView(fresh), '심은 결함(히스테리시스)인데 최종 화면이 같다 — 자가 이력을 못 본다');
 });
 
 // ── H 셀 스타일 카드의 내보내기 축(2026-09-28 후속 검토 major — 셀 모양 카드와 같은 거짓 열림이 H 카드에 남아 있었다) ─────────────
