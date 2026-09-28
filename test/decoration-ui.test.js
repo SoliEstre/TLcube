@@ -39,6 +39,8 @@
  *      다시 판정된다(안 바뀌면 예약 없음 · 렌더 뒤 계획은 안정). 크기 · 폭/높이 · 여백 없음은 index.html **실물 컨트롤 핸들러**를 태운다
  *      (핸들러 → 문서 순서 — 핸들러가 상태를 동기로 안 쓰면 빨개진다). 셀 모양 · H 둘 다. 트리거 배선 · 두 번째 렌더 · H 갈래를 지운
  *      심은 결함이 각각 잡힌다.
+ *      모드도 렌더 입력이다(Y 검출 강조는 고급 · 시험판에서만 생산자에 간다) — index.html 의 실물 모드 버튼 청취자 → setMode 를 태워,
+ *      전환 뒤 미리보기 장면 · 카드 · 내보내기 장면이 새 모드의 정지 렌더와 같은지 잰다. 모드 전환만으로는 생성 비콘을 새로 세지 않는다.
  *   ⑤ 잠금 사유 id(세 resolver 합집합)가 전부 사전 키로 매핑되고, 쓰는 키가 8언어에 모두 있다.
  *   ⑥ data-state-keys 배치 — 꾸미기 14키는 #sharedControls, customSat 은 customHue 와 같은 두 패널(D1 이양 자).
  *   ⑦ Canvas drawScene 이 noSeam 도형에 seam stroke 를 긋지 않는다(svg.js 와 같은 조건).
@@ -54,8 +56,10 @@ import { readFileSync } from 'node:fs';
 
 import {
   DECORATION_LOCK_REASON_IDS, DECORATION_STATE_DOMAINS, DECORATION_STATE_KEYS, createGeneratorState,
-  decorationValueFromInput, exposedGeneratorStateKeys, versionStateKey,
+  decorationValueFromInput, exposedGeneratorStateKeys, transitionGeneratorMode, versionStateKey,
 } from '../src/generator-state.js';
+import { createGenerateDebounceState, reduceGenerateDebounce } from '../src/generate-debounce.js';
+import { SHADING_ON } from '../src/shading.js';
 import {
   CELL_SHAPE_DEFAULT, CELL_SHAPE_DETECTOR_EMPHASIS_NOT_APPLICABLE, CELL_SHAPE_PARAMS, cellShapeAllowCtx, cellShapeCtx,
   cellShapeStructuralLock, resolveCellShapeSpec,
@@ -1541,6 +1545,128 @@ test('④ 심은 결함 — 문서 이벤트 트리거 · 두 번째 렌더를 �
   assert.equal(Boolean(broken.c.current.sceneOpts.cellShape), true, '심은 결함(두 번째 렌더 삭제)인데 미리보기가 사각이다 — 자가 결함을 못 본다');
   const fixed = exportHarness(entry, { cellShape: shape, exportSize: 192 });
   assert.equal(Boolean(fixed.c.current.sceneOpts.cellShape), false, '대조군: 실제 index.html 은 잠기면 미리보기가 사각이다');
+});
+
+// ── 모드 전환 = 렌더 입력 변경(2026-09-28 운영자 재현) ─────────────────────────────────────────────────────────────
+// Y 검출 강조는 고급 · 시험판에서만 생산자에 간다(renderTypeY 의 advancedOnlyCardsVisible 게이트 — 합성 왕복 v0TR 검출 회귀 8점).
+// 그런데 setMode 는 노출만 동기화하고 렌더를 안 불러서, 고급에서 그린 뒤 «일반» 을 눌러도 미리보기 · 카드 잠금(g1211) · 내보내기
+// 장면(current.scene)이 다음 입력 전까지 고급 그대로였다(2890fe6 ~ 정식 013). 아래는 index.html 의 실물 모드 버튼 청취자를 태운다.
+
+/** index.html 의 두 모드 버튼 click 청취자(실물 — 줄 그대로). */
+function modeButtonListeners(text) {
+  const start = text.indexOf("els.modeNormalBtn.addEventListener('click'");
+  const last = text.indexOf("els.modeAdvancedBtn.addEventListener('click'", start);
+  assert.ok(start >= 0 && last > start, '모드 버튼 청취자를 못 찾았다');
+  return text.slice(start, text.indexOf('\n', last));
+}
+
+/**
+ * 하네스에 실물 모드 배선(setMode · advancedOnlyCardsVisible · 두 버튼 청취자)을 싣는다 — 하네스 기본은 advancedOnlyCardsVisible 를
+ * «일반» 으로 박은 스텁이다. setMode 의 노출 동기화(패널 · 카드 목록 · 가시성)는 이 자의 대상 밖이라 스텁이다.
+ */
+function withModeWiring(h, initial, source = INDEX) {
+  Object.assign(h.c, { mode: initial, transitionGeneratorMode });
+  h.c.document.body = { dataset: {} };
+  for (const name of ['placeModeHostedSections', 'syncTypeUi', 'syncResTierUi', 'syncBgModeUi', 'renderQrPositionUi',
+    'renderFinderUi', 'syncRenderProfileUi']) h.c[name] = () => {};
+  for (const name of ['advancedOnlyCardsVisible', 'setMode']) h.run(fnSource(source, name));
+  h.run(modeButtonListeners(source));
+  return h;
+}
+
+/** 모드 버튼 클릭 — 실물 청취자 → 문서까지 버블(파생값 트리거) → 예약된 렌더가 있으면 돌린다(하네스 click 과 같은 모형). */
+function clickModeButton(h, id) {
+  h.pending.length = 0;
+  h.$(id).dispatch('click');
+  h.dispatchDocument('click');
+  if (h.pending.length > 0) { h.pending.length = 0; h.render(); }
+}
+
+/** 운영자 재현 구성 — Y(2.5D) · 27 B URL(제품 자동 사다리의 로케이터 · 버전) · 강조 'all'(제품 기본) · 투명 배경 · 열린 모양 하나. */
+function yModeHarness(initial, source = INDEX) {
+  const L = 27;
+  const h = harness({
+    state: { ...TYPE_STATES.Y, cellShape: 'bevel', centralN7Emphasis: 'all', locatorProfileY: yAutoOf(L).locatorProfileY },
+    payload: exportLenText(L), quietColor: 'none', source,
+  });
+  h.c.effectiveVersionYForEncode = () => yAutoOf(L).version;
+  withModeWiring(h, initial, source);
+  h.render();
+  return h;
+}
+
+const sceneJson = (h) => JSON.stringify(h.c.current.scene);
+const exportSceneJson = (h) => JSON.stringify(h.run("exportPlanFor('png')").scene);
+
+test('④ 모드 전환은 다시 그린다(실물 모드 버튼 → 제품 경로): «일반» 을 누르면 Y 검출 강조가 빠진 미리보기 · 카드 · 내보내기 장면이 곧바로 일반 화면의 렌더와 같고, «고급» 도 마찬가지다', () => {
+  // 대조군 — 각 모드에서 처음부터 그린 렌더. 두 모드가 실제로 다른 그림 · 다른 카드여야 이 자가 무언가를 잰다.
+  const normal = yModeHarness('normal');
+  const advanced = yModeHarness('advanced');
+  assert.equal('centralN7Emphasis' in lastOf(normal.calls.buildSceneY), false, '대조군: 일반 화면은 Y 강조를 안 넘긴다');
+  assert.equal(lastOf(advanced.calls.buildSceneY).centralN7Emphasis, 'all', '대조군: 고급 화면은 Y 강조를 넘긴다');
+  assert.notEqual(sceneJson(advanced), sceneJson(normal), '두 모드의 장면이 같다 — 모드가 렌더 입력인 자리를 못 잰다');
+  assert.ok(cardView(advanced).some((v) => v.includes(':detector-emphasis:')), '대조군: 고급 화면에 강조 잠금(g1211) 카드가 없다');
+  assert.ok(!cardView(normal).some((v) => v.includes(':detector-emphasis:')), '대조군: 일반 화면에 강조 잠금 카드가 있다');
+
+  // 고급에서 그린 화면 → «일반» 클릭.
+  const h = yModeHarness('advanced');
+  clickModeButton(h, 'modeNormalBtn');
+  assert.equal(h.c.mode, 'normal', '«일반» 청취자가 모드를 안 바꿨다');
+  assert.equal('centralN7Emphasis' in lastOf(h.calls.buildSceneY), false,
+    '«일반» 을 눌렀는데 마지막 렌더가 여전히 고급 전용 Y 강조를 넘긴 것이다 — 모드 전환이 다시 그리지 않았다');
+  assert.equal(sceneJson(h), sceneJson(normal), '«일반» 전환 뒤 미리보기 장면이 일반 화면의 렌더와 다르다');
+  assert.deepEqual(cardView(h), cardView(normal), '«일반» 전환 뒤 카드 잠금이 일반 화면과 다르다(고급의 g1211 이 남았다)');
+  assert.equal(exportSceneJson(h), exportSceneJson(normal), '«일반» 전환 직후 내보내기 장면이 고급 전용 강조 장면이다');
+
+  // 다시 «고급» — 반대 방향도 곧바로 따른다.
+  clickModeButton(h, 'modeAdvancedBtn');
+  assert.equal(h.c.mode, 'advanced');
+  assert.equal(lastOf(h.calls.buildSceneY).centralN7Emphasis, 'all', '«고급» 을 눌렀는데 Y 강조가 생산자에 안 갔다');
+  assert.equal(sceneJson(h), sceneJson(advanced), '«고급» 전환 뒤 미리보기 장면이 고급 화면의 렌더와 다르다');
+  assert.deepEqual(cardView(h), cardView(advanced), '«고급» 전환 뒤 카드 잠금이 고급 화면과 다르다');
+  assert.equal(exportSceneJson(h), exportSceneJson(advanced), '«고급» 전환 직후 내보내기 장면이 고급 화면과 다르다');
+});
+
+test('④ 모드 전환의 재렌더는 생성 비콘을 새로 세지 않는다(실물 emitProductGenerate · 디바운스) — 비콘의 mode 는 그대로 싣고, 내용이 바뀌면 센다', () => {
+  const h = yModeHarness('normal');
+  const beacons = [];
+  Object.assign(h.c, {
+    generateDebounceState: createGenerateDebounceState(), generateDebounceTimer: 0, lastGeneratorFailSignature: '',
+    generatorUserChanged: true, reduceGenerateDebounce, SHADING_ON,
+    genBeacon: (kind, props) => beacons.push({ kind, ...props }), setTimeout: () => 0, clearTimeout: () => {},
+  });
+  for (const name of ['generatedContentKind', 'reportedQrPosition', 'generateEventProps', 'scheduleGenerateDebounceTimer',
+    'advanceGenerateDebounce', 'emitProductGenerate']) h.run(fnSource(INDEX, name));
+  // 정착 시계(1.8 s)를 기다리는 대신 제품의 flush 사건(탭 숨김 · pagehide 가 쓰는 것)으로 정착시킨다.
+  const settle = () => h.run("advanceGenerateDebounce({ type: 'flush', at: Date.now() })");
+  h.render();
+  settle();
+  assert.deepEqual(beacons.map((b) => b.mode), ['normal'], '대조군: 사용자가 만든 첫 렌더는 생성 한 건이다');
+  clickModeButton(h, 'modeAdvancedBtn');
+  settle();
+  clickModeButton(h, 'modeNormalBtn');
+  settle();
+  assert.equal(beacons.length, 1, '모드만 바꿨는데 생성 비콘이 새로 나갔다 — 모드는 노출이지 새 생성이 아니다');
+  // 모드는 여전히 비콘 속성이다 — 고급 화면에서 내용을 바꾸면 그 생성은 mode 'advanced' 로 센다.
+  clickModeButton(h, 'modeAdvancedBtn');
+  h.c.normalPayloadText = () => exportLenText(28);
+  h.render();
+  settle();
+  assert.deepEqual(beacons.map((b) => b.mode), ['normal', 'advanced'], '고급 화면에서 내용을 바꿨는데 생성이 안 세어졌거나 mode 가 틀렸다');
+});
+
+test('④ 심은 결함 — setMode 의 재렌더 예약을 지우면 모드 전환 자가 빨개진다(자의 판별력)', () => {
+  const body = fnSource(INDEX, 'setMode');
+  const tail = /\n  schedule\(\);\n\}$/;
+  assert.match(body, tail, 'setMode 끝(재렌더 예약) 철자가 바뀌었다 — 결함 심기를 갱신할 것');
+  const planted = INDEX.replace(body, () => body.replace(tail, '\n}'));
+  assert.notEqual(planted, INDEX);
+  const normal = yModeHarness('normal');
+  const broken = yModeHarness('advanced', planted);
+  clickModeButton(broken, 'modeNormalBtn');
+  assert.equal(broken.c.mode, 'normal', '심은 결함에서도 청취자는 모드를 바꾼다');
+  assert.notEqual(sceneJson(broken), sceneJson(normal), '심은 결함(재렌더 삭제)인데 미리보기가 일반 화면과 같다 — 자가 결함을 못 본다');
+  assert.equal(lastOf(broken.calls.buildSceneY).centralN7Emphasis, 'all', '심은 결함: 마지막 렌더는 고급 그대로여야 한다');
 });
 
 // ── H 셀 스타일 카드의 내보내기 축(2026-09-28 후속 검토 major — 셀 모양 카드와 같은 거짓 열림이 H 카드에 남아 있었다) ─────────────

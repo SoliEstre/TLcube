@@ -9022,7 +9022,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-28.01';
+const GENERATOR_BUILD = '2026-09-28.02';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -9740,7 +9740,10 @@ function emitProductGenerate(result, cfg) {
   if (!result || !result.encoded) return;
   const props = generateEventProps(result, cfg);
   // 페이로드는 전송하지 않는다. 같은 메타·다른 내용도 새 생성으로 세기 위한 로컬 서명에만 쓴다.
-  const signature = JSON.stringify([props, cfg.text]);
+  // 서명에서 mode 는 뺀다(보고 속성으로는 싣는다): 모드 전환도 다시 그리는데(setMode), 모드는 노출이지 새 생성이 아니다 —
+  // 빼지 않으면 고급을 둘러보고 돌아오기만 해도 생성이 한 건 더 센다. lab 봉투(emitLabGen)의 서명에도 mode 가 없다.
+  const { mode: _shownMode, ...generated } = props;
+  const signature = JSON.stringify([generated, cfg.text]);
   advanceGenerateDebounce({
     type: 'change',
     at: Date.now(),
@@ -12159,7 +12162,8 @@ function advancedOnlyCardsVisible() {
 }
 
 function setMode(next) {
-  // 모드는 오직 노출만 바꾼다. generatorState를 DOM에서 읽어 덮거나 정규화하지 않는다.
+  // 모드는 generatorState 를 바꾸지 않는다 — DOM 에서 읽어 덮거나 정규화하지 않는다. 그러나 **렌더 입력이기는 하다**:
+  // Y 검출 강조는 advancedOnlyCardsVisible() 일 때만 생산자에 간다(renderTypeY). 그래서 맨 끝에서 다시 그린다.
   mode = transitionGeneratorMode(next);
   els.modeNormalBtn.classList.toggle('active', mode === 'normal');
   els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
@@ -12177,6 +12181,13 @@ function setMode(next) {
   syncRenderProfileUi();
   // 내보내기 옵션의 고급 전용 가시성(② 전체 · ③ 세부 select)은 모드에서 계산한다.
   syncExportOptionsUi();
+  // ⭐ **모드 전환은 다시 그린다 (2026-09-28 운영자 재현)** — 종전엔 여기서 노출만 맞추고 끝나서, 고급에서 Y 강조로 그린 뒤
+  //    «일반» 을 눌러도 미리보기 · 카드 잠금(g1211) · 내보내기 장면(current.scene)이 다음 입력 전까지 고급 그대로였다
+  //    (2890fe6 부터). 어느 렌더 입력이 모드를 읽는지 목록으로 들지 않는다 — 모드를 바꾸는 곳이 여기 하나라 여기서 예약한다.
+  //    render() 를 직접 부르지 않는 이유: 파생값 재유도(자동 로케이터 · 자리 자동)는 runScheduledRender 한 자리를 지난다.
+  //    2.5D 내보내기(PNG · SVG · 복사)와 큐브 · H 스냅샷은 flushScheduledRender 로 이 예약을 먼저 돌린다(Y 3D 스냅샷은
+  //    «보이는 화면의 사진» 계약이라 flush 없이 화면의 mesh 를 쓴다 — 예약이 도는 120 ms 동안은 화면도 옛 그림이다).
+  schedule();
 }
 
 /*
