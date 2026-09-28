@@ -113,7 +113,7 @@ import {
 } from './corner-marker-detect.js';
 import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
 import { detectBullseyes, pyramidLevelsForImage, refineBullseye } from './bullseye-detect.js';
-import { detectCellFinders } from './cell-finder-detect.js';
+import { detectCellFinders, isHalfTurnSymmetricCellMasks } from './cell-finder-detect.js';
 import { verifySagoae } from './sagoae-verify.js';
 import { OAK_FINDER_PATTERNS, OAK_RENDER_ONLY_FINDER_PATTERNS } from '../finder-oak-patterns.js';
 import {
@@ -2313,6 +2313,28 @@ function cellFinderHypotheses(luma, finder, family, options) {
       + '-' + (finder.geometryMode || 'affine'),
     luma,
   }));
+  /*
+   * 반바퀴 쌍둥이 (2026-09-28) — 파인더 휘도가 180° 회전에 불변(C2, 예: pinwheel-c2)이면 파인더는 θ 와
+   * θ+180° 를 **원리적으로** 못 가른다(finishCandidateSteps 의 방향 여유는 120°/240° 만 잰다). 코드 배치는
+   * 180° 대칭이 아니라서 뒤집힌 쪽 H 는 자세 오차가 0 이어도 포맷이 전멸한다(합성 격자 58/58). 그래서
+   * H·R(π) 가설을 **추가**해 포맷·RS 가 고르게 한다 — tri turn 쌍둥이와 같은 관용구. 기존 가설은 한 비트도
+   * 안 바뀌고, C2 가 아닌 파인더에선 이 분기가 안 열린다(C2 판정은 cellMasks 에서 유도 — 손 목록 없음).
+   */
+  if (finder.finderKind === 'cell-mask' && isHalfTurnSymmetricCellMasks(finder.cellMasks)) {
+    for (const hypothesis of base.slice()) {
+      // 정준 공간(유클리드 단위 셀, 원점 = 파인더 중심)의 R(π) = diag(−1, −1, 1) — H 의 0·1 열 부호만 뒤집는다.
+      const rotated = new Float64Array(9);
+      for (let i = 0; i < 9; i += 1) rotated[i] = (i % 3 === 2) ? hypothesis.H[i] : -hypothesis.H[i];
+      const degrees = (((hypothesis.rotationDegrees ?? 0) + 180) % 360 + 360) % 360;
+      base.push({
+        ...hypothesis,
+        H: rotated,
+        rotationDegrees: degrees,
+        orientation: Math.floor((degrees + 60) / 120) % 3,
+        hypothesisId: hypothesis.hypothesisId + '-r180',
+      });
+    }
+  }
   /*
    * C2c 분해 (2026-08-24 · T2 확장 2026-08-30) — «중앙 파인더 ∥ sagoae 검증기»
    * 합성 가설. 원자 daehan 검출기 없이도 중앙 포즈 위에서 sagoae 고리(예약 셀

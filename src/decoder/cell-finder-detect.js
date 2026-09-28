@@ -22,7 +22,10 @@ export const UNVERIFIED_CELL_FINDER_CALIBRATION = Object.freeze({
   varianceCentersPerScale: 0,
   maxCoarseCandidates: 8,
   maxRefinedCandidates: 1,
-  maxOutputCandidates: 2,
+  // 최종 NMS 의 자리 수 — 발자국 그룹을 **다 섞은** 뒤에 자른다. 2 였을 때 daehan 프레임 위의 19셀 후보
+  // (중앙 19셀 ⊃ taegeuk-solo 포함쌍)가 해상도 한계에서 daehan 후보를 두 자리 밖으로 밀어냈다
+  // (2026-09-28 실측: 합성 회전 격자 daehan 57 → 75/80, 실사진 코퍼스 ±0).
+  maxOutputCandidates: 4,
   minCorrelation: 0.56,
   minContrastRatio: 0.24,
   minOrientationMargin: 0.035,
@@ -30,6 +33,20 @@ export const UNVERIFIED_CELL_FINDER_CALIBRATION = Object.freeze({
 
 const REFINED_FACE_FRACTIONS = Object.freeze([0.10, 0.90]);
 const TURN_RADIANS = 2 * Math.PI / 3;
+/**
+ * 19셀 발자국(ρ=1) 그룹의 조대 각도 간격. 보정값(15°)은 그대로 두고 **이 그룹만** 좁힌다.
+ *
+ * 좌표 하강 정교화의 회전 포획이 ≈3° 라(격자 잔차 3° 는 참 자세로 돌아오고 4° 는 척도·전단이 섞인 틀린
+ * 국소해에 앉는다), 15° 격자에선 실패가 회전 크기가 아니라 «격자까지의 잔차» 를 따랐다 — pinwheel 이
+ * 5° · 20° · 35° 에서 죽고 12° · 27° · 45° 에서 읽혔다. 7.5° 로 출발점을 늘리면 합성 격자에서 pinwheel
+ * 33 → 74/80 · cellmask 48 → 80/80.
+ *
+ * ⚠ 정교화 **안에서** 멀리 뛰는 처방(회전 괄호 사전 패스)은 합성에선 더 나았지만 실사진 코퍼스 죽음 6 ·
+ *   전수 실패 3 을 냈다(2026-09-28, 한 축씩 가른 변형에서 괄호 하나가 전부) — 출발점을 늘리는 쪽을 택한 이유다.
+ * ⚠ 큰 발자국(daehan)까지 좁히면 daehan floor 가 흔들리고 상한 4 와 겹쳐 상위집합 과주장(k10 on k8)이
+ *   출력에 끼었다(finder-daehan ⑥) — 그래서 ρ=1 만이다. 호출자가 calibration 으로 간격을 주면 그 값을 따른다.
+ */
+const CELL19_COARSE_ANGLE_STEP_DEGREES = 7.5;
 const EPSILON = 1e-12;
 
 function profileNow() {
@@ -805,6 +822,30 @@ function nms(candidates, limit, exemptPairs) {
   return kept;
 }
 
+/**
+ * 19셀 cellMasks 의 **휘도**가 180° 회전에 불변(C2)인가 — 참이면 이 파인더는 θ 와 θ+180° 를 못 가른다
+ * (bootstrap `cellFinderHypotheses` 가 반바퀴 쌍둥이 가설을 더하는 조건).
+ *
+ * 면 단위 비트가 섞인 셀은 불변일 수 없다: 180° 회전은 마름모 면(T·L·R)을 면 자리에 겹치지 않게 옮긴다.
+ * 그래서 셀 전체가 한 값(비트 전부 0 또는 전부 1)이어야 하고, (q, r) 과 (−q, −r) 의 값이 같아야 한다.
+ * 발자국이 19셀이 아니면(daehan 등 cellLevels 계열) false — 판정 대상 밖이다.
+ * 패턴 메타데이터의 symmetryClass 는 생성 파라미터라 휘도 대칭과 다를 수 있어(«C2 face swirl» 은 면 비트가
+ * 섞여 휘도 C2 가 아니다) 쓰지 않는다.
+ */
+export function isHalfTurnSymmetricCellMasks(cellMasks) {
+  if (!Array.isArray(cellMasks) || cellMasks.length !== FINDER_CELL_ORDER.length) return false;
+  const whole = Object.values(FINDER_FACE_BITS).reduce((bits, bit) => bits | bit, 0);
+  const indexOf = new Map(FINDER_CELL_ORDER.map((cell, index) => [cell.q + ',' + cell.r, index]));
+  for (let index = 0; index < cellMasks.length; index += 1) {
+    const mask = cellMasks[index];
+    if (mask !== 0 && mask !== whole) return false;
+    const { q, r } = FINDER_CELL_ORDER[index];
+    const mirror = indexOf.get((-q) + ',' + (-r));
+    if (mirror === undefined || cellMasks[mirror] !== mask) return false;
+  }
+  return true;
+}
+
 export function scoreCellMaskAtHomography(luma, cellMasks, H, options = {}) {
   assertLumaField(luma);
   const template = templateOf(normalizePatterns(cellMasks, options)[0]);
@@ -863,6 +904,11 @@ export function* detectCellFindersSteps(luma, patternInput = FINDER_CELL_MASK_PA
   for (const [faceSamples, group] of groupByFootprint(templates)) {
     const groupEnumerationStarted = profile ? profileNow() : 0;
     const gcfg = searchParamsFor(cfg, faceSamples, law);
+    const callerAngleStep = options.calibration && typeof options.calibration === 'object'
+      && options.calibration.coarseAngleStepDegrees !== undefined;
+    if (!callerAngleStep && footprintRho(faceSamples) === 1) {
+      gcfg.coarseAngleStepDegrees = CELL19_COARSE_ANGLE_STEP_DEGREES;
+    }
     if (gcfg.varianceCentersPerScale > 0 && !integrals) integrals = integralsOf(luma);
     const scales = scaleSeeds(luma, options, gcfg);
     // 이 발자국이 쓰는 사다리의 반 간격. 조대 후보에 실어 정교화까지 들고 간다.
