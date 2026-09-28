@@ -1442,10 +1442,15 @@ const GENERATOR_TYPE_DERIVATION = (() => {
   const probes = [[{}, {}], [{ notchC: true }, {}], [{}, { innerSeat: 'o-cm' }], [{}, { turnA: true }]];
   const out = {};
   const collisions = [];
+  // notchC 탐침에서만 나오는 실효 타입(= 노치 C) — 제품 하한 키가 생성기 타입과 따로 간다(export-options
+  // minRoundtripPpuKey 의 notchC 문맥 → 'C:<v>', 2026-09-28). 손으로 'C' 를 적지 않고 같은 훑기에서 유도한다.
+  const notchC = new Set();
   for (const gen of GENERATOR_TYPES) {
+    const plain = cellShapeTypeOf(gen, {}, {});
     for (const [encoded, state] of probes) {
       const eff = cellShapeTypeOf(gen, encoded, state);
       if (eff === null) continue;
+      if (encoded.notchC === true && eff !== plain) notchC.add(eff);
       if (out[eff] !== undefined && out[eff] !== gen) {
         collisions.push(`${eff}: ${out[eff] ?? '?'} · ${gen}`);
         out[eff] = null;
@@ -1454,16 +1459,19 @@ const GENERATOR_TYPE_DERIVATION = (() => {
       out[eff] = gen;
     }
   }
-  return { map: Object.freeze(out), collisions: Object.freeze(collisions) };
+  return { map: Object.freeze(out), collisions: Object.freeze(collisions), notchC: Object.freeze([...notchC]) };
 })();
 export const CELL_SHAPE_GENERATOR_TYPE_OF = GENERATOR_TYPE_DERIVATION.map;
+/** 노치 C 실효 타입 목록 — 제품 하한 문맥에 notchC 를 싣는다(allowRowFloorCtx). 위 훑기의 notchC 탐침에서 유도. */
+export const CELL_SHAPE_NOTCH_C_TYPES = GENERATOR_TYPE_DERIVATION.notchC;
 /** 실효 타입 → 생성기 타입 유도의 충돌(한 실효 타입이 두 생성기 타입에서 나온다) — 비어 있어야 한다(잰 하한 자가 잰다). */
 export const CELL_SHAPE_GENERATOR_TYPE_COLLISIONS = GENERATOR_TYPE_DERIVATION.collisions;
 
 /**
  * 허용표 행 → 제품 하한 문맥(export-options `minRoundtripPpuKey` · `minRoundtripPpu` 의 입력 — 내보내기 경로와 같은 축:
  * 생성기 타입 · 버전, Y 는 n · 셀 표면 레이아웃). 잰 하한(허용표 `MEASURED_FLOORS`)과 제품 하한을 같은 키로 맞대는 **한 벌**의 유도다.
- *   oak → {type: 생성기 타입(`CELL_SHAPE_GENERATOR_TYPE_OF` — 실효 G · C → O, V → A), version}
+ *   oak → {type: 생성기 타입(`CELL_SHAPE_GENERATOR_TYPE_OF` — 실효 G · C → O, V → A), version}, 노치 C(`CELL_SHAPE_NOTCH_C_TYPES`)는
+ *         notchC: true 를 더 싣는다 — 제품 하한 키가 'C:<v>' 로 갈린다(2026-09-28, 그전엔 C 가 'O:<v>' 를 빌렸다)
  *   y   → {type: 'Y', n: Number(nBand), cellSurfaceLayout}(레이아웃 'none' 은 null — 그때 제품 키는 버전이 필요한데 행에 없어
  *         키가 어긋나 자가 빨개진다: 셀 표면 밖 Y 행이 생기면 이 유도를 먼저 넓힐 것)
  *   h   → {type: 'H', version}
@@ -1486,7 +1494,12 @@ export function allowRowFloorCtx(row) {
   if (!row || typeof row !== 'object') return null;
   if (row.table === 'oak') {
     const type = CELL_SHAPE_GENERATOR_TYPE_OF[row.type];
-    return typeof type === 'string' ? { type, version: row.version } : null;
+    if (typeof type !== 'string') return null;
+    // 노치 C 는 생성기 타입 O 지만 제품 하한 키가 'C:<v>' 다 — 내보내기 호출(index.html exportPlanFor)이
+    // encoded.notchC 를 싣는 것과 같은 문맥을 낸다(한 벌 — 둘이 갈리면 잰 하한 키가 제품 키와 어긋난다).
+    return CELL_SHAPE_NOTCH_C_TYPES.includes(row.type)
+      ? { type, version: row.version, notchC: true }
+      : { type, version: row.version };
   }
   if (row.table === 'y') {
     const n = Number(row.nBand);

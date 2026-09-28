@@ -249,8 +249,10 @@ export const DITHER_AUTO_COMBO = Object.freeze({
  * Y cellSize 1 에서는 1 단위 = 1 셀이라 두 수가 같다). 보고서 §2.3 실측으로 채운다.
  *
  * 하한은 버전·레이아웃마다 다르다 — 고정 상수 하나로 때우지 않는다(운영자 지시).
- * 키: 'O:1'..'O:3' · 'A:0'..'A:2' · 'Y:<cellSurfaceLayout>:<n>' ·
- * 'Y:plain:<version>'. 같은 레이아웃 안에서도 n별 측정값을 독립적으로 보존한다.
+ * 키: 'O:1'..'O:4' · 'A:0'..'A:2' · 'K:0'..'K:2' · 'C:0'..'C:3'(Type C — notchC 문맥) ·
+ * 'Y:<cellSurfaceLayout>:<n>' · 'Y:plain:<version>'. 같은 레이아웃 안에서도 n별 측정값을 독립적으로 보존한다.
+ * 스키마가 닿는 키는 전부 표에 있어야 한다 — test/export-options.test.js 가 GENERATOR_TYPES × 상태 스키마 선택지로
+ * 유도해 잰다(폴백은 «표가 모르는 미래 키» 용이지 알려진 키의 기본값이 아니다).
  */
 export const MIN_ROUNDTRIP_PPU = Object.freeze({
   // §2.3 실측(M3, granularity 0.5, 무왜곡·페이로드 3종 전수) + 독립 재검증(기본 옵션
@@ -271,6 +273,50 @@ export const MIN_ROUNDTRIP_PPU = Object.freeze({
   'Y:v0t:25': 7,
   'Y:v0ty:21': 7,
   'Y:v0ty:25': 7,
+  // 2026-09-28 미측정 키 채움 — 그전엔 전부 폴백 12 였다(스키마가 닿는 키인데 표에 없었다: 제품 자동 Y 의 기본
+  // 레이아웃 v0tr · 긴 페이로드의 «끔» · K · O4 · C). 같은 방법: 2.0..12.0 ppu · 0.5 간격 · 페이로드 3종(ECC M,
+  // Y 는 2/3톤 × 3) · 제품 조립 근사(상태 기본값 — 투명 배경 · 자동 안전영역 · 기본 파인더/자리/코너 QR) +
+  // 같은 키로 가는 변형(QR 없음 · O 자동 o-cm(G) · Y 윈도 QR · 중앙 QR)의 **최댓값**. 17 키 전부 기본 구성에서
+  // 단조였고 페이로드 민감 없음. 착지점(×1 · ×1.5 · ×2.5) 전수 + 시드 1 페이로드 독립 재검증(하한 · +0.5) 통과.
+  // 하한을 내리는 키는 중앙 QR 구성을 옛/새 착지점에서 나란히 재서 **회귀가 없을 때만** 내렸다 — 회귀하는 K:2 · C:0
+  // 과 꾸미기 잰 하한에 걸리는 K:0 · Y:v0tr 은 실측을 적고 12 에 묶었다(각 행 주석).
+  // 기록: private .agent/lanes/floor-keys-20260928/.
+  // O:4 — 기본(G · O) 8, 중앙 QR(· 중앙+코너 병행) 8.5 · 단조(QR 후보 상한을 풀어도 같은 모양 — 섬이 아니라
+  // 진짜 하한이라 접는다) → 최댓값 8.5.
+  'O:4': 8.5,
+  'K:1': 8.5,
+  // ⚠ K:2 는 실측 8.5(기본 코너 QR · QR 없음)지만 **12 로 둔다** — 같은 키의 중앙 QR 구성이 비단조다: 8 · 8.5 ·
+  // 9.5 전 페이로드 실패, 짧은 페이로드는 12 · 13.5 · 14.5 에서도 실패(15..24 통과). 원인은 하한이 아니라 디코더의
+  // QR 삼중쌍 후보 상한 절단(private k-ppu-floor-20260928 — 별도 과업)이라 하한에 접지 않는다. 8.5 로 내리면
+  // auto-fit 이 18 → 12.75 로 옮겨 그 섬에 떨어진다(이 파일의 «K 전 버전 × 중앙/코너QR» 자가 잡았다). 디코더 수정이
+  // 착지한 뒤 다시 재서 내린다.
+  'K:2': 12,
+  // Type C 는 'C:<v>' 로 갈랐다(minRoundtripPpuKey — 그전엔 C1..C3 이 O1..O3 을 빌렸다). 기본 구성(코너 QR)은
+  // C0..C3 모두 8.5. ⚠ 이 표가 못 지키는 축 — **C 중앙 QR 은 이 값에서도 자동 크기가 안 읽히는 곳이 있다**: 중앙 QR
+  // 구성은 8..24 ppu 에 섬이 흩어진다(QR 후보 상한 절단 — 상한 64 로 풀면 C0 · C1 은 9 부터 단조, 그래도 C2 는 10,
+  // C3 은 10 · 11 · 20 이 남는다). C 가 O 값을 빌리던 때도 같았다(C2 중앙 QR 은 8.5 × {1, 1.5} 둘 다 실패). 디코더
+  // 몫이라 하한에 접지 않는다(private floor-keys-20260928 · k-ppu-floor-20260928).
+  // C:0 은 실측 8.5 지만 **12 로 둔다** — 내리면 중앙 QR 의 auto-min · auto-fit(12.75)이 섬에 떨어진다(12 에선 통과).
+  'C:0': 12,
+  'C:1': 8.5,
+  'C:2': 8.5,
+  'C:3': 8.5,
+  // Y 셀 표면 밖(«끔» — 제품 자동 사다리가 긴 페이로드에서 고른다 · 시험판 hex 프레임). v2 는 윈도 QR 변형이 8.
+  'Y:plain:0': 7,
+  'Y:plain:1': 7,
+  'Y:plain:2': 8,
+  'Y:v0trq:21': 7,
+  'Y:v0trq:25': 7,
+  'Y:v0try:21': 7,
+  'Y:v0try:25': 7,
+  // ⚠ **꾸미기 잰 하한에 묶어 12 로 둔 셋** — 실측은 K:0 = 8 · Y:v0tr:21 = 7 · Y:v0tr:25 = 7 이다(같은 방법 ·
+  // 착지점 통과). 그런데 꾸미기 허용표가 이 세 키를 제품 하한 12 에서 시작한 사다리로 쟀다(cell-shape-allow
+  // MEASURED_FLOORS = 12). 여기서 내리면 test/cell-shape-measured-floors.test.js 가 의도대로 빨개지고, 그 사이
+  // ppu 는 꾸미기가 잰 적 없는 구간이 된다 — 내리는 것은 꾸미기 재측정 또는 운영자 결정 몫이다(조용히 착지 금지).
+  // 제품 기본 Y(자동 → v0tr)의 자동 크기가 여기에 걸려 있다: 내리면 ×1.5 착지가 18 → 10.5 ppu.
+  'K:0': 12,
+  'Y:v0tr:21': 12,
+  'Y:v0tr:25': 12,
 });
 
 /** 하한표에 없는 조합의 보수적 폴백 (실측 최댓값 이상으로 §2.3 에서 확정). */
@@ -278,10 +324,16 @@ export const MIN_ROUNDTRIP_PPU_FALLBACK = 12;
 
 /**
  * 인코딩 결과 문맥 → 하한표 키. 인코딩에서 유도한다 — 상수 하나로 때우지 않기 위한 장치.
- * @param {{type:'O'|'A'|'Y', version:number, n?:number|null,
- *          cellSurfaceLayout?:string|null}} ctx
+ *
+ * Type C(versionO 'ultra')는 생성기 타입 O 로 렌더되지만(index.html renderTypeO) 실루엣이 노치 C 이고
+ * 버전 번호도 C 표(0..3)다. 2026-09-28 까지는 'O:<v>' 로 풀려 C0 은 폴백, C1..C3 은 **O1..O3 의 하한을
+ * 빌려 썼다**(다른 실루엣의 측정값). 그래서 호출부가 notchC 를 실어 주면 'C:<v>' 로 가른다 — 인코딩
+ * 결과의 encoded.notchC 가 그 문맥이다.
+ * @param {{type:'O'|'A'|'Y'|'K', version:number, n?:number|null,
+ *          cellSurfaceLayout?:string|null, notchC?:boolean}} ctx
  */
 export function minRoundtripPpuKey(ctx) {
+  if (ctx.type === 'O' && ctx.notchC === true) return 'C:' + ctx.version;
   if (ctx.type === 'Y') {
     if (!ctx.cellSurfaceLayout) return 'Y:plain:' + ctx.version;
     const ns = CELL_SURFACE_FINAL_NS[ctx.cellSurfaceLayout];
@@ -298,8 +350,8 @@ export function minRoundtripPpuKey(ctx) {
 
 /**
  * 왕복이 서는 최소 ppu. 비트깊이가 낮으면 §2.2 실측이 정하는 배율/하한이 얹힌다.
- * @param {{type:'O'|'A'|'Y', version:number, n?:number|null, cellSurfaceLayout?:string|null,
- *          ditherBits?: number|null}} ctx
+ * @param {{type:'O'|'A'|'Y'|'K', version:number, n?:number|null, cellSurfaceLayout?:string|null,
+ *          notchC?:boolean, ditherBits?: number|null}} ctx
  */
 export function minRoundtripPpu(ctx) {
   const base = Object.prototype.hasOwnProperty.call(MIN_ROUNDTRIP_PPU, minRoundtripPpuKey(ctx))

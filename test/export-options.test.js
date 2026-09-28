@@ -38,6 +38,7 @@ import {
   EXPORT_TRIM_CORNER_QR_MARGIN,
   EXPORT_TRIM_MARGINS,
   MIN_ROUNDTRIP_PPU,
+  MIN_ROUNDTRIP_PPU_FALLBACK,
   PRINT_PPI_TIERS,
   exportPhysicalWidthMm,
   minRoundtripPpuKey,
@@ -65,7 +66,9 @@ import { encodeK } from '../src/encodeK.js';
 import { encodeY } from '../src/encodeY.js';
 import { buildScene } from '../src/scene.js';
 import { buildSceneY } from '../src/sceneY.js';
-import { sceneOptionsForOA } from '../src/generator-render-config.js';
+import { encodeOptionsForY, sceneOptionsForOA } from '../src/generator-render-config.js';
+import { CELL_SURFACE_FINAL_DROPPED_IDS } from '../src/cellSurfaceFinal.js';
+import { CELL_SHAPE_NOTCH_C_TYPES, allowRowFloorCtx } from '../src/cell-shape.js';
 import { addQuietZone } from '../src/quietzone.js';
 import { TL_READER_URL } from '../src/qr.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
@@ -257,12 +260,22 @@ test('① 크기 해석 — 자동 3종 배율 · 고정 정사각 contain · �
 
 test('실측 하한표 — 조합별 값과 «양자화가 하한을 안 내린다» 성질 (§2.3·§2.2)', () => {
   assert.deepEqual({ ...MIN_ROUNDTRIP_PPU }, {
-    'O:1': 8.5, 'O:2': 8.5, 'O:3': 8,
+    'O:1': 8.5, 'O:2': 8.5, 'O:3': 8, 'O:4': 8.5,
     'A:0': 9, 'A:1': 9, 'A:2': 8.5,
+    // K:0 은 실측 8 이지만 꾸미기 잰 하한(12)에 묶여 12 (export-options 주석 — 내리는 것은 운영자 결정).
+    // K:2 는 실측 8.5 지만 중앙 QR 구성의 QR 후보 상한 섬 때문에 12 (디코더 수정 뒤 재측정).
+    'K:0': 12, 'K:1': 8.5, 'K:2': 12,
+    // C:0 은 실측 8.5 지만 중앙 QR 섬 때문에 12 (디코더 수정 뒤 재측정).
+    'C:0': 12, 'C:1': 8.5, 'C:2': 8.5, 'C:3': 8.5,
     'Y:v0:13': 7.5,
     'Y:v0t:21': 7, 'Y:v0t:25': 7,
     'Y:v0ty:21': 7, 'Y:v0ty:25': 7,
-  }, '하한표가 실측과 다르다 — 바꿨다면 §2.3 을 다시 쟀는가');
+    // Y:v0tr 도 실측 7 · 꾸미기 잰 하한에 묶여 12.
+    'Y:v0tr:21': 12, 'Y:v0tr:25': 12,
+    'Y:v0trq:21': 7, 'Y:v0trq:25': 7,
+    'Y:v0try:21': 7, 'Y:v0try:25': 7,
+    'Y:plain:0': 7, 'Y:plain:1': 7, 'Y:plain:2': 8,
+  }, '하한표가 실측과 다르다 — 바꿨다면 §2.3 을 다시 쟀는가 (2026-09-28 채움: private .agent/lanes/floor-keys-20260928/)');
   assert.equal(minRoundtripPpu({ type: 'O', version: 2 }), 8.5);
   assert.equal(minRoundtripPpuKey({
     type: 'Y', version: 0, n: 13, cellSurfaceLayout: 'v0',
@@ -288,13 +301,111 @@ test('실측 하한표 — 조합별 값과 «양자화가 하한을 안 내린�
   assert.equal(minRoundtripPpu({
     type: 'Y', version: 2, n: 25, cellSurfaceLayout: 'v0ty',
   }), 7);
-  // 표에 없는 조합은 보수적 폴백 — 실측 최댓값(9) 이상이어야 한다.
-  assert.ok(minRoundtripPpu({ type: 'Y', version: 1 }) >= 9);
+  // 표에 없는 조합은 보수적 폴백 — 실측 최댓값(9) 이상이어야 한다. ⚠ 종전 이 줄은 {type:'Y', version:1}
+  // (= 'Y:plain:1')로 쟀는데, 그 키는 2026-09-28 에 실측이 생겼다(7). «없는 키» 는 드랍된 레이아웃에서 고른다
+  // (와이어는 살아 있고 생성기 카드만 내린 레이아웃 — 스키마가 안 닿는다).
+  const dropped = CELL_SURFACE_FINAL_DROPPED_IDS[0];
+  const droppedKey = minRoundtripPpuKey({ type: 'Y', version: 1, cellSurfaceLayout: dropped });
+  assert.equal(Object.prototype.hasOwnProperty.call(MIN_ROUNDTRIP_PPU, droppedKey), false, droppedKey + ' 가 표에 있다 — 없는 키 예시를 다시 골라라');
+  assert.ok(minRoundtripPpu({ type: 'Y', version: 1, cellSurfaceLayout: dropped }) >= 9);
+  // Type C 는 'C:<v>' — O 의 행을 빌리지 않는다 (notchC 없으면 종전대로 O 키).
+  assert.equal(minRoundtripPpuKey({ type: 'O', version: 1, notchC: true }), 'C:1');
+  assert.equal(minRoundtripPpuKey({ type: 'O', version: 1 }), 'O:1');
+  assert.equal(minRoundtripPpuKey({ type: 'O', version: 1, notchC: false }), 'O:1');
   for (const bits of DITHER_BIT_DEPTHS) {
     assert.ok(minRoundtripPpu({
       type: 'Y', version: 1, n: 21, cellSurfaceLayout: 'v0t', ditherBits: bits,
     }) >= 7);
   }
+});
+
+/**
+ * 스키마가 닿는 하한 키 전수 — 손 목록 없이 GENERATOR_TYPES × 상태 스키마 선택지에서 유도한다 (key → 출처).
+ *   · O/A/K: 버전 선택지의 정수 전부 (auto 는 이 중 하나로 풀린다)
+ *   · Y: locatorProfileY 선택지 × versionY 정수 × tone 을 제품 인코더 옵션(encodeOptionsForY)에 넣은 결과. 폴백은 그 함수의
+ *     결과를 바꾸는 둘(끔 · 윈도)만 넣는다 — 코너/중앙은 레이아웃 분기를 안 바꾼다.
+ *   · O 의 'ultra' = Type C: versionC 선택지 × notchC 문맥 (index.html 내보내기 호출이 encoded.notchC 를 싣는 모양).
+ * H 는 생성기 타입 목록 밖이다(자체 경로).
+ */
+function reachableFloorKeys() {
+  const keys = new Map();
+  const add = (ctx, why) => { const key = minRoundtripPpuKey(ctx); if (!keys.has(key)) keys.set(key, why); };
+  const ints = (field) => GENERATOR_STATE_SCHEMA[field].options.filter(Number.isInteger);
+  for (const type of GENERATOR_TYPES.filter((t) => t !== 'H')) {
+    if (type !== 'Y') {
+      for (const version of ints(versionStateKey(type))) add({ type, version }, `${type} v${version}`);
+      continue;
+    }
+    for (const locatorProfileY of GENERATOR_STATE_SCHEMA.locatorProfileY.options) {
+      for (const versionY of ints(versionStateKey('Y'))) {
+        for (const tone of GENERATOR_STATE_SCHEMA.tone.options) {
+          for (const fallback of [{ mode: 'off' }, { mode: 'window' }]) {
+            const o = encodeOptionsForY({ tone, versionY, fallback, locatorProfileY });
+            add({ type: 'Y', version: o.version ?? versionY, cellSurfaceLayout: o.cellSurfaceLayout || null },
+              `Y ${locatorProfileY} v${versionY} t${tone} ${fallback.mode}`);
+          }
+        }
+      }
+    }
+  }
+  if (GENERATOR_STATE_SCHEMA.versionO.options.includes('ultra')) {
+    for (const version of ints('versionC')) add({ type: 'O', version, notchC: true }, `C(ultra) v${version}`);
+  }
+  return keys;
+}
+
+// 표가 키 목록을 **따라가는가** — 값이 아니라 덮음을 잰다. 2026-09-28 까지 표는 O1..3 · A · Y v0/v0t/v0ty 만 알았고,
+// 스키마가 닿는 나머지(K 전부 · O4 · 제품 자동 Y 의 기본 레이아웃 v0tr · 긴 페이로드의 «끔» · 안쪽 QR 파생 v0trq/v0try ·
+// Type C)는 조용히 폴백 12 로 내보내졌다. 위 «실측 하한표» 자는 표에 **있는** 값만 재서 빠진 키를 못 봤다.
+test('하한표는 스키마가 닿는 모든 키를 덮는다 — 폴백은 미래 키용 · 낡은 행도 없다 (손 목록 없이 유도)', () => {
+  const reachable = reachableFloorKeys();
+  assert.ok(reachable.size > 0, '키 유도가 비었다');
+  const missing = [...reachable].filter(([key]) => !Object.prototype.hasOwnProperty.call(MIN_ROUNDTRIP_PPU, key));
+  assert.deepEqual(missing, [], '스키마가 닿는데 표에 없는 키 — 재서 채워라 (폴백 12 로 조용히 내보내진다)');
+  const stale = Object.keys(MIN_ROUNDTRIP_PPU).filter((key) => !reachable.has(key));
+  assert.deepEqual(stale, [], '표에 있는데 스키마가 안 닿는 키 — 레이아웃/버전이 내려갔으면 행도 정리하라');
+  for (const [key, value] of Object.entries(MIN_ROUNDTRIP_PPU)) {
+    assert.ok(Number.isFinite(value) && value > 0 && value <= MIN_ROUNDTRIP_PPU_FALLBACK, `${key}: ${value}`);
+  }
+});
+
+// index.html 의 하한 호출은 둘이다(내보내기 계획 · 인쇄 물리 폭 경고). 한쪽만 notchC 를 실으면 경고 문구와 실제 파일이
+// 서로 다른 하한을 쓴다. 호출처를 **훑어서** 문맥 리터럴을 실제로 평가한다 — 철자가 아니라 풀린 키를 잰다.
+test('index.html 의 minRoundtripPpu 호출은 전부 Type C 를 C 키로 푼다 — 호출처를 훑어 실행한다', () => {
+  const literals = [];
+  for (let at = INDEX_SOURCE.indexOf('minRoundtripPpu({'); at >= 0; at = INDEX_SOURCE.indexOf('minRoundtripPpu({', at + 1)) {
+    const open = at + 'minRoundtripPpu('.length;
+    let depth = 0;
+    let end = open;
+    for (; end < INDEX_SOURCE.length; end += 1) {
+      if (INDEX_SOURCE[end] === '{') depth += 1;
+      else if (INDEX_SOURCE[end] === '}' && --depth === 0) break;
+    }
+    literals.push(INDEX_SOURCE.slice(open, end + 1));
+  }
+  assert.ok(literals.length > 0, 'index.html 에서 minRoundtripPpu 호출을 못 찾았다');
+  for (const literal of literals) {
+    const run = (type, encoded) => runInNewContext(`(${literal})`, { current: { type, encoded }, ditherBits: null }, { timeout: 1000 });
+    for (const version of GENERATOR_STATE_SCHEMA.versionC.options.filter(Number.isInteger)) {
+      assert.equal(minRoundtripPpuKey(run('O', { version, notchC: true })), 'C:' + version, `C v${version}: ${literal}`);
+    }
+    assert.equal(minRoundtripPpuKey(run('O', { version: 2 })), 'O:2', `O v2: ${literal}`);
+    assert.equal(minRoundtripPpuKey(run('K', { version: 1 })), 'K:1', `K v1: ${literal}`);
+  }
+});
+
+// 꾸미기 허용표의 하한 키 유도(cell-shape allowRowFloorCtx)도 같은 C 키를 내야 한다 — 둘이 갈리면 잰 하한 키가 제품
+// 내보내기 키와 어긋난다(셀 모양 카드의 내보내기 크기 잠금이 엉뚱한 키로 판정). 지금 허용표엔 C 행이 없다(C 는 사각만 —
+// 구조 잠금)지만 유도는 한 벌이어야 한다.
+test('허용표 하한 유도(allowRowFloorCtx)는 노치 C 행을 제품과 같은 C 키로 푼다', () => {
+  assert.ok(CELL_SHAPE_NOTCH_C_TYPES.length > 0, '노치 C 실효 타입 유도가 비었다');
+  for (const type of CELL_SHAPE_NOTCH_C_TYPES) {
+    for (const version of GENERATOR_STATE_SCHEMA.versionC.options.filter(Number.isInteger)) {
+      assert.equal(minRoundtripPpuKey(allowRowFloorCtx({ table: 'oak', type, version })), 'C:' + version, `${type} v${version}`);
+    }
+  }
+  // 노치 C 가 아닌 O 계열(G · O)은 종전대로 O 키.
+  assert.equal(minRoundtripPpuKey(allowRowFloorCtx({ table: 'oak', type: 'G', version: 2 })), 'O:2');
 });
 
 test('실측 조합표 — 프로파일 + 크기 하한(minPpi) + pHYs 비오염 (§2.2·§10)', () => {

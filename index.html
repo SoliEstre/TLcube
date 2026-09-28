@@ -9022,7 +9022,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-28.02';
+const GENERATOR_BUILD = '2026-09-29.01';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -9920,10 +9920,13 @@ function exportPlanFor(format) {
     ).scene);
     if(current.type==='Y')scene=outlinedYScene(scene,current.encoded);
   }
+  // notchC — Type C 는 type 'O' 로 렌더되지만 하한 키가 따로다('C:<v>', export-options minRoundtripPpuKey).
+  // 이 문맥은 아래 syncExportPpiHint 의 호출과 같은 모양이어야 한다 (test/export-options.test.js 가 둘 다 실행해 잰다).
   const minPpu = minRoundtripPpu({
     type: current.type,
     version: current.encoded.version,
     cellSurfaceLayout: current.encoded.cellSurfaceLayout || null,
+    notchC: current.encoded.notchC === true,
     ditherBits,
   });
   const size = resolveExportSize({
@@ -16483,7 +16486,8 @@ function syncExportPpiHint() {
         sceneWidth: current.scene.width, sceneHeight: current.scene.height,
         minPpu: minRoundtripPpu({
           type: current.type, version: current.encoded.version,
-          cellSurfaceLayout: current.encoded.cellSurfaceLayout || null, ditherBits,
+          cellSurfaceLayout: current.encoded.cellSurfaceLayout || null,
+          notchC: current.encoded.notchC === true, ditherBits,
         }),
       });
       const mm = exportPhysicalWidthMm(size.width, ppi);
