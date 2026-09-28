@@ -5994,6 +5994,16 @@ function refinedCenterQrHypotheses(luma, formatPassed) {
 export function rescueCenterQrGrid(luma, options = {}, failure = {}) {
   const ledger = options._qrRescueLedger;
   if (!ledger || typeof ledger !== 'object' || options._centerQrRescue === false) return null;
+  // 소생은 최선 노력이다 — 안에서 무엇이 던지든 «소생 실패» 로 접어, 호출자(frontend)가 원래 실패를 그대로
+  // 돌려주게 한다. 예전에 실패 객체를 돌려주던 프레임이 예외를 던지게 되면 «실패 객체 불변» 계약이 깨진다.
+  try {
+    return rescueCenterQrGridSteps(luma, options, failure, ledger);
+  } catch (error) {
+    return { ok: false, attempts: [], error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function rescueCenterQrGridSteps(luma, options, failure, ledger) {
   const quiet = { ...options, _qrRescueLedger: undefined };
   const attempts = [];
   const accepted = (path, hypotheses, validated) => ok({

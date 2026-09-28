@@ -20,6 +20,7 @@
  *   ⑤ 오독 게이트 — 본문을 훼손한 중앙 QR 코드는 포맷까지 가서 소생(정련)이 돌아도 오독 0.
  *   ⑥ 소생 예산 — 파인더 같은 것이 없는 실패 프레임에서 예비는 비고(밀도 하한), 우연히 포맷 CRC 를
  *      통과한 가짜 포즈는 정련하지 않는다(시드 구조 점수 문턱). 시간이 아니라 일감으로 잰다.
+ *   ⑦ 소생 예외 격리 — 소생 안에서 무엇이 던지든 «소생 실패» 로 접힌다(frontend 는 원래 실패를 돌려준다).
  *
  * 합성 장면 = 흰 불투명 · margin 20 · bullseye · 링 없음 · ECC M · 화면 면 게인
  * (섬을 처음 잰 합성 조립과 같은 규약).
@@ -263,6 +264,22 @@ function textureFrame(seed, width = 720, height = 960) {
   }
   return { width, height, pixels };
 }
+
+test('⑦ 소생 예외 격리 — 망가진 원장에서도 던지지 않고 «소생 실패» 로 접힌다', () => {
+  const { raster } = frame('k2c', 20);
+  const luma = toRelativeLuminance(raster, {});
+  const ledger = createCenterQrRescueLedger();
+  // 셀 목록이 없는 «포맷 통과» 기록 — 정련 채점 셀을 만들다 TypeError 가 난다.
+  ledger.formatPassed.push({
+    hypothesis: { source: 'center-qr-finder', family: 'hex', hypothesisId: 'broken', H: new Float64Array(9) },
+    dataCells: null,
+    turn: false,
+  });
+  let rescue;
+  assert.doesNotThrow(() => { rescue = rescueCenterQrGrid(luma, { _qrRescueLedger: ledger }, { reason: 'x' }); });
+  assert.equal(rescue.ok, false);
+  assert.ok(typeof rescue.error === 'string' && rescue.error.trim().length > 0, '접힌 예외의 사유가 남아야 한다');
+});
 
 test('⑥ 소생 예산 — 파인더 없는 실패 프레임에서 예비는 비고, 우연한 포맷 통과는 정련하지 않는다', { timeout: 300_000 }, () => {
   // 시간이 아니라 «일감» 을 잰다: 두 문턱(예비 밀도 하한 · 정련 시드 문턱)이 빠지면 실패 프레임마다 가설
